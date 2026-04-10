@@ -1,9 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Check, Volume2, Pause, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { CheckCircle2, Volume2, Pause, Loader2 } from 'lucide-react'
 import { useReel } from '@/lib/reel-context'
 import { POPULAR_RECITERS } from '@/lib/quran-types'
 
@@ -15,7 +13,6 @@ export function ReciterSelector() {
 
   const handleSelect = (reciter: typeof POPULAR_RECITERS[0]) => {
     setConfig({ reciterId: reciter.id, reciterFolder: reciter.folder })
-    // Stop any playing preview
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
     setPreviewPlaying(null)
   }
@@ -26,7 +23,8 @@ export function ReciterSelector() {
 
     setPreviewLoading(reciter.id)
     try {
-      const url = `/api/audio?url=${encodeURIComponent(`https://everyayah.com/data/${reciter.folder}/001001.mp3`)}`
+      // Preview uses Fatiha v2 (الحمد لله رب العالمين) — replaces Bismillah
+      const url = `/api/audio?url=${encodeURIComponent(`https://everyayah.com/data/${reciter.folder}/001002.mp3`)}`
       const audio = new Audio(url)
       audioRef.current = audio
       audio.oncanplay = () => { setPreviewLoading(null); setPreviewPlaying(reciter.id); audio.play() }
@@ -37,45 +35,84 @@ export function ReciterSelector() {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <label className="text-sm font-medium text-muted-foreground">Reciter / القارئ</label>
-      <div className="flex flex-col gap-1">
-        {POPULAR_RECITERS.map((reciter) => (
+    <div className="flex flex-col gap-2">
+      {POPULAR_RECITERS.map((reciter) => {
+        const isSelected = config.reciterId === reciter.id
+        const isPlaying = previewPlaying === reciter.id
+        const isLoading = previewLoading === reciter.id
+
+        return (
           <div
             key={reciter.id}
-            className={cn(
-              'flex items-center justify-between px-3 py-2.5 rounded-lg border cursor-pointer transition-all',
-              config.reciterId === reciter.id
-                ? 'border-primary bg-primary/10'
-                : 'border-border hover:border-primary/50 hover:bg-muted/50'
-            )}
             onClick={() => handleSelect(reciter)}
+            className="group flex items-center justify-between px-4 py-3 rounded-xl border cursor-pointer transition-all duration-200"
+            style={{
+              border: isSelected
+                ? '1px solid rgba(201,168,76,0.55)'
+                : '1px solid rgba(201,168,76,0.1)',
+              background: isSelected
+                ? 'linear-gradient(135deg, rgba(201,168,76,0.14) 0%, rgba(201,168,76,0.06) 100%)'
+                : 'rgba(255,255,255,0.02)',
+              boxShadow: isSelected
+                ? '0 0 20px rgba(201,168,76,0.12), inset 0 1px 0 rgba(201,168,76,0.1)'
+                : 'none',
+            }}
           >
-            <div className="flex items-center gap-3">
-              {config.reciterId === reciter.id
-                ? <Check className="h-4 w-4 text-primary shrink-0" />
-                : <div className="h-4 w-4 shrink-0" />
-              }
-              <div>
-                <p className="text-sm font-medium">{reciter.name}</p>
-                <p className="text-xs text-muted-foreground font-arabic">{reciter.arabicName}</p>
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Check / empty indicator */}
+              {isSelected ? (
+                <CheckCircle2
+                  className="h-5 w-5 flex-shrink-0"
+                  style={{ color: '#c9a84c' }}
+                />
+              ) : (
+                <div
+                  className="h-5 w-5 rounded-full flex-shrink-0 border group-hover:border-[#c9a84c]/40 transition-colors"
+                  style={{ borderColor: 'rgba(201,168,76,0.18)' }}
+                />
+              )}
+
+              <div className="min-w-0">
+                <p
+                  className="text-sm font-semibold truncate transition-colors"
+                  style={{ color: isSelected ? '#f0d080' : 'inherit' }}
+                >
+                  {reciter.name}
+                </p>
+                <p
+                  className="text-xs font-arabic truncate mt-0.5"
+                  style={{ color: isSelected ? 'rgba(201,168,76,0.7)' : 'rgba(150,150,160,0.6)' }}
+                >
+                  {reciter.arabicName}
+                </p>
               </div>
             </div>
-            <Button
-              variant="ghost" size="icon"
-              className="h-8 w-8 shrink-0"
+
+            {/* Play button */}
+            <button
               onClick={(e) => { e.stopPropagation(); togglePreview(reciter) }}
+              className="flex-shrink-0 ml-2 flex items-center justify-center w-9 h-9 rounded-full border transition-all duration-200"
+              style={{
+                borderColor: isPlaying
+                  ? 'rgba(201,168,76,0.6)'
+                  : 'rgba(201,168,76,0.15)',
+                background: isPlaying
+                  ? 'rgba(201,168,76,0.2)'
+                  : 'rgba(201,168,76,0.04)',
+                boxShadow: isPlaying ? '0 0 12px rgba(201,168,76,0.3)' : 'none',
+              }}
+              title="Preview reciter"
             >
-              {previewLoading === reciter.id
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : previewPlaying === reciter.id
-                ? <Pause className="h-3.5 w-3.5" />
-                : <Volume2 className="h-3.5 w-3.5 text-muted-foreground" />
+              {isLoading
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: '#c9a84c' }} />
+                : isPlaying
+                ? <Pause className="h-3.5 w-3.5" style={{ color: '#f0d080' }} />
+                : <Volume2 className="h-3.5 w-3.5" style={{ color: 'rgba(201,168,76,0.55)' }} />
               }
-            </Button>
+            </button>
           </div>
-        ))}
-      </div>
+        )
+      })}
     </div>
   )
 }

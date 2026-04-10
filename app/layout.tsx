@@ -1,9 +1,9 @@
 import type { Metadata, Viewport } from 'next'
-import { Amiri, Amiri_Quran, Noto_Sans } from 'next/font/google'
+import { Amiri, Amiri_Quran, Noto_Sans, Scheherazade_New } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
-const amiri = Amiri({ 
+const amiri = Amiri({
   subsets: ['arabic', 'latin'],
   weight: ['400', '700'],
   variable: '--font-amiri',
@@ -13,6 +13,12 @@ const amiriQuran = Amiri_Quran({
   subsets: ['arabic'],
   weight: ['400'],
   variable: '--font-uthmani',
+})
+
+const scheherazade = Scheherazade_New({
+  subsets: ['arabic'],
+  weight: ['400', '700'],
+  variable: '--font-scheherazade',
 })
 
 const notoSans = Noto_Sans({
@@ -41,7 +47,7 @@ export default function RootLayout({
   return (
     <html lang="ar" dir="rtl" className="dark">
       <head />
-      <body className={`${amiri.variable} ${amiriQuran.variable} ${notoSans.variable} font-sans antialiased`}>
+      <body className={`${amiri.variable} ${amiriQuran.variable} ${scheherazade.variable} ${notoSans.variable} font-sans antialiased`}>
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

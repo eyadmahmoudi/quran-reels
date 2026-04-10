@@ -127,7 +127,7 @@ function drawFrame(
     roundRect(ctx, width / 2 - 160, 90, 320, 56, 28)
     ctx.fill()
     ctx.fillStyle = 'rgba(212,175,55,0.9)'
-    ctx.font = '30px "Scheherazade New", "Amiri Quran", Amiri, serif'
+    ctx.font = '30px "Amiri Quran", "Scheherazade New", Amiri, serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(surahName, width / 2, 118)
@@ -142,7 +142,7 @@ function drawFrame(
 
   // Minimal matches reference style (smaller, elegant). Classic keeps larger size.
   const arabicFontSize = displayMode === 'minimal' ? 58 : 68
-  ctx.font = `${arabicFontSize}px "Scheherazade New", "Amiri Quran", Amiri, serif`
+  ctx.font = `${arabicFontSize}px "Amiri Quran", "Scheherazade New", Amiri, serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.shadowColor = 'rgba(0,0,0,0.9)'
@@ -324,10 +324,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           try { backgroundImage = await loadImage(background.value) } catch { /* use gradient */ }
         }
 
-        try { await document.fonts.load('32px "Scheherazade New"') } catch { /* optional */ }
-        try { await document.fonts.load('58px "Scheherazade New"') } catch { /* optional */ }
         try { await document.fonts.load('32px "Amiri Quran"') } catch { /* optional */ }
         try { await document.fonts.load('58px "Amiri Quran"') } catch { /* optional */ }
+        try { await document.fonts.load('32px "Scheherazade New"') } catch { /* optional */ }
+        try { await document.fonts.load('58px "Scheherazade New"') } catch { /* optional */ }
         setProgress(40)
 
         // ── 3. Test MediaRecorder ──────────────────────────────────────────

@@ -24,7 +24,7 @@ const defaultConfig: ReelConfig = {
   reciterFolder: 'Alafasy_128kbps',
   background: PRESET_BACKGROUNDS[0],
   showTranslation: true,
-  translationId: 131,
+  translationId: 20,
   displayMode: 'minimal',
 }
 

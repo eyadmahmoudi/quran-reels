@@ -79,6 +79,7 @@ function drawFrame(
   verse: Verse | undefined,
   showTranslation: boolean,
   displayMode: 'minimal' | 'classic',
+  taawudhText?: string,
 ) {
   // ── Background ─────────────────────────────────────────────────────────────
   if (backgroundVideo) {
@@ -120,6 +121,21 @@ function drawFrame(
   }
   ctx.fillRect(0, 0, width, height)
 
+  // ── Ta'awwudh frame: draw intro text when taawudhText is provided and no verse ──
+  if (taawudhText && !verse) {
+    ctx.save()
+    ctx.fillStyle = 'white'
+    ctx.font = '52px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.shadowColor = 'rgba(0,0,0,0.9)'
+    ctx.shadowBlur = 18
+    ctx.direction = 'rtl'
+    ctx.fillText(taawudhText, width / 2, height * 0.44)
+    ctx.restore()
+    return
+  }
+
   // ── Classic mode: Surah name header ────────────────────────────────────────
   if (displayMode === 'classic') {
     ctx.save()
@@ -127,7 +143,7 @@ function drawFrame(
     roundRect(ctx, width / 2 - 160, 90, 320, 56, 28)
     ctx.fill()
     ctx.fillStyle = 'rgba(212,175,55,0.9)'
-    ctx.font = '30px "Amiri Quran", "Scheherazade New", Amiri, serif'
+    ctx.font = '30px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(surahName, width / 2, 118)
@@ -142,7 +158,7 @@ function drawFrame(
 
   // Minimal matches reference style (smaller, elegant). Classic keeps larger size.
   const arabicFontSize = displayMode === 'minimal' ? 58 : 68
-  ctx.font = `${arabicFontSize}px "Amiri Quran", "Scheherazade New", Amiri, serif`
+  ctx.font = `${arabicFontSize}px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.shadowColor = 'rgba(0,0,0,0.9)'
@@ -273,6 +289,19 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const decodedBuffers: AudioBuffer[] = []
         const verseTimings: Array<{ startMs: number; endMs: number }> = []
 
+        // ── Intro: Ta'awwudh frame + Al-Fatiha verse 2 (replaces Bismillah) ──
+        const taawudhText = 'أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ'
+        const fatihav2Url = `https://everyayah.com/data/${reciterFolder}/001002.mp3`
+        const fatihav2ProxyUrl = `/api/audio?url=${encodeURIComponent(fatihav2Url)}`
+        let taawudhBuffer: AudioBuffer | null = null
+        try {
+          const resp = await fetch(fatihav2ProxyUrl)
+          if (resp.ok) {
+            const ab = await resp.arrayBuffer()
+            taawudhBuffer = await audioCtx.decodeAudioData(ab)
+          }
+        } catch { /* skip if fails */ }
+
         for (let i = startVerse; i <= endVerse; i++) {
           if (cancelledRef.current) { audioCtx.close(); return }
           const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
@@ -285,6 +314,11 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           const audioBuf = await audioCtx.decodeAudioData(arrayBuf)
           decodedBuffers.push(audioBuf)
           setProgress(5 + ((i - startVerse + 1) / (endVerse - startVerse + 1)) * 25)
+        }
+
+        // Prepend ta'awwudh buffer at the start if it loaded
+        if (taawudhBuffer) {
+          decodedBuffers.unshift(taawudhBuffer)
         }
 
         if (cancelledRef.current) { audioCtx.close(); return }
@@ -324,6 +358,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           try { backgroundImage = await loadImage(background.value) } catch { /* use gradient */ }
         }
 
+        try { await document.fonts.load('58px "UthmanicHafs"') } catch { /* optional */ }
+        try { await document.fonts.load('32px "UthmanicHafs"') } catch { /* optional */ }
         try { await document.fonts.load('32px "Amiri Quran"') } catch { /* optional */ }
         try { await document.fonts.load('58px "Amiri Quran"') } catch { /* optional */ }
         try { await document.fonts.load('32px "Scheherazade New"') } catch { /* optional */ }
@@ -397,6 +433,11 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           let currentVerseIndex = 0
           let recordingFinished = false
 
+          // If ta'awwudh was prepended, verseTimings[0] = ta'awwudh, verseTimings[1+] = actual verses
+          // verses array still contains only the actual Quran verses (not shifted)
+          const hasIntro = taawudhBuffer !== null
+          const introOffset = hasIntro ? 1 : 0
+
           const render = () => {
             if (cancelledRef.current || recordingFinished) return
             const elapsedMs = performance.now() - wallStart
@@ -409,7 +450,16 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             }
 
             const videoProgress = Math.min(elapsedMs / totalDurationMs, 1)
-            drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, verses[currentVerseIndex], showTranslation, displayMode)
+
+            if (hasIntro && currentVerseIndex === 0) {
+              // Draw ta'awwudh intro frame
+              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, undefined, showTranslation, displayMode, taawudhText)
+            } else {
+              // Draw the actual verse (offset by intro)
+              const verseArrayIndex = currentVerseIndex - introOffset
+              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, verses[verseArrayIndex], showTranslation, displayMode)
+            }
+
             setProgress(50 + videoProgress * 48)
 
             if (elapsedMs < totalDurationMs && !cancelledRef.current) {

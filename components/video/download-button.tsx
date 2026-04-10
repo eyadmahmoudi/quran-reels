@@ -32,52 +32,38 @@ export function DownloadButton() {
       'Finalizing…'
 
     return (
-      <div className="flex flex-col gap-4 w-full">
-        {/* Stage label + cancel */}
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-foreground">{stage}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{Math.round(progress)}% complete</p>
-          </div>
-          <button
-            onClick={cancelGeneration}
-            className="flex items-center justify-center w-8 h-8 rounded-full border transition-colors hover:bg-destructive/10"
-            style={{ borderColor: 'rgba(201,168,76,0.25)' }}
-            title="Cancel"
-          >
-            <X className="h-4 w-4 text-muted-foreground" />
-          </button>
-        </div>
-
-        {/* Progress bar */}
-        <div
-          className="relative h-2 w-full rounded-full overflow-hidden"
-          style={{ background: 'rgba(201,168,76,0.12)' }}
-        >
+      <div className="flex flex-col gap-3 w-full">
+        {/* Progress bar with percentage label inside */}
+        <div className="relative h-7 w-full rounded-full overflow-hidden" style={{ background: 'rgba(201,168,76,0.1)' }}>
+          {/* Fill */}
           <div
-            className="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
+            className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
             style={{
-              width: `${progress}%`,
-              background: 'linear-gradient(90deg, #c9a84c, #f0d080, #c9a84c)',
-              backgroundSize: '200% 100%',
-              boxShadow: '0 0 12px rgba(201,168,76,0.5)',
+              width: `${Math.max(progress, 2)}%`,
+              background: 'linear-gradient(90deg, #a07830, #c9a84c, #f0d080)',
+              boxShadow: '2px 0 12px rgba(201,168,76,0.6)',
             }}
           />
+          {/* Percentage text — always centered over the full bar */}
+          <span
+            className="absolute inset-0 flex items-center justify-center text-xs font-bold"
+            style={{ color: progress > 48 ? '#0d1117' : '#c9a84c', zIndex: 1 }}
+          >
+            {Math.round(progress)}%
+          </span>
         </div>
 
-        {/* Pulsing dots */}
-        <div className="flex justify-center gap-1.5">
-          {[0, 1, 2].map(i => (
-            <div
-              key={i}
-              className="w-1.5 h-1.5 rounded-full animate-pulse"
-              style={{
-                background: '#c9a84c',
-                opacity: 0.6,
-                animationDelay: `${i * 200}ms`,
-              }}
-            />
-          ))}
+        {/* Stage + cancel */}
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">{stage}</p>
+          <button
+            onClick={cancelGeneration}
+            className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full border transition-colors hover:border-red-500/50 hover:bg-red-500/10"
+            style={{ borderColor: 'rgba(201,168,76,0.2)' }}
+            title="Cancel"
+          >
+            <X className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
         </div>
       </div>
     )

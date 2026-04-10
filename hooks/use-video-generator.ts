@@ -289,11 +289,14 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const decodedBuffers: AudioBuffer[] = []
         const verseTimings: Array<{ startMs: number; endMs: number }> = []
 
-        // ── Intro: Ta'awwudh audio (local) + Al-Fatiha v2 from reciter ──────
+        // ── Intro sequence ────────────────────────────────────────────────
+        // 1. Ta'awwudh: Al-Husary's Bismillah served locally (أعوذ بالله...)
+        // 2. Bismillah from selected reciter: only when startVerse===1,
+        //    surah≠1 (Fatiha already has it as v1) and surah≠9 (At-Tawbah)
         const taawudhText = 'أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ'
-        let taawudhBuffer: AudioBuffer | null = null
+        const BISMILLAH_TEXT = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ'
 
-        // 1. Load local ta'awwudh MP3 (served from /audio/taawwudh.mp3)
+        let taawudhBuffer: AudioBuffer | null = null
         try {
           const resp = await fetch('/audio/taawwudh.mp3')
           if (resp.ok) {
@@ -302,17 +305,19 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           }
         } catch { /* skip if fails */ }
 
-        // 2. Load Al-Fatiha v2 (الحمد لله رب العالمين) from the selected reciter
-        //    This replaces the Bismillah that normally opens each recitation
-        let fatihav2Buffer: AudioBuffer | null = null
-        try {
-          const fUrl = `/api/audio?url=${encodeURIComponent(`https://everyayah.com/data/${reciterFolder}/001002.mp3`)}`
-          const resp = await fetch(fUrl)
-          if (resp.ok) {
-            const ab = await resp.arrayBuffer()
-            fatihav2Buffer = await audioCtx.decodeAudioData(ab)
-          }
-        } catch { /* skip if fails */ }
+        // Bismillah: fetched from the selected reciter's 001001.mp3
+        const needsBismillah = startVerse === 1 && surahId !== 1 && surahId !== 9
+        let bismillahBuffer: AudioBuffer | null = null
+        if (needsBismillah) {
+          try {
+            const bUrl = `/api/audio?url=${encodeURIComponent(`https://everyayah.com/data/${reciterFolder}/001001.mp3`)}`
+            const resp = await fetch(bUrl)
+            if (resp.ok) {
+              const ab = await resp.arrayBuffer()
+              bismillahBuffer = await audioCtx.decodeAudioData(ab)
+            }
+          } catch { /* skip if fails */ }
+        }
 
         for (let i = startVerse; i <= endVerse; i++) {
           if (cancelledRef.current) { audioCtx.close(); return }
@@ -328,8 +333,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           setProgress(5 + ((i - startVerse + 1) / (endVerse - startVerse + 1)) * 25)
         }
 
-        // Prepend intro buffers: [ta'awwudh?, fatihav2?, ...verses]
-        if (fatihav2Buffer) decodedBuffers.unshift(fatihav2Buffer)
+        // Prepend intro buffers: [ta'awwudh?, bismillah?, ...verses]
+        if (bismillahBuffer) decodedBuffers.unshift(bismillahBuffer)
         if (taawudhBuffer) decodedBuffers.unshift(taawudhBuffer)
 
         if (cancelledRef.current) { audioCtx.close(); return }
@@ -444,11 +449,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           let currentVerseIndex = 0
           let recordingFinished = false
 
-          // Intro offsets: taawudhBuffer=1 slot, fatihav2Buffer=1 slot, then verses
-          const introOffset = (taawudhBuffer ? 1 : 0) + (fatihav2Buffer ? 1 : 0)
+          // Compute intro slot indices
           const taawudhIdx = taawudhBuffer ? 0 : -1
-          const fatihav2Idx = fatihav2Buffer ? (taawudhBuffer ? 1 : 0) : -1
-          const BISMILLAH_TEXT = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ'
+          const bismillahIdx = bismillahBuffer ? (taawudhBuffer ? 1 : 0) : -1
+          const introOffset = (taawudhBuffer ? 1 : 0) + (bismillahBuffer ? 1 : 0)
 
           const render = () => {
             if (cancelledRef.current || recordingFinished) return
@@ -464,13 +468,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             const videoProgress = Math.min(elapsedMs / totalDurationMs, 1)
 
             if (currentVerseIndex === taawudhIdx) {
-              // Ta'awwudh frame
               drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, undefined, showTranslation, displayMode, taawudhText)
-            } else if (currentVerseIndex === fatihav2Idx) {
-              // Bismillah/Fatiha v2 transition frame
+            } else if (currentVerseIndex === bismillahIdx) {
               drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, undefined, showTranslation, displayMode, BISMILLAH_TEXT)
             } else {
-              // Actual verse (offset by intro slots)
               const verseArrayIndex = currentVerseIndex - introOffset
               drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, verses[verseArrayIndex], showTranslation, displayMode)
             }

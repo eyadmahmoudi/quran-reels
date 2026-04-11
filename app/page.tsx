@@ -1,5 +1,7 @@
 'use client'
 
+import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
 import { ReelProvider } from '@/lib/reel-context'
 import { SurahSelector } from '@/components/quran/surah-selector'
 import { VerseSelector } from '@/components/quran/verse-selector'
@@ -62,50 +64,95 @@ function OrnamentDivider() {
   )
 }
 
+function ThemeToggleButton() {
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  if (!mounted) return <div className="w-11 h-11" />
+
+  const isDark = resolvedTheme === 'dark'
+  return (
+    <button
+      onClick={() => setTheme(isDark ? 'light' : 'dark')}
+      aria-label="Toggle light/dark mode"
+      className="animate-glow flex w-11 h-11 rounded-full items-center justify-center border flex-shrink-0 transition-all duration-300 cursor-pointer"
+      style={{
+        background: isDark
+          ? `radial-gradient(circle, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.05) 100%)`
+          : `radial-gradient(circle, rgba(201,168,76,0.35) 0%, rgba(201,168,76,0.12) 100%)`,
+        borderColor: `rgba(201,168,76,0.3)`,
+      }}
+    >
+      {/* Crescent icon — filled when dark, outlined when light */}
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="9" stroke={GOLD} strokeWidth="1.8"/>
+        {isDark ? (
+          /* crescent: filled moon shape */
+          <path
+            d="M14 6.3A7 7 0 1 0 14 17.7A5 5 0 1 1 14 6.3Z"
+            fill={GOLD}
+          />
+        ) : (
+          /* sun-like: open circle with rays suggestion */
+          <circle cx="12" cy="12" r="4" fill={GOLD} />
+        )}
+      </svg>
+    </button>
+  )
+}
+
 export default function QuranReelsGenerator() {
+  const { resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  const isDark = !mounted || resolvedTheme === 'dark'
+
+  const pageBg = isDark
+    ? `
+        radial-gradient(ellipse at 20% 0%, rgba(40,32,10,0.7) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 0%, rgba(20,30,50,0.6) 0%, transparent 55%),
+        radial-gradient(ellipse at 50% 100%, rgba(20,15,5,0.5) 0%, transparent 60%),
+        linear-gradient(180deg, #0a0d18 0%, #080b14 50%, #06080f 100%)
+      `
+    : `
+        radial-gradient(ellipse at 20% 0%, rgba(255,240,180,0.4) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 0%, rgba(200,220,255,0.3) 0%, transparent 55%),
+        radial-gradient(ellipse at 50% 100%, rgba(240,230,200,0.3) 0%, transparent 60%),
+        linear-gradient(180deg, #f5f0e4 0%, #f0ead8 50%, #ede6d0 100%)
+      `
+
+  const headerBg = isDark ? 'rgba(6,8,15,0.88)' : 'rgba(245,240,228,0.92)'
+  const headerBorder = isDark ? `rgba(201,168,76,0.14)` : `rgba(160,120,48,0.2)`
+  const footerTextColor = isDark ? `${GOLD}50` : `${GOLD_DARK}90`
+  const footerLinkColor = isDark ? 'rgba(150,150,160,0.45)' : 'rgba(100,90,70,0.6)'
+
   return (
     <ReelProvider>
-      {/* Page wrapper — deep space background with geo pattern */}
-      <div
-        className="min-h-screen geo-pattern"
-        style={{
-          background: `
-            radial-gradient(ellipse at 20% 0%, rgba(40,32,10,0.7) 0%, transparent 55%),
-            radial-gradient(ellipse at 80% 0%, rgba(20,30,50,0.6) 0%, transparent 55%),
-            radial-gradient(ellipse at 50% 100%, rgba(20,15,5,0.5) 0%, transparent 60%),
-            linear-gradient(180deg, #0a0d18 0%, #080b14 50%, #06080f 100%)
-          `,
-        }}
-      >
-        {/* ── Top gold bar ───────────────────────────────────────────────── */}
+      {/* Page wrapper */}
+      <div className="min-h-screen geo-pattern" style={{ background: pageBg }}>
+
+        {/* ── Top gold bar ─────────────────────────────────────────────── */}
         <div
           className="h-[3px] w-full"
           style={{ background: `linear-gradient(90deg, transparent, ${GOLD_DARK}, ${GOLD_LIGHT}, ${GOLD}, ${GOLD_LIGHT}, ${GOLD_DARK}, transparent)` }}
         />
 
-        {/* ── Header ─────────────────────────────────────────────────────── */}
+        {/* ── Header ───────────────────────────────────────────────────── */}
         <header
           className="sticky top-0 z-50 border-b"
           style={{
-            background: 'rgba(6,8,15,0.88)',
+            background: headerBg,
             backdropFilter: 'blur(20px)',
-            borderColor: `rgba(201,168,76,0.14)`,
-            boxShadow: '0 1px 0 rgba(201,168,76,0.06), 0 4px 24px rgba(0,0,0,0.4)',
+            borderColor: headerBorder,
+            boxShadow: '0 1px 0 rgba(201,168,76,0.06), 0 4px 24px rgba(0,0,0,0.1)',
           }}
         >
           <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
             <div className="flex items-center justify-between gap-3">
-              {/* Logo */}
+              {/* Logo + crescent toggle */}
               <div className="flex items-center gap-3">
-                <div
-                  className="animate-glow hidden sm:flex w-11 h-11 rounded-full items-center justify-center border flex-shrink-0"
-                  style={{
-                    background: `radial-gradient(circle, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.05) 100%)`,
-                    borderColor: `rgba(201,168,76,0.3)`,
-                  }}
-                >
-                  <span style={{ fontSize: 22, color: GOLD }}>☽</span>
-                </div>
+                <ThemeToggleButton />
                 <div>
                   <h1 className="text-base sm:text-xl font-bold leading-tight gold-shimmer-text">
                     Quran Reels Generator
@@ -115,26 +162,11 @@ export default function QuranReelsGenerator() {
                   </p>
                 </div>
               </div>
-
-              {/* Badge */}
-              <div
-                className="hidden sm:flex items-center gap-2 text-[10px] tracking-widest uppercase font-semibold px-3 py-1.5 rounded-full border"
-                style={{
-                  color: `${GOLD}cc`,
-                  borderColor: `rgba(201,168,76,0.22)`,
-                  background: `rgba(201,168,76,0.07)`,
-                  boxShadow: `0 0 16px rgba(201,168,76,0.06)`,
-                }}
-              >
-                <span style={{ color: GOLD }}>✦</span>
-                <span>Uthmanic Script</span>
-                <span style={{ color: GOLD }}>✦</span>
-              </div>
             </div>
           </div>
         </header>
 
-        {/* ── Main ───────────────────────────────────────────────────────── */}
+        {/* ── Main ─────────────────────────────────────────────────────── */}
         <main className="container mx-auto px-3 sm:px-4 py-8 sm:py-12">
           <div className="max-w-2xl mx-auto">
 
@@ -149,7 +181,6 @@ export default function QuranReelsGenerator() {
                   boxShadow: `0 8px 48px rgba(201,168,76,0.12), 0 0 0 1px rgba(201,168,76,0.06) inset`,
                 }}
               >
-                {/* Top shine */}
                 <div
                   className="absolute top-0 left-1/4 right-1/4 h-px"
                   style={{ background: `linear-gradient(90deg, transparent, ${GOLD}60, transparent)` }}
@@ -168,17 +199,14 @@ export default function QuranReelsGenerator() {
 
               {/* Subtitle */}
               <h2
-                className="text-sm sm:text-base font-semibold tracking-wide mb-2"
+                className="text-sm sm:text-base font-semibold tracking-wide"
                 style={{ color: `${GOLD}bb` }}
               >
                 ✦ &nbsp; Professional Quran Video Reels &nbsp; ✦
               </h2>
-              <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                Authentic Uthmani script · Professional reciters · Cinematic video backgrounds
-              </p>
             </div>
 
-            {/* ── Settings cards ─────────────────────────────────────── */}
+            {/* ── Settings cards ───────────────────────────────────────── */}
             <div className="flex flex-col gap-3 sm:gap-4">
 
               <SectionCard step={1} title="Surah" arabicTitle="اختيار السورة">
@@ -222,24 +250,34 @@ export default function QuranReelsGenerator() {
 
             </div>
 
-            {/* ── Footer ───────────────────────────────────────────── */}
+            {/* ── Footer ───────────────────────────────────────────────── */}
             <div className="text-center mt-10 pb-6">
               <div className="ornament-divider mb-4">
                 <span style={{ color: `${GOLD}50`, fontSize: 14 }}>✦</span>
               </div>
-              <p className="text-xs mb-1" style={{ color: `${GOLD}50` }}>
-                Built with respect for the Holy Quran
+
+              {/* Dua */}
+              <p
+                className="font-arabic text-base sm:text-lg mb-3 leading-loose"
+                style={{
+                  direction: 'rtl',
+                  color: isDark ? `${GOLD}cc` : `${GOLD_DARK}dd`,
+                  textShadow: isDark ? `0 0 20px rgba(201,168,76,0.25)` : 'none',
+                }}
+              >
+                لا تنسونا من صالح دعائكم
               </p>
-              <p className="text-xs" style={{ color: 'rgba(150,150,160,0.45)' }}>
+
+              <p className="text-xs mb-1" style={{ color: footerTextColor }}>
                 Audio ·{' '}
                 <a
                   href="https://everyayah.com"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="transition-colors duration-200"
-                  style={{ color: 'rgba(150,150,160,0.45)' }}
+                  style={{ color: footerLinkColor }}
                   onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(150,150,160,0.45)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = footerLinkColor)}
                 >
                   EveryAyah.com
                 </a>
@@ -249,9 +287,9 @@ export default function QuranReelsGenerator() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="transition-colors duration-200"
-                  style={{ color: 'rgba(150,150,160,0.45)' }}
+                  style={{ color: footerLinkColor }}
                   onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'rgba(150,150,160,0.45)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = footerLinkColor)}
                 >
                   Quran.com
                 </a>
@@ -261,7 +299,7 @@ export default function QuranReelsGenerator() {
           </div>
         </main>
 
-        {/* ── Bottom bar ─────────────────────────────────────────────────── */}
+        {/* ── Bottom bar ───────────────────────────────────────────────── */}
         <div
           className="h-[2px] w-full"
           style={{ background: `linear-gradient(90deg, transparent, ${GOLD}40, transparent)` }}

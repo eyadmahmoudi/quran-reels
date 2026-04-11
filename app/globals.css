@@ -215,6 +215,35 @@
     0 1px 0 rgba(201,168,76,0.15) inset;
 }
 
+/* ── Light mode card override ───────────────────────────────────────────── */
+:root:not(.dark) .quran-card {
+  background: linear-gradient(145deg,
+    rgba(255,252,245,0.97) 0%,
+    rgba(250,244,232,0.99) 100%
+  );
+  border-color: rgba(160,120,48,0.22);
+  box-shadow:
+    0 4px 24px rgba(0,0,0,0.08),
+    0 1px 0 rgba(201,168,76,0.12) inset;
+}
+:root:not(.dark) .quran-card:hover {
+  border-color: rgba(160,120,48,0.4);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 16px rgba(201,168,76,0.08);
+}
+:root:not(.dark) .geo-pattern {
+  background-image:
+    radial-gradient(circle at 25% 25%, rgba(201,168,76,0.06) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(201,168,76,0.05) 0%, transparent 50%),
+    repeating-linear-gradient(
+      45deg, transparent, transparent 30px,
+      rgba(160,120,48,0.04) 30px, rgba(160,120,48,0.04) 31px
+    ),
+    repeating-linear-gradient(
+      -45deg, transparent, transparent 30px,
+      rgba(160,120,48,0.04) 30px, rgba(160,120,48,0.04) 31px
+    );
+}
+
 /* ── Ornamental divider ─────────────────────────────────────────────────── */
 .ornament-divider {
   display: flex;

@@ -427,10 +427,13 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
           mediaRecorder.start(1000)
 
-          const startTime = audioCtx.currentTime
-          source.start(startTime)
+          // Start audio and capture the audio-clock start time.
+          // We use audioCtx.currentTime (not performance.now()) as the timing
+          // source so the canvas render loop stays perfectly in sync with the
+          // audio — the two clocks can drift apart over longer recordings.
+          const audioStartTime = audioCtx.currentTime
+          source.start(audioStartTime)
 
-          const wallStart = performance.now()
           let currentVerseIndex = 0
           let recordingFinished = false
 
@@ -441,7 +444,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
           const render = () => {
             if (cancelledRef.current || recordingFinished) return
-            const elapsedMs = performance.now() - wallStart
+            // Elapsed time in ms, locked to the audio clock
+            const elapsedMs = (audioCtx.currentTime - audioStartTime) * 1000
 
             for (let i = 0; i < verseTimings.length; i++) {
               if (elapsedMs >= verseTimings[i].startMs && elapsedMs < verseTimings[i].endMs) {

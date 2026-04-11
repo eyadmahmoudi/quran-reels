@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Check, Upload, X, Film } from 'lucide-react'
+import { Check, Upload, X, Film, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
-import { PRESET_BACKGROUNDS, type BackgroundOption } from '@/lib/quran-types'
+import { PRESET_BACKGROUNDS, PRESET_VIDEOS, type BackgroundOption } from '@/lib/quran-types'
 
 const gradients = PRESET_BACKGROUNDS.filter((b) => b.type === 'gradient')
 const naturePhotos = PRESET_BACKGROUNDS.filter((b) => b.type === 'preset')
@@ -65,11 +65,62 @@ export function BackgroundSelector() {
         Background / الخلفية
       </label>
 
-      {/* Video upload — the "reel style" option */}
+      {/* Built-in video presets */}
       <div>
         <p className="text-xs font-medium text-primary mb-2 flex items-center gap-1">
           <Film className="h-3 w-3" />
-          Video Background (Reel Style)
+          Video Backgrounds
+        </p>
+        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+          {PRESET_VIDEOS.map((bg) => (
+            <button
+              key={bg.id}
+              onClick={() => handleSelect(bg)}
+              title={bg.name}
+              className={cn(
+                'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all bg-muted',
+                config.background?.id === bg.id
+                  ? 'border-primary ring-2 ring-primary/20'
+                  : 'border-transparent hover:border-primary/50'
+              )}
+            >
+              {bg.thumbnail ? (
+                <img
+                  src={bg.thumbnail}
+                  alt={bg.name}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-muted">
+                  <Play className="h-4 w-4 text-muted-foreground" />
+                </div>
+              )}
+              {/* Play icon overlay */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                {config.background?.id === bg.id ? (
+                  <div className="bg-black/30 rounded-full p-1">
+                    <Check className="h-3 w-3 text-white" />
+                  </div>
+                ) : (
+                  <div className="bg-black/40 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Play className="h-3 w-3 text-white" />
+                  </div>
+                )}
+              </div>
+              <span className="absolute bottom-0 inset-x-0 text-[9px] text-white/90 text-center py-0.5 bg-black/50 truncate px-0.5">
+                {bg.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Video upload — custom upload */}
+      <div>
+        <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+          <Upload className="h-3 w-3" />
+          Upload Your Own Video
         </p>
         {customVideo ? (
           <div className="flex items-center gap-3">

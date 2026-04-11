@@ -81,6 +81,10 @@ function drawFrame(
   displayMode: 'minimal' | 'classic',
   taawudhText?: string,
 ) {
+  // ── Rendering quality ──────────────────────────────────────────────────────
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+
   // ── Background ─────────────────────────────────────────────────────────────
   if (backgroundVideo) {
     // Draw current video frame — cover-fit

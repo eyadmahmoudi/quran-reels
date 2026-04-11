@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import type { Verse, BackgroundOption } from '@/lib/quran-types'
+import { drawAnimatedBackground } from '@/lib/animations'
 // fix-webm-duration imported dynamically below
 
 interface VideoGeneratorOptions {
@@ -37,23 +38,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
-/** Load an HTMLVideoElement from a URL and wait until it can play */
-function loadVideo(src: string): Promise<HTMLVideoElement> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video')
-    video.crossOrigin = 'anonymous'
-    video.muted = true
-    video.loop = true
-    video.playsInline = true
-    video.preload = 'auto'
-    video.src = src
-    video.oncanplaythrough = () => resolve(video)
-    video.onerror = reject
-    video.load()
-    // Fallback — some browsers fire canplay instead
-    video.oncanplay = () => resolve(video)
-  })
-}
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath()
@@ -73,27 +57,21 @@ function drawFrame(
   width: number,
   height: number,
   backgroundImage: HTMLImageElement | null,
-  backgroundVideo: HTMLVideoElement | null,
   background: { type: string; value: string },
   surahName: string,
   verse: Verse | undefined,
   showTranslation: boolean,
   displayMode: 'minimal' | 'classic',
   taawudhText?: string,
+  animTimeMs?: number,
 ) {
   // ── Rendering quality ──────────────────────────────────────────────────────
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
   // ── Background ─────────────────────────────────────────────────────────────
-  if (backgroundVideo) {
-    // Draw current video frame — cover-fit
-    const vw = backgroundVideo.videoWidth || width
-    const vh = backgroundVideo.videoHeight || height
-    const scale = Math.max(width / vw, height / vh)
-    const x = (width - vw * scale) / 2
-    const y = (height - vh * scale) / 2
-    ctx.drawImage(backgroundVideo, x, y, vw * scale, vh * scale)
+  if (background.type === 'animated') {
+    drawAnimatedBackground(ctx, width, height, animTimeMs ?? 0, background.value)
   } else if (backgroundImage) {
     const scale = Math.max(width / backgroundImage.width, height / backgroundImage.height)
     const x = (width - backgroundImage.width * scale) / 2
@@ -117,11 +95,12 @@ function drawFrame(
     ctx.fillRect(0, 0, width, height)
   }
 
-  // Dark overlay — lighter in minimal mode so background video shows through nicely
+  // Dark overlay
+  const hasRichBg = background.type === 'animated' || !!backgroundImage
   if (displayMode === 'minimal') {
-    ctx.fillStyle = backgroundVideo ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.20)'
+    ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.20)'
   } else {
-    ctx.fillStyle = backgroundImage || backgroundVideo ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.25)'
+    ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.25)'
   }
   ctx.fillRect(0, 0, width, height)
 
@@ -237,13 +216,12 @@ async function exportVerseImages(
   ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, verses: Verse[],
   background: { type: string; value: string },
   backgroundImage: HTMLImageElement | null,
-  backgroundVideo: HTMLVideoElement | null,
   surahName: string, showTranslation: boolean,
   displayMode: 'minimal' | 'classic',
   setProgress: (n: number) => void
 ) {
   for (let i = 0; i < verses.length; i++) {
-    drawFrame(ctx, canvas.width, canvas.height, backgroundImage, backgroundVideo, background, surahName, verses[i], showTranslation, displayMode)
+    drawFrame(ctx, canvas.width, canvas.height, backgroundImage, background, surahName, verses[i], showTranslation, displayMode, undefined, i * 3000)
     const blob = await new Promise<Blob>((resolve) => { canvas.toBlob((b) => resolve(b!), 'image/png', 1.0) })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -362,19 +340,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const totalDurationMs = timeOffset
         setProgress(35)
 
-        // ── 2. Load background asset ───────────────────────────────────────
+        // ── 2. Load background image (animated backgrounds need no asset) ──
         let backgroundImage: HTMLImageElement | null = null
-        let backgroundVideo: HTMLVideoElement | null = null
 
-        if (background.type === 'video') {
-          try {
-            backgroundVideo = await loadVideo(background.value)
-            // Start playing so frames are available to draw
-            await backgroundVideo.play()
-          } catch (e) {
-            console.warn('[video] Could not load background video:', e)
-          }
-        } else if (background.type === 'custom' || background.type === 'preset') {
+        if (background.type === 'custom' || background.type === 'preset') {
           try { backgroundImage = await loadImage(background.value) } catch { /* use gradient */ }
         }
 
@@ -406,8 +375,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         // ── 4a. IMAGE FALLBACK ─────────────────────────────────────────────
         if (!useMediaRecorder) {
           audioCtx.close()
-          if (backgroundVideo) backgroundVideo.pause()
-          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideo, surahName, showTranslation, displayMode, setProgress)
+          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, surahName, showTranslation, displayMode, setProgress)
           setProgress(100)
           setIsGenerating(false)
           setError('Video recording is not supported in this browser. Downloaded verse images instead.')
@@ -472,12 +440,12 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             const videoProgress = Math.min(elapsedMs / totalDurationMs, 1)
 
             if (currentVerseIndex === taawudhIdx) {
-              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, undefined, showTranslation, displayMode, taawudhText)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, taawudhText, elapsedMs)
             } else if (currentVerseIndex === bismillahIdx) {
-              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, undefined, showTranslation, displayMode, BISMILLAH_TEXT)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, BISMILLAH_TEXT, elapsedMs)
             } else {
               const verseArrayIndex = currentVerseIndex - introOffset
-              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, verses[verseArrayIndex], showTranslation, displayMode)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, verses[verseArrayIndex], showTranslation, displayMode, undefined, elapsedMs)
             }
 
             setProgress(50 + videoProgress * 48)
@@ -490,7 +458,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
                 source.stop()
                 mediaRecorder.stop()
                 audioCtx.close()
-                if (backgroundVideo) backgroundVideo.pause()
               }, 300)
             }
           }
@@ -519,9 +486,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           setIsGenerating(false)
         } catch (mediaErr) {
           audioCtx.close()
-          if (backgroundVideo) backgroundVideo.pause()
           console.log('[video] MediaRecorder failed, falling back to images:', mediaErr)
-          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideo, surahName, showTranslation, displayMode, setProgress)
+          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, surahName, showTranslation, displayMode, setProgress)
           setProgress(100)
           setIsGenerating(false)
           setError('Video recording failed. Downloaded verse images instead.')

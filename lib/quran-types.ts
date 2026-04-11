@@ -137,8 +137,8 @@ export interface ReelConfig {
 export interface BackgroundOption {
   id: string
   name: string
-  type: 'preset' | 'custom' | 'gradient' | 'video'
-  value: string // URL for preset/custom/video, CSS gradient for gradient
+  type: 'preset' | 'custom' | 'gradient' | 'animated'
+  value: string // URL for preset/custom, CSS gradient for gradient, animation name for animated
   thumbnail?: string
 }
 
@@ -265,106 +265,22 @@ export const PRESET_BACKGROUNDS: BackgroundOption[] = [
   },
 ]
 
-// ── Built-in video backgrounds (Pexels CDN — all IDs visually verified) ──────
-export const PRESET_VIDEOS: BackgroundOption[] = [
-  {
-    id: 'vid-ocean',
-    name: 'Ocean Sunrise',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/1093662/1093662-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/1093662/free-video-1093662.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-blue-waters',
-    name: 'Blue Waters',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/3571264/3571264-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/3571264/free-video-3571264.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-beach',
-    name: 'Sandy Beach',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/1321208/1321208-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/1321208/free-video-1321208.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-coast',
-    name: 'Forest Coast',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/2169880/2169880-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/2169880/free-video-2169880.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-valley',
-    name: 'Mountain Valley',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/1437396/1437396-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/1437396/free-video-1437396.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-forest',
-    name: 'Forest Light',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/1448735/1448735-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/1448735/free-video-1448735.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-winter',
-    name: 'Winter Sunset',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/857014/857014-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/857014/free-video-857014.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-sky',
-    name: 'Clear Sky',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/856975/856975-hd_1280_720_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/856975/free-video-856975.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-night-arch',
-    name: 'Night Dome',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/855046/855046-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/855046/free-video-855046.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-flowers',
-    name: 'Purple Meadow',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/854649/854649-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/854649/free-video-854649.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-mystic',
-    name: 'Mystic Light',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/855799/855799-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/855799/free-video-855799.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-rocks',
-    name: 'Rocky Shore',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/1343218/1343218-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/1343218/free-video-1343218.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-water',
-    name: 'Peaceful Water',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/2499611/2499611-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/2499611/free-video-2499611.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
-  {
-    id: 'vid-desert',
-    name: 'Desert Wind',
-    type: 'video',
-    value: 'https://videos.pexels.com/video-files/856638/856638-hd_1920_1080_25fps.mp4',
-    thumbnail: 'https://images.pexels.com/videos/856638/free-video-856638.jpg?auto=compress&cs=tinysrgb&w=200',
-  },
+// ── Animated canvas backgrounds (procedurally generated, no external deps) ───
+export const ANIMATED_BACKGROUNDS: BackgroundOption[] = [
+  { id: 'anim-starfield', name: 'Starfield',     type: 'animated', value: 'starfield',  thumbnail: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=200&q=60' },
+  { id: 'anim-aurora',    name: 'Aurora',        type: 'animated', value: 'aurora',     thumbnail: 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=200&q=60' },
+  { id: 'anim-ocean',     name: 'Ocean Night',   type: 'animated', value: 'ocean',      thumbnail: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=200&q=60' },
+  { id: 'anim-rain',      name: 'Night Rain',    type: 'animated', value: 'rain',       thumbnail: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=200&q=60' },
+  { id: 'anim-desert',    name: 'Desert Sunset', type: 'animated', value: 'desert',     thumbnail: 'https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=200&q=60' },
+  { id: 'anim-galaxy',    name: 'Galaxy',        type: 'animated', value: 'galaxy',     thumbnail: 'https://images.unsplash.com/photo-1464802686167-b939a6910659?w=200&q=60' },
+  { id: 'anim-candle',    name: 'Candlelight',   type: 'animated', value: 'candle',     thumbnail: 'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=200&q=60' },
+  { id: 'anim-snow',      name: 'Snowfall',      type: 'animated', value: 'snow',       thumbnail: 'https://images.unsplash.com/photo-1534088568595-a066f410bcda?w=200&q=60' },
+  { id: 'anim-forest',    name: 'Forest Night',  type: 'animated', value: 'forest',     thumbnail: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=200&q=60' },
+  { id: 'anim-nebula',    name: 'Nebula',        type: 'animated', value: 'nebula',     thumbnail: 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?w=200&q=60' },
+  { id: 'anim-fire',      name: 'Fire',          type: 'animated', value: 'fire',       thumbnail: 'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?w=200&q=60' },
+  { id: 'anim-water',     name: 'Water Ripple',  type: 'animated', value: 'water',      thumbnail: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=200&q=60' },
+  { id: 'anim-mountains', name: 'Mountains',     type: 'animated', value: 'mountains',  thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200&q=60' },
+  { id: 'anim-hills',     name: 'Green Hills',   type: 'animated', value: 'hills',      thumbnail: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=200&q=60' },
 ]
 
 export interface ReciterOption {

@@ -1,21 +1,51 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { Check, Upload, X, Film, Play } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { Check, Upload, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
-import { PRESET_BACKGROUNDS, PRESET_VIDEOS, type BackgroundOption } from '@/lib/quran-types'
+import { PRESET_BACKGROUNDS, ANIMATED_BACKGROUNDS, type BackgroundOption } from '@/lib/quran-types'
+import { drawAnimatedBackground } from '@/lib/animations'
+import { useState } from 'react'
 
 const gradients = PRESET_BACKGROUNDS.filter((b) => b.type === 'gradient')
 const naturePhotos = PRESET_BACKGROUNDS.filter((b) => b.type === 'preset')
 
+/** Small live canvas preview for animated backgrounds */
+function AnimatedPreview({ name, active }: { name: string; active: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  const rafRef = useRef<number>(0)
+
+  useEffect(() => {
+    const canvas = ref.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const start = performance.now()
+    const loop = () => {
+      drawAnimatedBackground(ctx, canvas.width, canvas.height, performance.now() - start, name)
+      rafRef.current = requestAnimationFrame(loop)
+    }
+    rafRef.current = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [name])
+
+  return (
+    <canvas
+      ref={ref}
+      width={72}
+      height={128}
+      className="w-full h-full object-cover"
+      style={{ display: 'block' }}
+    />
+  )
+}
+
 export function BackgroundSelector() {
   const { config, setConfig } = useReel()
   const [customBackground, setCustomBackground] = useState<BackgroundOption | null>(null)
-  const [customVideo, setCustomVideo] = useState<BackgroundOption | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
-  const videoInputRef = useRef<HTMLInputElement>(null)
 
   const handleSelect = (bg: BackgroundOption) => setConfig({ background: bg })
 
@@ -32,31 +62,11 @@ export function BackgroundSelector() {
     setConfig({ background: custom })
   }
 
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (!file.type.startsWith('video/')) { alert('Please select a video file'); return }
-    if (customVideo?.value) URL.revokeObjectURL(customVideo.value)
-    const url = URL.createObjectURL(file)
-    const custom: BackgroundOption = {
-      id: 'custom-video', name: file.name, type: 'video', value: url,
-    }
-    setCustomVideo(custom)
-    setConfig({ background: custom })
-  }
-
   const clearCustomImage = () => {
     if (customBackground?.value) URL.revokeObjectURL(customBackground.value)
     setCustomBackground(null)
     setConfig({ background: PRESET_BACKGROUNDS[0] })
     if (imageInputRef.current) imageInputRef.current.value = ''
-  }
-
-  const clearCustomVideo = () => {
-    if (customVideo?.value) URL.revokeObjectURL(customVideo.value)
-    setCustomVideo(null)
-    setConfig({ background: PRESET_BACKGROUNDS[0] })
-    if (videoInputRef.current) videoInputRef.current.value = ''
   }
 
   return (
@@ -65,49 +75,28 @@ export function BackgroundSelector() {
         Background / الخلفية
       </label>
 
-      {/* Built-in video presets */}
+      {/* ── Animated Backgrounds ── */}
       <div>
-        <p className="text-xs font-medium text-primary mb-2 flex items-center gap-1">
-          <Film className="h-3 w-3" />
-          Video Backgrounds
-        </p>
+        <p className="text-xs font-medium text-primary mb-2">✦ Animated Backgrounds</p>
         <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-          {PRESET_VIDEOS.map((bg) => (
+          {ANIMATED_BACKGROUNDS.map((bg) => (
             <button
               key={bg.id}
               onClick={() => handleSelect(bg)}
               title={bg.name}
               className={cn(
-                'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all bg-muted',
+                'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all bg-black',
                 config.background?.id === bg.id
                   ? 'border-primary ring-2 ring-primary/20'
                   : 'border-transparent hover:border-primary/50'
               )}
             >
-              {bg.thumbnail ? (
-                <img
-                  src={bg.thumbnail}
-                  alt={bg.name}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-muted">
-                  <Play className="h-4 w-4 text-muted-foreground" />
+              <AnimatedPreview name={bg.value} active={config.background?.id === bg.id} />
+              {config.background?.id === bg.id && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <Check className="h-4 w-4 text-white drop-shadow" />
                 </div>
               )}
-              {/* Play icon overlay */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                {config.background?.id === bg.id ? (
-                  <div className="bg-black/30 rounded-full p-1">
-                    <Check className="h-3 w-3 text-white" />
-                  </div>
-                ) : (
-                  <div className="bg-black/40 rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Play className="h-3 w-3 text-white" />
-                  </div>
-                )}
-              </div>
               <span className="absolute bottom-0 inset-x-0 text-[9px] text-white/90 text-center py-0.5 bg-black/50 truncate px-0.5">
                 {bg.name}
               </span>
@@ -116,64 +105,7 @@ export function BackgroundSelector() {
         </div>
       </div>
 
-      {/* Video upload — custom upload */}
-      <div>
-        <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-          <Upload className="h-3 w-3" />
-          Upload Your Own Video
-        </p>
-        {customVideo ? (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => handleSelect(customVideo)}
-              className={cn(
-                'relative w-16 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all block bg-black',
-                config.background?.id === 'custom-video'
-                  ? 'border-primary ring-2 ring-primary/20'
-                  : 'border-border hover:border-primary/50'
-              )}
-            >
-              <video
-                src={customVideo.value}
-                className="w-full h-full object-cover opacity-80"
-                muted
-                playsInline
-              />
-              {config.background?.id === 'custom-video' && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                  <Check className="h-4 w-4 text-white" />
-                </div>
-              )}
-            </button>
-            <div className="flex flex-col gap-1">
-              <p className="text-xs text-foreground truncate max-w-[160px]">{customVideo.name}</p>
-              <p className="text-xs text-muted-foreground">Video background loaded</p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="h-7 text-xs gap-1"
-                  onClick={() => videoInputRef.current?.click()}>
-                  <Upload className="h-3 w-3" /> Replace
-                </Button>
-                <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive"
-                  onClick={clearCustomVideo}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <Button
-            variant="outline"
-            className="h-16 w-full border-dashed gap-2 border-primary/40 hover:border-primary"
-            onClick={() => videoInputRef.current?.click()}
-          >
-            <Film className="h-4 w-4 text-primary" />
-            <span className="text-sm">Upload Video (.mp4, .mov…)</span>
-          </Button>
-        )}
-        <input ref={videoInputRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
-      </div>
-
-      {/* Gradient section */}
+      {/* ── Gradients ── */}
       <div>
         <p className="text-xs text-muted-foreground mb-2">Gradients</p>
         <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
@@ -203,7 +135,7 @@ export function BackgroundSelector() {
         </div>
       </div>
 
-      {/* Nature photos section */}
+      {/* ── Nature Photos ── */}
       <div>
         <p className="text-xs text-muted-foreground mb-2">Nature Photos</p>
         <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
@@ -219,12 +151,7 @@ export function BackgroundSelector() {
                   : 'border-transparent hover:border-primary/50'
               )}
             >
-              <img
-                src={bg.thumbnail || bg.value}
-                alt={bg.name}
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
+              <img src={bg.thumbnail || bg.value} alt={bg.name} className="w-full h-full object-cover" loading="lazy" />
               {config.background?.id === bg.id && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                   <Check className="h-4 w-4 text-white" />
@@ -238,7 +165,7 @@ export function BackgroundSelector() {
         </div>
       </div>
 
-      {/* Custom image upload */}
+      {/* ── Custom Image Upload ── */}
       <div>
         <p className="text-xs text-muted-foreground mb-2">Upload Image</p>
         {customBackground ? (

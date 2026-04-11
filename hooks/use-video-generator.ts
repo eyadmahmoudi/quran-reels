@@ -395,9 +395,22 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             ...audioDest.stream.getAudioTracks(),
           ])
 
+          // Prefer MP4 (H.264+AAC) — plays natively in phone galleries.
+          // Chrome 130+ on Windows/Android supports this via hardware encoding.
+          // Fall back to WebM if MP4 is unavailable.
+          const MP4_TYPES = [
+            'video/mp4;codecs=avc1,mp4a.40.2',
+            'video/mp4;codecs=h264,aac',
+            'video/mp4',
+          ]
+          const WEBM_TYPES = [
+            'video/webm;codecs=vp8,opus',
+            'video/webm',
+          ]
           const mimeType =
-            MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' :
-            'video/webm'
+            [...MP4_TYPES, ...WEBM_TYPES].find(t => MediaRecorder.isTypeSupported(t)) ?? 'video/webm'
+          const isMp4 = mimeType.startsWith('video/mp4')
+          const fileExt = isMp4 ? 'mp4' : 'webm'
 
           const mediaRecorder = new MediaRecorder(combinedStream, {
             mimeType,
@@ -467,19 +480,21 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           let videoBlob = await recordingComplete
           if (cancelledRef.current) return
 
-          // Patch WebM duration metadata
+          // Patch WebM duration metadata (only needed for WebM, not MP4)
           setProgress(98)
-          try {
-            const mod = await import('fix-webm-duration')
-            const fix = mod.default ?? mod
-            videoBlob = await fix(videoBlob, totalDurationMs)
-          } catch { /* use original blob if patch fails */ }
+          if (!isMp4) {
+            try {
+              const mod = await import('fix-webm-duration')
+              const fix = mod.default ?? mod
+              videoBlob = await fix(videoBlob, totalDurationMs)
+            } catch { /* use original blob if patch fails */ }
+          }
 
           setProgress(99)
           const url = URL.createObjectURL(videoBlob)
           const a = document.createElement('a')
           a.href = url
-          a.download = `quran-reel-${surahName.replace(/\s+/g, '-')}-${startVerse}-${endVerse}.webm`
+          a.download = `quran-reel-${surahName.replace(/\s+/g, '-')}-${startVerse}-${endVerse}.${fileExt}`
           document.body.appendChild(a); a.click(); document.body.removeChild(a)
           URL.revokeObjectURL(url)
           setProgress(100)

@@ -290,7 +290,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const verseTimings: Array<{ startMs: number; endMs: number }> = []
 
         // ── Intro sequence ────────────────────────────────────────────────
-        // 1. Ta'awwudh: Al-Husary's Bismillah served locally (أعوذ بالله...)
+        // 1. Ta'awwudh: Al-Husary saying أعوذ بالله من الشيطان الرجيم (served locally)
         // 2. Bismillah from selected reciter: only when startVerse===1,
         //    surah≠1 (Fatiha already has it as v1) and surah≠9 (At-Tawbah)
         const taawudhText = 'أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ'

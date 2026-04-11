@@ -23,8 +23,8 @@ export function ReciterSelector() {
 
     setPreviewLoading(reciter.id)
     try {
-      // Preview: Bismillah (001001.mp3) — short, clean sample of the reciter's voice
-      const url = `/api/audio?url=${encodeURIComponent(`https://everyayah.com/data/${reciter.folder}/001001.mp3`)}`
+      // Preview: Fatiha v2 (001002.mp3) — الحمد لله رب العالمين, clean sample of the reciter's voice
+      const url = `/api/audio?url=${encodeURIComponent(`https://everyayah.com/data/${reciter.folder}/001002.mp3`)}`
       const audio = new Audio(url)
       audioRef.current = audio
       audio.oncanplay = () => { setPreviewLoading(null); setPreviewPlaying(reciter.id); audio.play() }

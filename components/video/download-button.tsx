@@ -37,7 +37,7 @@ export function DownloadButton() {
         <div className="relative h-7 w-full rounded-full overflow-hidden" style={{ background: 'rgba(201,168,76,0.1)' }}>
           {/* Fill */}
           <div
-            className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
+            className="absolute inset-y-0 left-0 transition-all duration-500"
             style={{
               width: `${Math.max(progress, 2)}%`,
               background: 'linear-gradient(90deg, #a07830, #c9a84c, #f0d080)',

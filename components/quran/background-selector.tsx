@@ -1,18 +1,27 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { Check, Upload, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, Upload, X, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
 import { PRESET_BACKGROUNDS, ANIMATED_BACKGROUNDS, type BackgroundOption } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
-import { useState } from 'react'
 
 const gradients = PRESET_BACKGROUNDS.filter((b) => b.type === 'gradient')
 const naturePhotos = PRESET_BACKGROUNDS.filter((b) => b.type === 'preset')
 
-/** Static canvas thumbnail for animated backgrounds — renders one frame only */
+const INITIAL_COUNT = 4
+
+type Category = 'animated' | 'nature' | 'gradients'
+
+const CATEGORIES: { key: Category; label: string; labelAr: string }[] = [
+  { key: 'animated', label: 'Animated', labelAr: 'متحركة' },
+  { key: 'nature', label: 'Nature', labelAr: 'طبيعة' },
+  { key: 'gradients', label: 'Gradients', labelAr: 'تدرجات' },
+]
+
+/** Static canvas thumbnail — renders one frame only */
 function AnimatedPreview({ name }: { name: string }) {
   const ref = useRef<HTMLCanvasElement>(null)
 
@@ -21,7 +30,6 @@ function AnimatedPreview({ name }: { name: string }) {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    // Draw a single frame at t=2000ms (a representative moment) — no animation loop
     drawAnimatedBackground(ctx, canvas.width, canvas.height, 2000, name)
   }, [name])
 
@@ -36,10 +44,30 @@ function AnimatedPreview({ name }: { name: string }) {
   )
 }
 
+function BgThumbnail({ bg }: { bg: BackgroundOption }) {
+  if (bg.type === 'animated') {
+    return <AnimatedPreview name={bg.value} />
+  }
+  if (bg.type === 'gradient') {
+    return <div className="w-full h-full" style={{ background: bg.value }} />
+  }
+  // preset (nature photo)
+  return (
+    <img
+      src={bg.thumbnail || bg.value}
+      alt={bg.name}
+      className="w-full h-full object-cover"
+      loading="lazy"
+    />
+  )
+}
+
 export function BackgroundSelector() {
   const { config, setConfig } = useReel()
   const [customBackground, setCustomBackground] = useState<BackgroundOption | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const [activeCategory, setActiveCategory] = useState<Category>('animated')
+  const [expanded, setExpanded] = useState(false)
 
   const handleSelect = (bg: BackgroundOption) => setConfig({ background: bg })
 
@@ -63,105 +91,87 @@ export function BackgroundSelector() {
     if (imageInputRef.current) imageInputRef.current.value = ''
   }
 
+  // Get items for current category
+  const allItems =
+    activeCategory === 'animated' ? ANIMATED_BACKGROUNDS :
+    activeCategory === 'nature' ? naturePhotos :
+    gradients
+
+  const visibleItems = expanded ? allItems : allItems.slice(0, INITIAL_COUNT)
+  const hasMore = allItems.length > INITIAL_COUNT
+
+  // Reset expanded state when switching categories
+  const switchCategory = (cat: Category) => {
+    setActiveCategory(cat)
+    setExpanded(false)
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <label className="text-sm font-medium text-muted-foreground">
         Background / الخلفية
       </label>
 
-      {/* ── Animated Backgrounds ── */}
-      <div>
-        <p className="text-xs font-medium text-primary mb-2">✦ Animated Backgrounds</p>
-        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-          {ANIMATED_BACKGROUNDS.map((bg) => (
-            <button
-              key={bg.id}
-              onClick={() => handleSelect(bg)}
-              title={bg.name}
-              className={cn(
-                'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all bg-black',
-                config.background?.id === bg.id
-                  ? 'border-primary ring-2 ring-primary/20'
-                  : 'border-transparent hover:border-primary/50'
-              )}
-            >
-              <AnimatedPreview name={bg.value} />
-              {config.background?.id === bg.id && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                  <Check className="h-4 w-4 text-white drop-shadow" />
-                </div>
-              )}
-              <span className="absolute bottom-0 inset-x-0 text-[9px] text-white/90 text-center py-0.5 bg-black/50 truncate px-0.5">
-                {bg.name}
-              </span>
-            </button>
-          ))}
-        </div>
+      {/* ── Category tabs ── */}
+      <div className="flex gap-1 p-1 rounded-lg bg-muted/50">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat.key}
+            onClick={() => switchCategory(cat.key)}
+            className={cn(
+              'flex-1 py-2 px-3 rounded-md text-xs font-medium transition-colors',
+              activeCategory === cat.key
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {cat.label}
+          </button>
+        ))}
       </div>
 
-      {/* ── Gradients ── */}
-      <div>
-        <p className="text-xs text-muted-foreground mb-2">Gradients</p>
-        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-          {gradients.map((bg) => (
-            <button
-              key={bg.id}
-              onClick={() => handleSelect(bg)}
-              title={bg.name}
-              className={cn(
-                'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all',
-                config.background?.id === bg.id
-                  ? 'border-primary ring-2 ring-primary/20'
-                  : 'border-transparent hover:border-primary/50'
-              )}
-              style={{ background: bg.value }}
-            >
-              {config.background?.id === bg.id && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                  <Check className="h-4 w-4 text-white" />
-                </div>
-              )}
-              <span className="absolute bottom-0 inset-x-0 text-[9px] text-white/80 text-center py-0.5 bg-black/30 truncate px-0.5">
-                {bg.name}
-              </span>
-            </button>
-          ))}
-        </div>
+      {/* ── Background grid ── */}
+      <div className="grid grid-cols-4 gap-2">
+        {visibleItems.map((bg) => (
+          <button
+            key={bg.id}
+            onClick={() => handleSelect(bg)}
+            title={bg.name}
+            className={cn(
+              'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all',
+              bg.type === 'animated' || bg.type === 'preset' ? 'bg-black' : 'bg-muted',
+              config.background?.id === bg.id
+                ? 'border-primary ring-2 ring-primary/20'
+                : 'border-transparent hover:border-primary/50'
+            )}
+          >
+            <BgThumbnail bg={bg} />
+            {config.background?.id === bg.id && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                <Check className="h-4 w-4 text-white drop-shadow" />
+              </div>
+            )}
+            <span className="absolute bottom-0 inset-x-0 text-[9px] text-white/90 text-center py-0.5 bg-black/50 truncate px-0.5">
+              {bg.name}
+            </span>
+          </button>
+        ))}
       </div>
 
-      {/* ── Nature Photos ── */}
-      <div>
-        <p className="text-xs text-muted-foreground mb-2">Nature Photos</p>
-        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-          {naturePhotos.map((bg) => (
-            <button
-              key={bg.id}
-              onClick={() => handleSelect(bg)}
-              title={bg.name}
-              className={cn(
-                'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all bg-muted',
-                config.background?.id === bg.id
-                  ? 'border-primary ring-2 ring-primary/20'
-                  : 'border-transparent hover:border-primary/50'
-              )}
-            >
-              <img src={bg.thumbnail || bg.value} alt={bg.name} className="w-full h-full object-cover" loading="lazy" />
-              {config.background?.id === bg.id && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                  <Check className="h-4 w-4 text-white" />
-                </div>
-              )}
-              <span className="absolute bottom-0 inset-x-0 text-[9px] text-white/90 text-center py-0.5 bg-black/50 truncate px-0.5">
-                {bg.name}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* ── Show more / less ── */}
+      {hasMore && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center justify-center gap-1 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
+          {expanded ? 'Show less' : `Show more (${allItems.length - INITIAL_COUNT})`}
+        </button>
+      )}
 
       {/* ── Custom Image Upload ── */}
-      <div>
-        <p className="text-xs text-muted-foreground mb-2">Upload Image</p>
+      <div className="pt-2 border-t border-border/50">
+        <p className="text-xs text-muted-foreground mb-2">Custom Image</p>
         {customBackground ? (
           <div className="relative inline-block">
             <button
@@ -190,7 +200,7 @@ export function BackgroundSelector() {
           </div>
         ) : (
           <Button
-            variant="outline" className="h-12 w-full border-dashed gap-2"
+            variant="outline" className="h-10 w-full border-dashed gap-2"
             onClick={() => imageInputRef.current?.click()}
           >
             <Upload className="h-4 w-4" />

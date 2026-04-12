@@ -68,7 +68,7 @@ export function VideoPreview() {
     pause,
     stop,
   } = useQuranAudio({
-    recitationId: config.reciterId || 7,
+    recitationId: config.recitationId || 7,
     surahId: config.surah?.id || 1,
     startVerse: config.startVerse,
     endVerse: config.endVerse,

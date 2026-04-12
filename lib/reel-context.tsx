@@ -12,8 +12,6 @@ interface ReelContextType {
   setVerses: (verses: Verse[]) => void
   currentVerseIndex: number
   setCurrentVerseIndex: (index: number) => void
-  isPlaying: boolean
-  setIsPlaying: (playing: boolean) => void
   resetConfig: () => void
   isConfigValid: boolean
 }
@@ -36,7 +34,6 @@ export function ReelProvider({ children }: { children: ReactNode }) {
   const [config, setConfigState] = useState<ReelConfig>(defaultConfig)
   const [verses, setVerses] = useState<Verse[]>([])
   const [currentVerseIndex, setCurrentVerseIndex] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(false)
 
   useEffect(() => {
     if (!config.surah) {
@@ -80,7 +77,6 @@ export function ReelProvider({ children }: { children: ReactNode }) {
     <ReelContext.Provider value={{
       config, setConfig, verses, setVerses,
       currentVerseIndex, setCurrentVerseIndex,
-      isPlaying, setIsPlaying,
       resetConfig, isConfigValid,
     }}>
       {children}

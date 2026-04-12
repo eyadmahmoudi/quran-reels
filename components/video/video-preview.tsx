@@ -9,6 +9,13 @@ import { useQuranAudio } from '@/hooks/use-quran-audio'
 import { fetchVerses } from '@/lib/quran-api'
 import { formatTime } from '@/lib/quran-api'
 
+// 1. ADDED HELPER FUNCTION HERE (Outside the component)
+function formatAyahNumber(verseKey: string | number) {
+  const numStr = verseKey.toString().includes(':') ? verseKey.toString().split(':')[1] : verseKey.toString();
+  // The KFGQPC font expects standard digits and will automatically draw the circle around them
+  return `\u06DD${numStr}`; 
+}
+
 export function VideoPreview() {
   const {
     config,
@@ -155,16 +162,17 @@ export function VideoPreview() {
               <Loader2 className="h-8 w-8 text-white animate-spin" />
             ) : currentVerse ? (
               <div className="text-center space-y-6">
-                {/* Arabic verse in Uthmani script */}
+                
+                {/* 2. UPDATED ARABIC VERSE DISPLAY HERE */}
                 <p
-                  className="text-white text-2xl leading-loose text-center"
+                  className="text-[#c9a84c] text-3xl leading-loose text-center"
                   style={{
                     fontFamily: 'Uthmani, "KFGQPC Uthmanic Script HAFS", Amiri, serif',
                     direction: 'rtl',
-                    textShadow: '0 2px 10px rgba(0,0,0,0.5)',
+                    textShadow: '0 2px 10px rgba(0,0,0,0.8)',
                   }}
                 >
-                  {currentVerse.text_uthmani}
+                  {currentVerse.text_uthmani} {formatAyahNumber(currentVerse.verse_key)}
                 </p>
 
                 {/* Translation if enabled */}

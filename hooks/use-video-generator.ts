@@ -141,8 +141,8 @@ function drawFrame(
 
   // Minimal matches reference style (smaller, elegant). Classic keeps larger size.
   const arabicFontSize = displayMode === 'minimal' ? 58 : 68
-  ctx.font = `${arabicFontSize}px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif`
-  ctx.textAlign = 'center'
+  const nabiFont = `${arabicFontSize}px "Nabi", sans-serif`
+  const uthmanicFont = `${arabicFontSize}px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif`
   ctx.textBaseline = 'middle'
   ctx.shadowColor = 'rgba(0,0,0,0.9)'
   ctx.shadowBlur = displayMode === 'minimal' ? 18 : 24
@@ -150,13 +150,18 @@ function drawFrame(
 
   const verseText = verse.text_uthmani || verse.words?.map(w => w.text_uthmani).join(' ') || ''
 
-  // Always include the verse-end medallion ۝ (U+06DD) with Arabic numeral — matches reference
+  // Ayah marker: standard digits — UthmanicHafs renders ۝ + digits as the Quranic circle glyph
   const verseNumber = parseInt(verse.verse_key.split(':')[1])
-  const markerChar = `\u06DD${toArabicNumerals(verseNumber)}`
-  const fullText = `${verseText} ${markerChar}`
+  const markerChar = `\u06DD${verseNumber}`
 
+  // Measure marker width in UthmanicHafs
+  ctx.font = uthmanicFont
+  const markerWidth = ctx.measureText(markerChar).width
+
+  // Word-wrap verse text using Nabi font (marker handled separately)
+  ctx.font = nabiFont
   const maxWidth = width - 100
-  const words = fullText.split(' ')
+  const words = verseText.split(' ')
   const lines: string[] = []
   let currentLine = ''
   for (const word of words) {
@@ -165,7 +170,17 @@ function drawFrame(
       lines.push(currentLine); currentLine = word
     } else { currentLine = testLine }
   }
-  if (currentLine) lines.push(currentLine)
+  // Check if marker fits on the last line, otherwise give it its own line
+  if (currentLine) {
+    const lastLineWidth = ctx.measureText(currentLine).width
+    const spaceW = ctx.measureText(' ').width
+    if (lastLineWidth + spaceW + markerWidth > maxWidth) {
+      lines.push(currentLine)
+      lines.push('') // marker-only line
+    } else {
+      lines.push(currentLine)
+    }
+  }
 
   const lineHeight = arabicFontSize * 1.6
   const totalTextHeight = lines.length * lineHeight
@@ -177,7 +192,39 @@ function drawFrame(
   const textStartY = textCenterY - totalTextHeight / 2
 
   lines.forEach((line, i) => {
-    ctx.fillText(line, width / 2, textStartY + i * lineHeight)
+    const y = textStartY + i * lineHeight
+    const isLastLine = i === lines.length - 1
+
+    if (!isLastLine) {
+      // Regular verse line — Nabi font, centered
+      ctx.font = nabiFont
+      ctx.textAlign = 'center'
+      ctx.fillText(line, width / 2, y)
+    } else if (line === '') {
+      // Marker-only line — UthmanicHafs, centered
+      ctx.font = uthmanicFont
+      ctx.textAlign = 'center'
+      ctx.fillText(markerChar, width / 2, y)
+    } else {
+      // Last line with verse text + marker — two fonts, positioned as a centered block
+      ctx.font = nabiFont
+      const lineW = ctx.measureText(line).width
+      const spaceW = ctx.measureText(' ').width
+      ctx.font = uthmanicFont
+      const mw = ctx.measureText(markerChar).width
+      const totalW = lineW + spaceW + mw
+      // RTL: verse text on the right, marker on the left
+      const rightEdge = width / 2 + totalW / 2
+      const leftEdge = width / 2 - totalW / 2
+
+      ctx.font = nabiFont
+      ctx.textAlign = 'right'
+      ctx.fillText(line, rightEdge, y)
+
+      ctx.font = uthmanicFont
+      ctx.textAlign = 'left'
+      ctx.fillText(markerChar, leftEdge, y)
+    }
   })
   ctx.shadowBlur = 0
   ctx.restore()
@@ -347,8 +394,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           try { backgroundImage = await loadImage(background.value) } catch { /* use gradient */ }
         }
 
+        try { await document.fonts.load('58px "Nabi"') } catch { /* optional */ }
+        try { await document.fonts.load('68px "Nabi"') } catch { /* optional */ }
         try { await document.fonts.load('58px "UthmanicHafs"') } catch { /* optional */ }
-        try { await document.fonts.load('32px "UthmanicHafs"') } catch { /* optional */ }
+        try { await document.fonts.load('68px "UthmanicHafs"') } catch { /* optional */ }
         try { await document.fonts.load('32px "Amiri Quran"') } catch { /* optional */ }
         try { await document.fonts.load('58px "Amiri Quran"') } catch { /* optional */ }
         try { await document.fonts.load('32px "Scheherazade New"') } catch { /* optional */ }

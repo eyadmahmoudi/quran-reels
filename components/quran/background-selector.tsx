@@ -12,23 +12,17 @@ import { useState } from 'react'
 const gradients = PRESET_BACKGROUNDS.filter((b) => b.type === 'gradient')
 const naturePhotos = PRESET_BACKGROUNDS.filter((b) => b.type === 'preset')
 
-/** Small live canvas preview for animated backgrounds */
-function AnimatedPreview({ name, active }: { name: string; active: boolean }) {
+/** Static canvas thumbnail for animated backgrounds — renders one frame only */
+function AnimatedPreview({ name }: { name: string }) {
   const ref = useRef<HTMLCanvasElement>(null)
-  const rafRef = useRef<number>(0)
 
   useEffect(() => {
     const canvas = ref.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    const start = performance.now()
-    const loop = () => {
-      drawAnimatedBackground(ctx, canvas.width, canvas.height, performance.now() - start, name)
-      rafRef.current = requestAnimationFrame(loop)
-    }
-    rafRef.current = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(rafRef.current)
+    // Draw a single frame at t=2000ms (a representative moment) — no animation loop
+    drawAnimatedBackground(ctx, canvas.width, canvas.height, 2000, name)
   }, [name])
 
   return (
@@ -91,7 +85,7 @@ export function BackgroundSelector() {
                   : 'border-transparent hover:border-primary/50'
               )}
             >
-              <AnimatedPreview name={bg.value} active={config.background?.id === bg.id} />
+              <AnimatedPreview name={bg.value} />
               {config.background?.id === bg.id && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                   <Check className="h-4 w-4 text-white drop-shadow" />

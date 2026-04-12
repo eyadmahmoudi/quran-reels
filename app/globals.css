@@ -138,46 +138,12 @@
     );
 }
 
-/* ── Gold shimmer animation ─────────────────────────────────────────────── */
-@keyframes shimmer {
-  0% { background-position: -200% center; }
-  100% { background-position: 200% center; }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
-}
-
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 20px rgba(201,168,76,0.3), 0 0 40px rgba(201,168,76,0.1); }
-  50% { box-shadow: 0 0 30px rgba(201,168,76,0.5), 0 0 60px rgba(201,168,76,0.2); }
-}
-
-@keyframes border-glow {
-  0%, 100% { border-color: rgba(201,168,76,0.25); }
-  50% { border-color: rgba(201,168,76,0.55); }
-}
-
-.animate-float {
-  animation: float 4s ease-in-out infinite;
-}
-
-.animate-glow {
-  animation: glow-pulse 3s ease-in-out infinite;
-}
-
-.animate-border-glow {
-  animation: border-glow 2.5s ease-in-out infinite;
-}
-
+/* ── Gold text (static — no animation) ─────────────────────────────────── */
 .gold-shimmer-text {
-  background: linear-gradient(90deg, #b8922a, #f0d080, #c9a84c, #f5e090, #b8922a);
-  background-size: 200% auto;
+  background: linear-gradient(90deg, #b8922a, #f0d080, #c9a84c);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: shimmer 4s linear infinite;
 }
 
 /* ── Quran card ─────────────────────────────────────────────────────────── */
@@ -189,11 +155,7 @@
   );
   border: 1px solid rgba(201,168,76,0.18);
   border-radius: 16px;
-  box-shadow:
-    0 4px 24px rgba(0,0,0,0.35),
-    0 1px 0 rgba(201,168,76,0.08) inset,
-    0 -1px 0 rgba(0,0,0,0.3) inset;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
   overflow: hidden;
 }
 
@@ -207,14 +169,6 @@
   background: linear-gradient(90deg, transparent, rgba(201,168,76,0.5), transparent);
 }
 
-.quran-card:hover {
-  border-color: rgba(201,168,76,0.35);
-  box-shadow:
-    0 8px 40px rgba(0,0,0,0.45),
-    0 0 20px rgba(201,168,76,0.06),
-    0 1px 0 rgba(201,168,76,0.15) inset;
-}
-
 /* ── Light mode card override ───────────────────────────────────────────── */
 :root:not(.dark) .quran-card {
   background: linear-gradient(145deg,
@@ -222,13 +176,7 @@
     rgba(250,244,232,0.99) 100%
   );
   border-color: rgba(160,120,48,0.22);
-  box-shadow:
-    0 4px 24px rgba(0,0,0,0.08),
-    0 1px 0 rgba(201,168,76,0.12) inset;
-}
-:root:not(.dark) .quran-card:hover {
-  border-color: rgba(160,120,48,0.4);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 0 16px rgba(201,168,76,0.08);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
 }
 :root:not(.dark) .geo-pattern {
   background-image:

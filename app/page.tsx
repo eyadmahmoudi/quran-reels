@@ -75,7 +75,7 @@ function ThemeToggleButton() {
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       aria-label="Toggle light/dark mode"
-      className="animate-glow flex w-11 h-11 rounded-full items-center justify-center border flex-shrink-0 transition-all duration-300 cursor-pointer"
+      className="flex w-11 h-11 rounded-full items-center justify-center border flex-shrink-0 transition-colors duration-300 cursor-pointer"
       style={{
         background: isDark
           ? `radial-gradient(circle, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.05) 100%)`
@@ -122,7 +122,7 @@ export default function QuranReelsGenerator() {
         linear-gradient(180deg, #f5f0e4 0%, #f0ead8 50%, #ede6d0 100%)
       `
 
-  const headerBg = isDark ? 'rgba(6,8,15,0.88)' : 'rgba(245,240,228,0.92)'
+  const headerBg = isDark ? 'rgb(6,8,15)' : 'rgb(245,240,228)'
   const headerBorder = isDark ? `rgba(201,168,76,0.14)` : `rgba(160,120,48,0.2)`
   const footerTextColor = isDark ? `${GOLD}50` : `${GOLD_DARK}90`
   const footerLinkColor = isDark ? 'rgba(150,150,160,0.45)' : 'rgba(100,90,70,0.6)'
@@ -143,9 +143,8 @@ export default function QuranReelsGenerator() {
           className="sticky top-0 z-50 border-b"
           style={{
             background: headerBg,
-            backdropFilter: 'blur(20px)',
             borderColor: headerBorder,
-            boxShadow: '0 1px 0 rgba(201,168,76,0.06), 0 4px 24px rgba(0,0,0,0.1)',
+            boxShadow: '0 1px 0 rgba(201,168,76,0.06), 0 4px 12px rgba(0,0,0,0.08)',
           }}
         >
           <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
@@ -174,7 +173,7 @@ export default function QuranReelsGenerator() {
             <div className="text-center mb-10 sm:mb-14">
               {/* Bismillah card */}
               <div
-                className="animate-float inline-block px-6 sm:px-10 py-5 rounded-2xl mb-5 border relative overflow-hidden"
+                className="inline-block px-6 sm:px-10 py-5 rounded-2xl mb-5 border relative overflow-hidden"
                 style={{
                   background: `linear-gradient(145deg, rgba(201,168,76,0.10) 0%, rgba(201,168,76,0.04) 100%)`,
                   borderColor: `rgba(201,168,76,0.25)`,

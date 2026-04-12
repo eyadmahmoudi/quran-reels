@@ -1,18 +1,16 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { Play, Pause, RotateCcw, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
 import { useQuranAudio } from '@/hooks/use-quran-audio'
 import { fetchVerses } from '@/lib/quran-api'
 import { formatTime } from '@/lib/quran-api'
 
-// 1. ADDED HELPER FUNCTION HERE (Outside the component)
+// FORMATTER: Gives standard numbers to the Uthmani font so it draws the circle
 function formatAyahNumber(verseKey: string | number) {
   const numStr = verseKey.toString().includes(':') ? verseKey.toString().split(':')[1] : verseKey.toString();
-  // The KFGQPC font expects standard digits and will automatically draw the circle around them
   return `\u06DD${numStr}`; 
 }
 
@@ -29,7 +27,6 @@ export function VideoPreview() {
 
   const [isLoadingVerses, setIsLoadingVerses] = useState(false)
 
-  // Load verses when config changes
   useEffect(() => {
     async function loadVerses() {
       if (!config.surah) return
@@ -70,7 +67,6 @@ export function VideoPreview() {
     play,
     pause,
     stop,
-    seekToVerse,
   } = useQuranAudio({
     recitationId: config.recitationId || 7,
     surahId: config.surah?.id || 1,
@@ -81,7 +77,6 @@ export function VideoPreview() {
     onComplete: () => setIsPlaying(false),
   })
 
-  // Sync playing state
   useEffect(() => {
     setIsPlaying(audioIsPlaying)
   }, [audioIsPlaying, setIsPlaying])
@@ -101,7 +96,6 @@ export function VideoPreview() {
 
   const currentVerse = verses[audioVerseIndex]
 
-  // Get background style
   const backgroundStyle =
     config.background?.type === 'gradient'
       ? { background: config.background.value }
@@ -137,17 +131,13 @@ export function VideoPreview() {
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Phone mockup */}
       <div
         className="relative w-full max-w-[280px] aspect-[9/16] rounded-3xl overflow-hidden border-4 border-border shadow-2xl"
         style={backgroundStyle}
       >
-        {/* Overlay for better text readability */}
         <div className="absolute inset-0 bg-black/30" />
 
-        {/* Content */}
         <div className="relative h-full flex flex-col p-4">
-          {/* Header - Surah info */}
           <div className="flex items-center justify-center mb-4">
             <div className="bg-black/40 backdrop-blur-sm px-4 py-2 rounded-full">
               <span className="text-white/90 text-sm font-arabic">
@@ -156,33 +146,38 @@ export function VideoPreview() {
             </div>
           </div>
 
-          {/* Main content - Verse display */}
           <div className="flex-1 flex flex-col items-center justify-center px-2">
             {isLoadingVerses ? (
               <Loader2 className="h-8 w-8 text-white animate-spin" />
             ) : currentVerse ? (
               <div className="text-center space-y-6">
                 
-                {/* 2. UPDATED ARABIC VERSE DISPLAY HERE */}
+                {/* EXACT FONT SPLIT HERE */}
                 <p
                   className="text-[#c9a84c] text-3xl leading-loose text-center"
-                  style={{
-                    fontFamily: 'Uthmani, "KFGQPC Uthmanic Script HAFS", Amiri, serif',
-                    direction: 'rtl',
-                    textShadow: '0 2px 10px rgba(0,0,0,0.8)',
-                  }}
+                  dir="rtl"
+                  style={{ textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}
                 >
-                  {currentVerse.text_uthmani} {formatAyahNumber(currentVerse.verse_key)}
+                  {/* VERSE: Uses the Nabi font */}
+                  <span style={{ fontFamily: 'Nabi, sans-serif' }}>
+                    {currentVerse.text_uthmani}
+                  </span>
+                  
+                  {/* NUMBER: Uses the Uthmani font (renders the circle perfectly!) */}
+                  <span 
+                    style={{ fontFamily: 'UthmanicHafs, serif' }} 
+                    className="text-[2.5rem] mr-2 align-middle text-white/90"
+                  >
+                    {formatAyahNumber(currentVerse.verse_key)}
+                  </span>
                 </p>
 
-                {/* Translation if enabled */}
                 {config.showTranslation && currentVerse.translations?.[0] && (
                   <p className="text-white/80 text-sm leading-relaxed font-sans" dir="ltr">
                     {currentVerse.translations[0].text}
                   </p>
                 )}
 
-                {/* Verse number indicator */}
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-primary text-xs bg-primary/20 px-3 py-1 rounded-full">
                     {currentVerse.verse_key}
@@ -194,9 +189,7 @@ export function VideoPreview() {
             )}
           </div>
 
-          {/* Footer - Progress */}
           <div className="mt-auto">
-            {/* Progress bar */}
             <div className="h-1 bg-white/20 rounded-full overflow-hidden mb-2">
               <div
                 className="h-full bg-primary transition-all duration-200"
@@ -204,7 +197,6 @@ export function VideoPreview() {
               />
             </div>
 
-            {/* Time display */}
             <div className="flex justify-between text-xs text-white/60">
               <span>{formatTime(currentTime)}</span>
               <span>
@@ -216,7 +208,6 @@ export function VideoPreview() {
         </div>
       </div>
 
-      {/* Controls */}
       <div className="flex items-center gap-3">
         <Button
           variant="outline"
@@ -242,15 +233,13 @@ export function VideoPreview() {
           )}
         </Button>
 
-        <div className="w-10" /> {/* Spacer for symmetry */}
+        <div className="w-10" />
       </div>
 
-      {/* Error display */}
       {audioError && (
         <p className="text-destructive text-sm text-center">{audioError}</p>
       )}
 
-      {/* Loading indicator */}
       {isAudioLoading && (
         <p className="text-muted-foreground text-sm">Loading audio files...</p>
       )}

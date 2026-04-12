@@ -9,11 +9,18 @@ import { useQuranAudio } from '@/hooks/use-quran-audio'
 import { fetchVerses } from '@/lib/quran-api'
 import { formatTime } from '@/lib/quran-api'
 
-// 1. ADDED HELPER FUNCTION HERE (Outside the component)
+// Helper function to format numbers with the old system font and classical brackets
 function formatAyahNumber(verseKey: string | number) {
   const numStr = verseKey.toString().includes(':') ? verseKey.toString().split(':')[1] : verseKey.toString();
-  // The KFGQPC font expects standard digits and will automatically draw the circle around them
-  return `\u06DD${numStr}`; 
+  
+  const arabicNumbers = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  const arabicConverted = numStr
+    .split('')
+    .map((n) => arabicNumbers[parseInt(n, 10)])
+    .join('');
+    
+  // Uses universal ornate Quranic brackets that work perfectly with standard fonts
+  return ` ﴾${arabicConverted}﴿ `; 
 }
 
 export function VideoPreview() {
@@ -163,16 +170,21 @@ export function VideoPreview() {
             ) : currentVerse ? (
               <div className="text-center space-y-6">
                 
-                {/* 2. UPDATED ARABIC VERSE DISPLAY HERE */}
+                {/* Verse Display (Mixed Fonts) */}
                 <p
                   className="text-[#c9a84c] text-3xl leading-loose text-center"
-                  style={{
-                    fontFamily: 'Uthmani, "KFGQPC Uthmanic Script HAFS", Amiri, serif',
-                    direction: 'rtl',
-                    textShadow: '0 2px 10px rgba(0,0,0,0.8)',
-                  }}
+                  dir="rtl"
+                  style={{ textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}
                 >
-                  {currentVerse.text_uthmani} {formatAyahNumber(currentVerse.verse_key)}
+                  {/* Part 1: The Verse in the New Uthmani Font */}
+                  <span style={{ fontFamily: 'Uthmani, "KFGQPC Uthmanic Script HAFS", serif' }}>
+                    {currentVerse.text_uthmani}
+                  </span>
+                  
+                  {/* Part 2: The Number in the Old System Font */}
+                  <span className="font-arabic text-2xl mr-2 text-white/90">
+                    {formatAyahNumber(currentVerse.verse_key)}
+                  </span>
                 </p>
 
                 {/* Translation if enabled */}

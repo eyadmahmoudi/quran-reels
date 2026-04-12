@@ -425,7 +425,11 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             mediaRecorder.onerror = (e) => reject(new Error('MediaRecorder: ' + (e as ErrorEvent).message))
           })
 
-          mediaRecorder.start(1000)
+          // No timeslice — record as a single blob so the container header
+          // gets the correct total duration.  Using start(1000) wrote duration
+          // from only the first 1-second chunk, which made phones/stories show
+          // the video as ~3 s even though it plays longer.
+          mediaRecorder.start()
 
           // Start audio and capture the audio-clock start time.
           // We use audioCtx.currentTime (not performance.now()) as the timing
@@ -491,7 +495,9 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
               const mod = await import('fix-webm-duration')
               const fix = mod.default ?? mod
               videoBlob = await fix(videoBlob, totalDurationMs)
-            } catch { /* use original blob if patch fails */ }
+            } catch (e) {
+              console.warn('[video] fix-webm-duration failed:', e)
+            }
           }
 
           setProgress(99)

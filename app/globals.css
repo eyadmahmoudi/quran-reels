@@ -6,7 +6,8 @@
 /* KFGQPC Uthman Taha Naskh - Official Quran Font from King Fahd Quran Complex */
 @font-face {
   font-family: 'UthmanicHafs';
-  src: url('/fonts/UthmanicHafs.ttf') format('truetype');
+  /* Make sure the name exactly matches the downloaded file, and ends in .otf */
+  src: url('/fonts/UthmanicHafs.otf') format('opentype'); 
   font-weight: normal;
   font-style: normal;
   font-display: swap;

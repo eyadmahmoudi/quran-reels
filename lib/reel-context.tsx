@@ -47,7 +47,7 @@ export function ReelProvider({ children }: { children: ReactNode }) {
     fetchVerses(config.surah.id, {
       startVerse: config.startVerse,
       endVerse: config.endVerse,
-      translationId: config.showTranslation ? config.translationId : undefined,
+      translationId: config.showTranslation ? config.translationId! : undefined,
     }).then((data) => {
       if (!cancelled) setVerses(data)
     }).catch((err) => {

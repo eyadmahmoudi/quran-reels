@@ -104,11 +104,11 @@ function drawFrame(
   }
   ctx.fillRect(0, 0, width, height)
 
-  // ── Ta'awwudh frame: draw intro text when taawudhText is provided and no verse ──
+  // ── Ta'awwudh / Bismillah frame: draw intro text when taawudhText is provided and no verse ──
   if (taawudhText && !verse) {
     ctx.save()
     ctx.fillStyle = 'white'
-    ctx.font = '52px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif'
+    ctx.font = '52px "Nabi", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.shadowColor = 'rgba(0,0,0,0.9)'
@@ -150,9 +150,10 @@ function drawFrame(
 
   const verseText = verse.text_uthmani || verse.words?.map(w => w.text_uthmani).join(' ') || ''
 
-  // Ayah marker: standard digits — UthmanicHafs renders ۝ + digits as the Quranic circle glyph
+  // Ayah marker: Arabic-Indic numerals with U+06DD — canvas lacks font-feature-settings
+  // so we must use Eastern Arabic digits for UthmanicHafs to render the circle glyph
   const verseNumber = parseInt(verse.verse_key.split(':')[1])
-  const markerChar = `\u06DD${verseNumber}`
+  const markerChar = `\u06DD${toArabicNumerals(verseNumber)}`
 
   // Measure marker width in UthmanicHafs
   ctx.font = uthmanicFont
@@ -394,6 +395,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           try { backgroundImage = await loadImage(background.value) } catch { /* use gradient */ }
         }
 
+        try { await document.fonts.load('52px "Nabi"') } catch { /* optional */ }
         try { await document.fonts.load('58px "Nabi"') } catch { /* optional */ }
         try { await document.fonts.load('68px "Nabi"') } catch { /* optional */ }
         try { await document.fonts.load('58px "UthmanicHafs"') } catch { /* optional */ }

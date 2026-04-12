@@ -107,7 +107,7 @@ export default function QuranReelsGenerator() {
               </div>
               {/* Bismillah in header instead of hero */}
               <p
-                className="font-uthmani text-sm sm:text-lg hidden sm:block"
+                className="font-nabi text-sm sm:text-lg hidden sm:block"
                 style={{ color: `${GOLD}cc`, direction: 'rtl' }}
               >
                 بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ

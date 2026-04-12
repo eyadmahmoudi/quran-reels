@@ -1,26 +1,20 @@
-'use client'
+"use client";
 
-import { useState, useEffect, useCallback } from 'react'
-import { Play, Pause, RotateCcw, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { useReel } from '@/lib/reel-context'
-import { useQuranAudio } from '@/hooks/use-quran-audio'
-import { fetchVerses } from '@/lib/quran-api'
-import { formatTime } from '@/lib/quran-api'
+import { useState, useEffect, useCallback } from "react";
+import { Play, Pause, RotateCcw, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { useReel } from "@/lib/reel-context";
+import { useQuranAudio } from "@/hooks/use-quran-audio";
+import { fetchVerses } from "@/lib/quran-api";
+import { formatTime } from "@/lib/quran-api";
 
-// 1. SIMPLE NUMBER FORMATTER (Converts to Arabic numerals and adds the Uthmani circle symbol)
+// FORMATTER: Gives standard numbers to the Uthmani font so it draws the circle
 function formatAyahNumber(verseKey: string | number) {
-  const numStr = verseKey.toString().includes(':') ? verseKey.toString().split(':')[1] : verseKey.toString();
-  
-  const arabicNumbers = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-  const arabicConverted = numStr
-    .split('')
-    .map((n) => arabicNumbers[parseInt(n, 10)])
-    .join('');
-    
-  // The \u06DD symbol tells the Uthmani font to draw the circle around these numbers
-  return `\u06DD${arabicConverted}`; 
+  const numStr = verseKey.toString().includes(":")
+    ? verseKey.toString().split(":")[1]
+    : verseKey.toString();
+  return `\u06DD${numStr}`;
 }
 
 export function VideoPreview() {
@@ -32,31 +26,33 @@ export function VideoPreview() {
     setIsPlaying,
     currentVerseIndex,
     setCurrentVerseIndex,
-  } = useReel()
+  } = useReel();
 
-  const [isLoadingVerses, setIsLoadingVerses] = useState(false)
+  const [isLoadingVerses, setIsLoadingVerses] = useState(false);
 
   // Load verses when config changes
   useEffect(() => {
     async function loadVerses() {
-      if (!config.surah) return
+      if (!config.surah) return;
 
-      setIsLoadingVerses(true)
+      setIsLoadingVerses(true);
       try {
         const loadedVerses = await fetchVerses(config.surah.id, {
           startVerse: config.startVerse,
           endVerse: config.endVerse,
-          translationId: config.showTranslation ? config.translationId ?? undefined : undefined,
-        })
-        setVerses(loadedVerses)
+          translationId: config.showTranslation
+            ? (config.translationId ?? undefined)
+            : undefined,
+        });
+        setVerses(loadedVerses);
       } catch (error) {
-        console.error('Failed to load verses:', error)
+        console.error("Failed to load verses:", error);
       } finally {
-        setIsLoadingVerses(false)
+        setIsLoadingVerses(false);
       }
     }
 
-    loadVerses()
+    loadVerses();
   }, [
     config.surah,
     config.startVerse,
@@ -64,7 +60,7 @@ export function VideoPreview() {
     config.showTranslation,
     config.translationId,
     setVerses,
-  ])
+  ]);
 
   const {
     isLoading: isAudioLoading,
@@ -86,39 +82,43 @@ export function VideoPreview() {
     verses,
     onVerseChange: setCurrentVerseIndex,
     onComplete: () => setIsPlaying(false),
-  })
+  });
 
   // Sync playing state
   useEffect(() => {
-    setIsPlaying(audioIsPlaying)
-  }, [audioIsPlaying, setIsPlaying])
+    setIsPlaying(audioIsPlaying);
+  }, [audioIsPlaying, setIsPlaying]);
 
   const handlePlayPause = async () => {
     if (audioIsPlaying) {
-      pause()
+      pause();
     } else {
-      await play()
+      await play();
     }
-  }
+  };
 
   const handleReset = () => {
-    stop()
-    setCurrentVerseIndex(0)
-  }
+    stop();
+    setCurrentVerseIndex(0);
+  };
 
-  const currentVerse = verses[audioVerseIndex]
+  const currentVerse = verses[audioVerseIndex];
 
   // Get background style
   const backgroundStyle =
-    config.background?.type === 'gradient'
+    config.background?.type === "gradient"
       ? { background: config.background.value }
-      : config.background?.type === 'custom' || config.background?.type === 'preset'
+      : config.background?.type === "custom" ||
+          config.background?.type === "preset"
         ? {
             backgroundImage: `url(${config.background.value})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            backgroundSize: "cover",
+            backgroundPosition: "center",
           }
-        : { background: 'linear-gradient(180deg, #0c1220 0%, #1a2744 50%, #0c1220 100%)' }
+        : {
+            background:
+              "linear-gradient(180deg, #0c1220 0%, #1a2744 50%, #0c1220 100%)",
+          };
 
   if (!config.surah) {
     return (
@@ -126,7 +126,8 @@ export function VideoPreview() {
         <div
           className="relative w-full max-w-[280px] aspect-[9/16] rounded-3xl overflow-hidden border-4 border-border shadow-2xl"
           style={{
-            background: 'linear-gradient(180deg, #0c1220 0%, #1a2744 50%, #0c1220 100%)',
+            background:
+              "linear-gradient(180deg, #0c1220 0%, #1a2744 50%, #0c1220 100%)",
           }}
         >
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
@@ -139,7 +140,7 @@ export function VideoPreview() {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -169,21 +170,23 @@ export function VideoPreview() {
               <Loader2 className="h-8 w-8 text-white animate-spin" />
             ) : currentVerse ? (
               <div className="text-center space-y-6">
-                
-                {/* THE EASY SPLIT: Verse = Nabi | Number = UthmanicHafs */}
+                {/* EXACT FONT SPLIT HERE */}
                 <p
                   className="text-[#c9a84c] text-3xl leading-loose text-center"
                   dir="rtl"
-                  style={{ textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}
+                  style={{ textShadow: "0 2px 10px rgba(0,0,0,0.8)" }}
                 >
-                  {/* The Verse in the NEW Nabi Font */}
-                  <span style={{ fontFamily: 'Nabi, sans-serif' }}>
+                  {/* VERSE: Uses the Nabi font */}
+                  <span style={{ fontFamily: "Nabi, sans-serif" }}>
                     {currentVerse.text_uthmani}
                   </span>
-                  
-                  {/* The Number in the OLD Uthmani Font (renders the circle perfectly!) */}
-                  <span 
-                    style={{ fontFamily: 'UthmanicHafs, serif' }} 
+
+                  {/* NUMBER: Uses the Uthmani font (renders the circle perfectly!) */}
+                  <span
+                    style={{
+                      fontFamily:
+                        'UthmanicHafs, "KFGQPC Uthmanic Script HAFS", serif',
+                    }}
                     className="text-[2.5rem] mr-2 align-middle text-white/90"
                   >
                     {formatAyahNumber(currentVerse.verse_key)}
@@ -192,7 +195,10 @@ export function VideoPreview() {
 
                 {/* Translation if enabled */}
                 {config.showTranslation && currentVerse.translations?.[0] && (
-                  <p className="text-white/80 text-sm leading-relaxed font-sans" dir="ltr">
+                  <p
+                    className="text-white/80 text-sm leading-relaxed font-sans"
+                    dir="ltr"
+                  >
                     {currentVerse.translations[0].text}
                   </p>
                 )}
@@ -242,7 +248,6 @@ export function VideoPreview() {
         >
           <RotateCcw className="h-4 w-4" />
         </Button>
-
         <Button
           onClick={handlePlayPause}
           disabled={isAudioLoading || verses.length === 0}
@@ -256,7 +261,6 @@ export function VideoPreview() {
             <Play className="h-5 w-5 ml-0.5" />
           )}
         </Button>
-
         <div className="w-10" /> {/* Spacer for symmetry */}
       </div>
 
@@ -270,5 +274,5 @@ export function VideoPreview() {
         <p className="text-muted-foreground text-sm">Loading audio files...</p>
       )}
     </div>
-  )
+  );
 }

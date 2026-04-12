@@ -118,8 +118,14 @@
   .font-arabic {
     font-family: var(--font-amiri), 'Amiri', serif;
   }
+  
+  /* STRICT UTILITY CLASSES ADDED HERE */
+  .font-nabi {
+    font-family: 'Nabi', sans-serif !important;
+  }
+
   .font-uthmani {
-    font-family: 'UthmanicHafs', 'Amiri Quran', 'Scheherazade New', serif;
+    font-family: 'UthmanicHafs', serif !important;
     font-feature-settings: "liga" 1, "calt" 1;
     text-rendering: optimizeLegibility;
   }

@@ -3,20 +3,29 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* KFGQPC Uthman Taha Naskh - Official Quran Font from King Fahd Quran Complex */
 @font-face {
-  font-family: 'UthmanicHafs';
-  src: url('/fonts/UthmanicHafs.ttf') format('truetype'); /* MUST BE .ttf */
+  font-family: 'NabiFont';
+  src: url('/fonts/Nabi.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Nabi';
-  src: url('/fonts/Nabi.ttf') format('truetype');
+  font-family: 'UthmaniFont';
+  src: url('/fonts/UthmanicHafs.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
+  font-display: swap;
+}
+
+/* These classes FORCE the browser to use the font */
+.verse-nabi-text {
+  font-family: 'NabiFont', sans-serif !important;
+}
+
+.number-uthmani-text {
+  font-family: 'UthmaniFont', serif !important;
 }
 :root {
   --background: oklch(0.98 0.005 90);

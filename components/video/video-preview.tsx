@@ -171,24 +171,19 @@ export function VideoPreview() {
             ) : currentVerse ? (
               <div className="text-center space-y-6">
                 {/* EXACT FONT SPLIT HERE */}
+                {/* THE FORCED FONT SPLIT */}
                 <p
                   className="text-[#c9a84c] text-3xl leading-loose text-center"
                   dir="rtl"
                   style={{ textShadow: "0 2px 10px rgba(0,0,0,0.8)" }}
                 >
-                  {/* VERSE: Uses the Nabi font */}
-                  <span style={{ fontFamily: "Nabi, sans-serif" }}>
+                  {/* The Verse forced to use Nabi */}
+                  <span className="verse-nabi-text">
                     {currentVerse.text_uthmani}
                   </span>
 
-                  {/* NUMBER: Uses the Uthmani font (renders the circle perfectly!) */}
-                  <span
-                    style={{
-                      fontFamily:
-                        'UthmanicHafs, "KFGQPC Uthmanic Script HAFS", serif',
-                    }}
-                    className="text-[2.5rem] mr-2 align-middle text-white/90"
-                  >
+                  {/* The Number forced to use Uthmani */}
+                  <span className="number-uthmani-text text-[2.5rem] mr-2 align-middle text-white/90">
                     {formatAyahNumber(currentVerse.verse_key)}
                   </span>
                 </p>

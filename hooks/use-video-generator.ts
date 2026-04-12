@@ -446,6 +446,16 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           const bismillahIdx = bismillahBuffer ? (taawudhBuffer ? 1 : 0) : -1
           const introOffset = (taawudhBuffer ? 1 : 0) + (bismillahBuffer ? 1 : 0)
 
+          // Use a Web Worker timer instead of requestAnimationFrame.
+          // rAF is paused when the tab is in the background, which freezes
+          // the canvas while audio keeps playing — corrupting the recording.
+          // Web Worker setInterval runs unthrottled regardless of tab focus.
+          const timerBlob = new Blob([
+            `let id;self.onmessage=e=>{if(e.data==="start")id=setInterval(()=>self.postMessage("t"),33);else{clearInterval(id);close()}}`
+          ], { type: 'application/javascript' })
+          const timerUrl = URL.createObjectURL(timerBlob)
+          const timerWorker = new Worker(timerUrl)
+
           const render = () => {
             if (cancelledRef.current || recordingFinished) return
             // Elapsed time in ms, locked to the audio clock
@@ -471,10 +481,11 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
             setProgress(50 + videoProgress * 48)
 
-            if (elapsedMs < totalDurationMs && !cancelledRef.current) {
-              requestAnimationFrame(render)
-            } else {
+            if (elapsedMs >= totalDurationMs || cancelledRef.current) {
               recordingFinished = true
+              timerWorker.postMessage('stop')
+              timerWorker.terminate()
+              URL.revokeObjectURL(timerUrl)
               setTimeout(() => {
                 source.stop()
                 mediaRecorder.stop()
@@ -483,7 +494,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             }
           }
 
-          render()
+          timerWorker.onmessage = render
+          timerWorker.postMessage('start')
 
           let videoBlob = await recordingComplete
           if (cancelledRef.current) return

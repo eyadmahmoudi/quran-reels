@@ -15,67 +15,18 @@ const GOLD = '#c9a84c'
 const GOLD_LIGHT = '#f0d080'
 const GOLD_DARK = '#a07830'
 
-function StepBadge({ n }: { n: number }) {
-  return (
-    <span
-      className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold shadow-lg"
-      style={{
-        background: `linear-gradient(135deg, ${GOLD_DARK}, ${GOLD_LIGHT})`,
-        color: '#0d1117',
-        boxShadow: `0 2px 12px rgba(201,168,76,0.4)`,
-      }}
-    >
-      {n}
-    </span>
-  )
-}
-
-function SectionCard({
-  step,
-  title,
-  arabicTitle,
-  children,
-}: {
-  step: number
-  title: string
-  arabicTitle: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="quran-card p-5 sm:p-6">
-      <div className="flex items-center gap-3 mb-5">
-        <StepBadge n={step} />
-        <div>
-          <h3 className="text-sm font-bold tracking-wide text-foreground uppercase">{title}</h3>
-          <p className="text-xs mt-0.5 font-arabic" style={{ color: `${GOLD}99` }}>{arabicTitle}</p>
-        </div>
-        <div className="flex-1 ml-2 h-px" style={{ background: `linear-gradient(90deg, rgba(201,168,76,0.35), transparent)` }} />
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function OrnamentDivider() {
-  return (
-    <div className="ornament-divider my-2">
-      <span style={{ color: `${GOLD}80`, fontSize: 20, userSelect: 'none' }}>✦</span>
-    </div>
-  )
-}
-
 function ThemeToggleButton() {
   const { resolvedTheme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
-  if (!mounted) return <div className="w-11 h-11" />
+  if (!mounted) return <div className="w-9 h-9" />
 
   const isDark = resolvedTheme === 'dark'
   return (
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       aria-label="Toggle light/dark mode"
-      className="flex w-11 h-11 rounded-full items-center justify-center border flex-shrink-0 transition-colors duration-300 cursor-pointer"
+      className="flex w-9 h-9 rounded-full items-center justify-center border flex-shrink-0 transition-colors duration-300 cursor-pointer"
       style={{
         background: isDark
           ? `radial-gradient(circle, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.05) 100%)`
@@ -83,21 +34,22 @@ function ThemeToggleButton() {
         borderColor: `rgba(201,168,76,0.3)`,
       }}
     >
-      {/* Crescent icon — filled when dark, outlined when light */}
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="12" cy="12" r="9" stroke={GOLD} strokeWidth="1.8"/>
         {isDark ? (
-          /* crescent: filled moon shape */
-          <path
-            d="M14 6.3A7 7 0 1 0 14 17.7A5 5 0 1 1 14 6.3Z"
-            fill={GOLD}
-          />
+          <path d="M14 6.3A7 7 0 1 0 14 17.7A5 5 0 1 1 14 6.3Z" fill={GOLD} />
         ) : (
-          /* sun-like: open circle with rays suggestion */
           <circle cx="12" cy="12" r="4" fill={GOLD} />
         )}
       </svg>
     </button>
+  )
+}
+
+/** Thin gold line between sections inside the panel */
+function Divider() {
+  return (
+    <div className="h-px w-full" style={{ background: `linear-gradient(90deg, transparent, rgba(201,168,76,0.25), transparent)` }} />
   )
 }
 
@@ -129,135 +81,101 @@ export default function QuranReelsGenerator() {
 
   return (
     <ReelProvider>
-      {/* Page wrapper */}
       <div className="min-h-screen geo-pattern" style={{ background: pageBg }}>
 
-        {/* ── Top gold bar ─────────────────────────────────────────────── */}
+        {/* ── Top accent bar ── */}
         <div
-          className="h-[3px] w-full"
+          className="h-[2px] w-full"
           style={{ background: `linear-gradient(90deg, transparent, ${GOLD_DARK}, ${GOLD_LIGHT}, ${GOLD}, ${GOLD_LIGHT}, ${GOLD_DARK}, transparent)` }}
         />
 
-        {/* ── Header ───────────────────────────────────────────────────── */}
+        {/* ── Header ── */}
         <header
           className="sticky top-0 z-50 border-b"
-          style={{
-            background: headerBg,
-            borderColor: headerBorder,
-            boxShadow: '0 1px 0 rgba(201,168,76,0.06), 0 4px 12px rgba(0,0,0,0.08)',
-          }}
+          style={{ background: headerBg, borderColor: headerBorder, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
         >
-          <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
-            <div className="flex items-center justify-between gap-3">
-              {/* Logo + crescent toggle */}
-              <div className="flex items-center gap-3">
-                <ThemeToggleButton />
-                <div>
-                  <h1 className="text-base sm:text-xl font-bold leading-tight gold-shimmer-text">
-                    Quran Reels Generator
-                  </h1>
-                  <p className="text-[11px] sm:text-xs font-arabic leading-none mt-0.5" style={{ color: `${GOLD}90` }}>
-                    مولد مقاطع القرآن الكريم
-                  </p>
-                </div>
+          <div className="container mx-auto px-4 sm:px-6 py-2.5 sm:py-3">
+            <div className="flex items-center gap-3">
+              <ThemeToggleButton />
+              <div className="flex-1">
+                <h1 className="text-sm sm:text-lg font-bold leading-tight gold-shimmer-text">
+                  Quran Reels Generator
+                </h1>
+                <p className="text-[10px] sm:text-xs font-arabic leading-none mt-0.5" style={{ color: `${GOLD}80` }}>
+                  مولد مقاطع القرآن الكريم
+                </p>
               </div>
+              {/* Bismillah in header instead of hero */}
+              <p
+                className="font-uthmani text-sm sm:text-lg hidden sm:block"
+                style={{ color: `${GOLD}cc`, direction: 'rtl' }}
+              >
+                بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ
+              </p>
             </div>
           </div>
         </header>
 
-        {/* ── Main ─────────────────────────────────────────────────────── */}
-        <main className="container mx-auto px-3 sm:px-4 py-8 sm:py-12">
+        {/* ── Main ── */}
+        <main className="container mx-auto px-3 sm:px-4 py-6 sm:py-8">
           <div className="max-w-2xl mx-auto">
 
-            {/* ── Hero ─────────────────────────────────────────────────── */}
-            <div className="text-center mb-10 sm:mb-14">
-              {/* Bismillah card */}
-              <div
-                className="inline-block px-6 sm:px-10 py-5 rounded-2xl mb-5 border relative overflow-hidden"
-                style={{
-                  background: `linear-gradient(145deg, rgba(201,168,76,0.10) 0%, rgba(201,168,76,0.04) 100%)`,
-                  borderColor: `rgba(201,168,76,0.25)`,
-                  boxShadow: `0 8px 48px rgba(201,168,76,0.12), 0 0 0 1px rgba(201,168,76,0.06) inset`,
-                }}
-              >
-                <div
-                  className="absolute top-0 left-1/4 right-1/4 h-px"
-                  style={{ background: `linear-gradient(90deg, transparent, ${GOLD}60, transparent)` }}
-                />
-                <p
-                  className="font-uthmani text-2xl sm:text-4xl leading-loose"
-                  style={{
-                    color: GOLD_LIGHT,
-                    direction: 'rtl',
-                    textShadow: `0 0 40px rgba(201,168,76,0.5), 0 2px 4px rgba(0,0,0,0.8)`,
-                  }}
-                >
-                  بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ
-                </p>
+            {/* ── Single panel: all settings ── */}
+            <div className="quran-card">
+
+              {/* Surah + Verse Range — grouped together */}
+              <div className="p-4 sm:p-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <SurahSelector />
+                  </div>
+                  <div>
+                    <VerseSelector />
+                  </div>
+                </div>
               </div>
 
-              {/* Subtitle */}
-              <h2
-                className="text-sm sm:text-base font-semibold tracking-wide"
-                style={{ color: `${GOLD}bb` }}
-              >
-                ✦ &nbsp; Professional Quran Video Reels &nbsp; ✦
-              </h2>
-            </div>
+              <Divider />
 
-            {/* ── Settings cards ───────────────────────────────────────── */}
-            <div className="flex flex-col gap-3 sm:gap-4">
-
-              <SectionCard step={1} title="Surah" arabicTitle="اختيار السورة">
-                <SurahSelector />
-              </SectionCard>
-
-              <SectionCard step={2} title="Verse Range" arabicTitle="نطاق الآيات">
-                <VerseSelector />
-              </SectionCard>
-
-              <SectionCard step={3} title="Reciter" arabicTitle="اختيار القارئ">
+              {/* Reciter */}
+              <div className="p-4 sm:p-5">
                 <ReciterSelector />
-              </SectionCard>
+              </div>
 
-              <SectionCard step={4} title="Background" arabicTitle="الخلفية">
+              <Divider />
+
+              {/* Background */}
+              <div className="p-4 sm:p-5">
                 <BackgroundSelector />
-              </SectionCard>
+              </div>
 
-              <SectionCard step={5} title="Translation" arabicTitle="الترجمة">
-                <TranslationSettings />
-              </SectionCard>
+              <Divider />
 
-              <SectionCard step={6} title="Display Style" arabicTitle="نمط العرض">
-                <DisplayModeSelector />
-              </SectionCard>
-
-              <OrnamentDivider />
-
-              {/* ── Generate ─────────────────────────────────────────── */}
-              <div
-                className="quran-card p-5 sm:p-7"
-                style={{ boxShadow: `0 8px 48px rgba(201,168,76,0.15), 0 0 0 1px rgba(201,168,76,0.12)` }}
-              >
-                <div className="text-center mb-4">
-                  <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: `${GOLD}80` }}>
-                    ✦ &nbsp; Ready to Generate &nbsp; ✦
-                  </p>
+              {/* Translation + Display — grouped together */}
+              <div className="p-4 sm:p-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <div>
+                    <TranslationSettings />
+                  </div>
+                  <div>
+                    <DisplayModeSelector />
+                  </div>
                 </div>
+              </div>
+
+              <Divider />
+
+              {/* Generate button — part of the panel, not a separate card */}
+              <div className="p-4 sm:p-5">
                 <DownloadButton />
               </div>
 
             </div>
 
-            {/* ── Footer ───────────────────────────────────────────────── */}
-            <div className="text-center mt-10 pb-6">
-              <div className="ornament-divider mb-4">
-                <span style={{ color: `${GOLD}50`, fontSize: 14 }}>✦</span>
-              </div>
-
-              {/* Dua */}
+            {/* ── Footer ── */}
+            <div className="text-center mt-8 pb-6">
               <p
-                className="font-arabic text-base sm:text-lg mb-3 leading-loose"
+                className="font-arabic text-base sm:text-lg mb-2 leading-loose"
                 style={{
                   direction: 'rtl',
                   color: isDark ? `${GOLD}cc` : `${GOLD_DARK}dd`,
@@ -266,8 +184,7 @@ export default function QuranReelsGenerator() {
               >
                 لا تنسونا من صالح دعائكم
               </p>
-
-              <p className="text-xs mb-1" style={{ color: footerTextColor }}>
+              <p className="text-xs" style={{ color: footerTextColor }}>
                 Audio ·{' '}
                 <a
                   href="https://everyayah.com"
@@ -298,7 +215,6 @@ export default function QuranReelsGenerator() {
           </div>
         </main>
 
-        {/* ── Bottom bar ───────────────────────────────────────────────── */}
         <div
           className="h-[2px] w-full"
           style={{ background: `linear-gradient(90deg, transparent, ${GOLD}40, transparent)` }}

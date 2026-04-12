@@ -9,11 +9,18 @@ import { useQuranAudio } from '@/hooks/use-quran-audio'
 import { fetchVerses } from '@/lib/quran-api'
 import { formatTime } from '@/lib/quran-api'
 
-// 1. UTHMANI NUMBER FORMATTER (Uses the special Uthmani circle)
+// 1. SIMPLE NUMBER FORMATTER (Converts to Arabic numerals and adds the Uthmani circle symbol)
 function formatAyahNumber(verseKey: string | number) {
   const numStr = verseKey.toString().includes(':') ? verseKey.toString().split(':')[1] : verseKey.toString();
-  // The Uthmani font expects standard digits to draw the circle around them
-  return `\u06DD${numStr}`; 
+  
+  const arabicNumbers = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+  const arabicConverted = numStr
+    .split('')
+    .map((n) => arabicNumbers[parseInt(n, 10)])
+    .join('');
+    
+  // The \u06DD symbol tells the Uthmani font to draw the circle around these numbers
+  return `\u06DD${arabicConverted}`; 
 }
 
 export function VideoPreview() {
@@ -163,20 +170,20 @@ export function VideoPreview() {
             ) : currentVerse ? (
               <div className="text-center space-y-6">
                 
-                {/* 2. THE FIX: Verse = New Nabi Font | Number = Old Uthmani Font */}
+                {/* THE EASY SPLIT: Verse = Nabi | Number = UthmanicHafs */}
                 <p
                   className="text-[#c9a84c] text-3xl leading-loose text-center"
                   dir="rtl"
                   style={{ textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}
                 >
-                  {/* The Verse in the New Nabi Font */}
-                  <span style={{ fontFamily: 'Nabi, Arial, sans-serif' }}>
+                  {/* The Verse in the NEW Nabi Font */}
+                  <span style={{ fontFamily: 'Nabi, sans-serif' }}>
                     {currentVerse.text_uthmani}
                   </span>
                   
-                  {/* The Number in the Old Uthmani Font (renders the circle perfectly!) */}
+                  {/* The Number in the OLD Uthmani Font (renders the circle perfectly!) */}
                   <span 
-                    style={{ fontFamily: 'Uthmani, "KFGQPC Uthmanic Script HAFS", serif' }} 
+                    style={{ fontFamily: 'UthmanicHafs, serif' }} 
                     className="text-[2.5rem] mr-2 align-middle text-white/90"
                   >
                     {formatAyahNumber(currentVerse.verse_key)}

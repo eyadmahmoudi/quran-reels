@@ -10,6 +10,7 @@ import { BackgroundSelector } from '@/components/quran/background-selector'
 import { TranslationSettings } from '@/components/quran/translation-settings'
 import { DisplayModeSelector } from '@/components/quran/display-mode-selector'
 import { DownloadButton } from '@/components/video/download-button'
+import { VideoPreview } from '@/components/video/video-preview'
 
 const GOLD = '#c9a84c'
 const GOLD_LIGHT = '#f0d080'
@@ -105,7 +106,7 @@ export default function QuranReelsGenerator() {
                   مولد مقاطع القرآن الكريم
                 </p>
               </div>
-              {/* Bismillah in header instead of hero */}
+              {/* Bismillah in header */}
               <p
                 className="font-nabi text-sm sm:text-lg hidden sm:block"
                 style={{ color: `${GOLD}cc`, direction: 'rtl' }}
@@ -116,102 +117,103 @@ export default function QuranReelsGenerator() {
           </div>
         </header>
 
-        {/* ── Main ── */}
-        <main className="container mx-auto px-3 sm:px-4 py-6 sm:py-8">
-          <div className="max-w-2xl mx-auto">
+        {/* ── Main: two-panel layout on desktop ── */}
+        <main className="container mx-auto px-3 sm:px-4 lg:px-6 py-6 sm:py-8">
+          <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
 
-            {/* ── Single panel: all settings ── */}
-            <div className="quran-card">
+            {/* ── Left: Settings panel ── */}
+            <div className="w-full lg:w-[58%] lg:min-w-0">
+              <div className="quran-card">
 
-              {/* Surah + Verse Range — grouped together */}
-              <div className="p-4 sm:p-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+                {/* Surah + Verse Range */}
+                <div className="p-4 sm:p-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <SurahSelector />
-                  </div>
-                  <div>
                     <VerseSelector />
                   </div>
                 </div>
-              </div>
 
-              <Divider />
+                <Divider />
 
-              {/* Reciter */}
-              <div className="p-4 sm:p-5">
-                <ReciterSelector />
-              </div>
-
-              <Divider />
-
-              {/* Background */}
-              <div className="p-4 sm:p-5">
-                <BackgroundSelector />
-              </div>
-
-              <Divider />
-
-              {/* Translation + Display — grouped together */}
-              <div className="p-4 sm:p-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
+                {/* Display + Translation — both compact, grouped */}
+                <div className="p-4 sm:p-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <DisplayModeSelector />
                     <TranslationSettings />
                   </div>
-                  <div>
-                    <DisplayModeSelector />
-                  </div>
                 </div>
+
+                <Divider />
+
+                {/* Reciter — full width (tall scrollable list) */}
+                <div className="p-4 sm:p-5">
+                  <ReciterSelector />
+                </div>
+
+                <Divider />
+
+                {/* Background — full width (thumbnail grid) */}
+                <div className="p-4 sm:p-5">
+                  <BackgroundSelector />
+                </div>
+
+                <Divider />
+
+                {/* Generate */}
+                <div className="p-4 sm:p-5">
+                  <DownloadButton />
+                </div>
+
               </div>
-
-              <Divider />
-
-              {/* Generate button — part of the panel, not a separate card */}
-              <div className="p-4 sm:p-5">
-                <DownloadButton />
-              </div>
-
             </div>
 
-            {/* ── Footer ── */}
-            <div className="text-center mt-8 pb-6">
-              <p
-                className="font-arabic text-base sm:text-lg mb-2 leading-loose"
-                style={{
-                  direction: 'rtl',
-                  color: isDark ? `${GOLD}cc` : `${GOLD_DARK}dd`,
-                  textShadow: isDark ? `0 0 20px rgba(201,168,76,0.25)` : 'none',
-                }}
+            {/* ── Right: Live preview (sticky on desktop) ── */}
+            <div className="w-full lg:w-[42%] lg:sticky lg:top-20">
+              <div className="quran-card p-4 sm:p-5">
+                <VideoPreview />
+              </div>
+            </div>
+
+          </div>
+
+          {/* ── Footer ── */}
+          <div className="text-center mt-8 pb-6">
+            <p
+              className="font-arabic text-base sm:text-lg mb-2 leading-loose"
+              style={{
+                direction: 'rtl',
+                color: isDark ? `${GOLD}cc` : `${GOLD_DARK}dd`,
+                textShadow: isDark ? `0 0 20px rgba(201,168,76,0.25)` : 'none',
+              }}
+            >
+              لا تنسونا من صالح دعائكم
+            </p>
+            <p className="text-xs" style={{ color: footerTextColor }}>
+              Audio ·{' '}
+              <a
+                href="https://everyayah.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors duration-200"
+                style={{ color: footerLinkColor }}
+                onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
+                onMouseLeave={e => (e.currentTarget.style.color = footerLinkColor)}
               >
-                لا تنسونا من صالح دعائكم
-              </p>
-              <p className="text-xs" style={{ color: footerTextColor }}>
-                Audio ·{' '}
-                <a
-                  href="https://everyayah.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="transition-colors duration-200"
-                  style={{ color: footerLinkColor }}
-                  onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
-                  onMouseLeave={e => (e.currentTarget.style.color = footerLinkColor)}
-                >
-                  EveryAyah.com
-                </a>
-                {' · '}
-                <a
-                  href="https://quran.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="transition-colors duration-200"
-                  style={{ color: footerLinkColor }}
-                  onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
-                  onMouseLeave={e => (e.currentTarget.style.color = footerLinkColor)}
-                >
-                  Quran.com
-                </a>
-              </p>
-            </div>
-
+                EveryAyah.com
+              </a>
+              {' · '}
+              <a
+                href="https://quran.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors duration-200"
+                style={{ color: footerLinkColor }}
+                onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
+                onMouseLeave={e => (e.currentTarget.style.color = footerLinkColor)}
+              >
+                Quran.com
+              </a>
+            </p>
           </div>
         </main>
 

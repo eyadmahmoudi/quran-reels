@@ -9,8 +9,8 @@ import { useQuranAudio } from '@/hooks/use-quran-audio'
 import { fetchVerses } from '@/lib/quran-api'
 import { formatTime } from '@/lib/quran-api'
 
-// Helper function to format numbers with the old system font and classical brackets
-function formatAyahNumber(verseKey: string | number) {
+// NEW COMPONENT: Stacks the Uthmani circle and Nabi numbers on top of each other
+function AyahNumberDisplay({ verseKey }: { verseKey: string | number }) {
   const numStr = verseKey.toString().includes(':') ? verseKey.toString().split(':')[1] : verseKey.toString();
   
   const arabicNumbers = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
@@ -19,8 +19,30 @@ function formatAyahNumber(verseKey: string | number) {
     .map((n) => arabicNumbers[parseInt(n, 10)])
     .join('');
     
-  // Uses universal ornate Quranic brackets that work perfectly with standard fonts
-  return ` ﴾${arabicConverted}﴿ `; 
+  return (
+    <span className="relative inline-flex items-center justify-center mx-1 align-middle" dir="ltr">
+      {/* 1. The Empty Circle (Forced to use Uthmani font) */}
+      <span 
+        style={{ fontFamily: 'Uthmani, "KFGQPC Uthmanic Script HAFS", serif' }} 
+        className="text-[2.5rem] text-[#c9a84c] leading-none"
+      >
+        {"\u06DD"}
+      </span>
+      
+      {/* 2. The Numbers (Forced to use Nabi font, layered perfectly inside) */}
+      <span 
+        className="absolute text-white/90"
+        style={{ 
+          fontFamily: 'Nabi, Arial, sans-serif',
+          // Shrinks the font slightly if the ayah is 3 digits long (e.g., Ayah 255)
+          fontSize: arabicConverted.length > 2 ? '0.75rem' : '0.9rem',
+          marginTop: '0.15rem' 
+        }}
+      >
+        {arabicConverted}
+      </span>
+    </span>
+  );
 }
 
 export function VideoPreview() {
@@ -170,21 +192,18 @@ export function VideoPreview() {
             ) : currentVerse ? (
               <div className="text-center space-y-6">
                 
-                {/* Verse Display (Mixed Fonts) */}
+                {/* MIXED FONT DISPLAY */}
                 <p
                   className="text-[#c9a84c] text-3xl leading-loose text-center"
                   dir="rtl"
                   style={{ textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}
                 >
-                  {/* Part 1: The Verse in the New Uthmani Font */}
                   <span style={{ fontFamily: 'Uthmani, "KFGQPC Uthmanic Script HAFS", serif' }}>
                     {currentVerse.text_uthmani}
                   </span>
                   
-                  {/* Part 2: The Number in the Old System Font */}
-                  <span className="font-arabic text-2xl mr-2 text-white/90">
-                    {formatAyahNumber(currentVerse.verse_key)}
-                  </span>
+                  {/* Call to the new stacked component */}
+                  <AyahNumberDisplay verseKey={currentVerse.verse_key} />
                 </p>
 
                 {/* Translation if enabled */}

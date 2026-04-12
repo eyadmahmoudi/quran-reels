@@ -11,7 +11,12 @@
   font-style: normal;
   font-display: swap;
 }
-
+@font-face {
+  font-family: 'Nabi';
+  src: url('/fonts/Nabi.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
 :root {
   --background: oklch(0.98 0.005 90);
   --foreground: oklch(0.15 0.02 250);

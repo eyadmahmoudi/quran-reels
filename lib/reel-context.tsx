@@ -71,6 +71,7 @@ export function ReelProvider({ children }: { children: ReactNode }) {
     config.surah !== null &&
     config.startVerse > 0 &&
     config.endVerse >= config.startVerse &&
+    config.endVerse - config.startVerse + 1 <= 20 &&
     config.reciterId !== null
 
   return (

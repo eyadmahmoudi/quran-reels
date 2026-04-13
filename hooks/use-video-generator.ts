@@ -33,7 +33,11 @@ function toArabicNumerals(n: number): string {
 /** Load an HTMLImageElement from a URL */
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image(); img.crossOrigin = 'anonymous'
+    const img = new Image()
+    // Don't set crossOrigin for blob/data URLs — it breaks loading
+    if (!src.startsWith('blob:') && !src.startsWith('data:')) {
+      img.crossOrigin = 'anonymous'
+    }
     img.onload = () => resolve(img); img.onerror = reject; img.src = src
   })
 }

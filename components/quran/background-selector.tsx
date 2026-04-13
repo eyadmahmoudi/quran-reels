@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, Upload, X, ChevronDown } from 'lucide-react'
+import { Check, Upload, X, ChevronDown, ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
@@ -62,12 +62,30 @@ function BgThumbnail({ bg }: { bg: BackgroundOption }) {
   )
 }
 
+/** Small "ACTIVE" badge to clearly indicate the selected background */
+function ActiveBadge() {
+  return (
+    <span
+      className="absolute top-1 left-1 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm z-10"
+      style={{
+        background: 'rgba(34,197,94,0.85)',
+        color: 'white',
+        backdropFilter: 'blur(4px)',
+      }}
+    >
+      Active
+    </span>
+  )
+}
+
 export function BackgroundSelector() {
   const { config, setConfig } = useReel()
   const [customBackground, setCustomBackground] = useState<BackgroundOption | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [activeCategory, setActiveCategory] = useState<Category>('animated')
   const [expanded, setExpanded] = useState(false)
+
+  const isCustomActive = config.background?.id === 'custom-upload'
 
   const handleSelect = (bg: BackgroundOption) => setConfig({ background: bg })
 
@@ -112,6 +130,78 @@ export function BackgroundSelector() {
         Background / الخلفية
       </label>
 
+      {/* ── Currently active indicator ── */}
+      <div
+        className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
+        style={{
+          background: isCustomActive
+            ? 'rgba(34,197,94,0.08)'
+            : 'rgba(201,168,76,0.08)',
+          border: `1px solid ${isCustomActive ? 'rgba(34,197,94,0.2)' : 'rgba(201,168,76,0.2)'}`,
+        }}
+      >
+        <ImageIcon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }} />
+        <span style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }}>
+          Using: <strong>{isCustomActive ? `Uploaded — ${config.background?.name}` : config.background?.name || 'None'}</strong>
+        </span>
+      </div>
+
+      {/* ── Custom Image Upload ── */}
+      <div
+        className="pt-2 pb-3 border-t border-b border-border/50"
+        style={{
+          background: isCustomActive ? 'rgba(34,197,94,0.03)' : undefined,
+        }}
+      >
+        <p className="text-xs text-muted-foreground mb-2">
+          Custom Image {isCustomActive && <span style={{ color: '#22c55e', fontWeight: 600 }}>• In use</span>}
+        </p>
+        {customBackground ? (
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <button
+                onClick={() => handleSelect(customBackground)}
+                className={cn(
+                  'relative w-16 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all block',
+                  isCustomActive
+                    ? 'border-green-500 ring-2 ring-green-500/20'
+                    : 'border-transparent hover:border-primary/50'
+                )}
+              >
+                <img src={customBackground.value} alt="Custom" className="w-full h-full object-cover" />
+                {isCustomActive && <ActiveBadge />}
+                {isCustomActive && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    <Check className="h-4 w-4 text-white" />
+                  </div>
+                )}
+              </button>
+              <Button
+                variant="ghost" size="icon"
+                className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground"
+                onClick={clearCustomImage}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+            {!isCustomActive && (
+              <p className="text-xs text-muted-foreground">
+                Click the thumbnail to use this image
+              </p>
+            )}
+          </div>
+        ) : (
+          <Button
+            variant="outline" className="h-10 w-full border-dashed gap-2"
+            onClick={() => imageInputRef.current?.click()}
+          >
+            <Upload className="h-4 w-4" />
+            <span className="text-sm">Upload Image</span>
+          </Button>
+        )}
+        <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+      </div>
+
       {/* ── Category tabs ── */}
       <div className="flex gap-1 p-1 rounded-lg bg-muted/50">
         {CATEGORIES.map((cat) => (
@@ -132,30 +222,34 @@ export function BackgroundSelector() {
 
       {/* ── Background grid ── */}
       <div className="grid grid-cols-4 gap-2">
-        {visibleItems.map((bg) => (
-          <button
-            key={bg.id}
-            onClick={() => handleSelect(bg)}
-            title={bg.name}
-            className={cn(
-              'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all',
-              bg.type === 'animated' || bg.type === 'preset' ? 'bg-black' : 'bg-muted',
-              config.background?.id === bg.id
-                ? 'border-primary ring-2 ring-primary/20'
-                : 'border-transparent hover:border-primary/50'
-            )}
-          >
-            <BgThumbnail bg={bg} />
-            {config.background?.id === bg.id && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                <Check className="h-4 w-4 text-white drop-shadow" />
-              </div>
-            )}
-            <span className="absolute bottom-0 inset-x-0 text-[9px] text-white/90 text-center py-0.5 bg-black/50 truncate px-0.5">
-              {bg.name}
-            </span>
-          </button>
-        ))}
+        {visibleItems.map((bg) => {
+          const isSelected = config.background?.id === bg.id
+          return (
+            <button
+              key={bg.id}
+              onClick={() => handleSelect(bg)}
+              title={bg.name}
+              className={cn(
+                'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all',
+                bg.type === 'animated' || bg.type === 'preset' ? 'bg-black' : 'bg-muted',
+                isSelected
+                  ? 'border-primary ring-2 ring-primary/20'
+                  : 'border-transparent hover:border-primary/50'
+              )}
+            >
+              <BgThumbnail bg={bg} />
+              {isSelected && <ActiveBadge />}
+              {isSelected && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                  <Check className="h-4 w-4 text-white drop-shadow" />
+                </div>
+              )}
+              <span className="absolute bottom-0 inset-x-0 text-[9px] text-white/90 text-center py-0.5 bg-black/50 truncate px-0.5">
+                {bg.name}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       {/* ── Show more / less ── */}
@@ -168,47 +262,6 @@ export function BackgroundSelector() {
           {expanded ? 'Show less' : `Show more (${allItems.length - INITIAL_COUNT})`}
         </button>
       )}
-
-      {/* ── Custom Image Upload ── */}
-      <div className="pt-2 border-t border-border/50">
-        <p className="text-xs text-muted-foreground mb-2">Custom Image</p>
-        {customBackground ? (
-          <div className="relative inline-block">
-            <button
-              onClick={() => handleSelect(customBackground)}
-              className={cn(
-                'relative w-16 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all block',
-                config.background?.id === 'custom-upload'
-                  ? 'border-primary ring-2 ring-primary/20'
-                  : 'border-transparent'
-              )}
-            >
-              <img src={customBackground.value} alt="Custom" className="w-full h-full object-cover" />
-              {config.background?.id === 'custom-upload' && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                  <Check className="h-4 w-4 text-white" />
-                </div>
-              )}
-            </button>
-            <Button
-              variant="ghost" size="icon"
-              className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground"
-              onClick={clearCustomImage}
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
-        ) : (
-          <Button
-            variant="outline" className="h-10 w-full border-dashed gap-2"
-            onClick={() => imageInputRef.current?.click()}
-          >
-            <Upload className="h-4 w-4" />
-            <span className="text-sm">Upload Image</span>
-          </Button>
-        )}
-        <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Play, Pause, RotateCcw, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
@@ -65,6 +65,7 @@ export function VideoPreview() {
     duration,
     currentTime,
     error: audioError,
+    verseTimings,
     play,
     pause,
     stop,
@@ -111,50 +112,41 @@ export function VideoPreview() {
     return splitTranslation(currentVerse.translations[0].text, chunks)
   }, [currentVerse?.translations, chunks])
 
-  // Track which chunk is displayed (auto-cycle when audio is playing)
-  const [currentChunkIndex, setCurrentChunkIndex] = useState(0)
-  const chunkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const prevVerseIndexRef = useRef(audioVerseIndex)
+  // Build per-chunk time boundaries from actual verse audio duration
+  const chunkTimeBoundaries = useMemo<Array<{ startMs: number; endMs: number }>>(() => {
+    if (chunks.length <= 1) return []
+    // Get actual verse duration from audio timings
+    const timing = verseTimings[audioVerseIndex]
+    const verseDurationMs = timing
+      ? (timing.endTime - timing.startTime)
+      : (verses.length > 0 ? (duration / verses.length) : 5000)
+    const totalChars = chunks.reduce((s, c) => s + c.charCount, 0)
+    if (totalChars === 0) return []
 
-  // Reset chunk index when verse changes
-  useEffect(() => {
-    if (audioVerseIndex !== prevVerseIndexRef.current) {
-      setCurrentChunkIndex(0)
-      prevVerseIndexRef.current = audioVerseIndex
+    const boundaries: Array<{ startMs: number; endMs: number }> = []
+    let offset = 0
+    for (const chunk of chunks) {
+      const ratio = chunk.charCount / totalChars
+      const chunkDur = verseDurationMs * ratio
+      boundaries.push({ startMs: offset, endMs: offset + chunkDur })
+      offset += chunkDur
     }
-  }, [audioVerseIndex])
+    return boundaries
+  }, [chunks, verseTimings, audioVerseIndex, duration, verses.length])
 
-  // Auto-cycle through chunks proportionally to the verse's audio duration
-  useEffect(() => {
-    // Clear any existing timer
-    if (chunkTimerRef.current) {
-      clearInterval(chunkTimerRef.current)
-      chunkTimerRef.current = null
+  // Determine current chunk from audio currentTime (synced to recitation)
+  const currentChunkIndex = useMemo(() => {
+    if (chunks.length <= 1 || chunkTimeBoundaries.length === 0) return 0
+    // Compute time elapsed within the current verse
+    const timing = verseTimings[audioVerseIndex]
+    if (!timing) return 0
+    const elapsedInVerse = currentTime - timing.startTime
+    // Find which chunk boundary we're in
+    for (let i = 0; i < chunkTimeBoundaries.length; i++) {
+      if (elapsedInVerse < chunkTimeBoundaries[i].endMs) return i
     }
-
-    if (!audioIsPlaying || chunks.length <= 1) return
-
-    // Estimate per-verse duration from overall progress
-    // Each verse gets roughly equal time (since we don't have per-verse timing in preview)
-    const verseDurationMs = verses.length > 0 ? (duration / verses.length) : 5000
-    const chunkDurationMs = verseDurationMs / chunks.length
-
-    if (chunkDurationMs <= 0 || !isFinite(chunkDurationMs)) return
-
-    chunkTimerRef.current = setInterval(() => {
-      setCurrentChunkIndex((prev) => {
-        if (prev < chunks.length - 1) return prev + 1
-        return prev // stay on last chunk until verse changes
-      })
-    }, chunkDurationMs)
-
-    return () => {
-      if (chunkTimerRef.current) {
-        clearInterval(chunkTimerRef.current)
-        chunkTimerRef.current = null
-      }
-    }
-  }, [audioIsPlaying, chunks.length, duration, verses.length, audioVerseIndex])
+    return chunks.length - 1 // past end → show last chunk
+  }, [chunks.length, chunkTimeBoundaries, verseTimings, audioVerseIndex, currentTime])
 
   // Determine which chunk to show
   const activeChunk = chunks.length > 0 ? chunks[Math.min(currentChunkIndex, chunks.length - 1)] : null

@@ -30,6 +30,7 @@ interface UseQuranAudioReturn {
   duration: number
   currentTime: number
   error: string | null
+  verseTimings: VerseTimingInfo[]
   play: () => Promise<void>
   pause: () => void
   stop: () => void
@@ -321,6 +322,7 @@ export function useQuranAudio({
     duration,
     currentTime,
     error,
+    verseTimings: verseTimingsRef.current,
     play,
     pause,
     stop,

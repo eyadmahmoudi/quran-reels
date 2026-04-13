@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from 'react'
 import type { Verse, BackgroundOption } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
+import { splitVerseIntoChunks } from '@/lib/verse-chunking'
 // fix-webm-duration imported dynamically below
 
 interface VideoGeneratorOptions {
@@ -23,6 +24,27 @@ interface UseVideoGeneratorReturn {
   error: string | null
   generateVideo: (options: VideoGeneratorOptions) => Promise<void>
   cancelGeneration: () => void
+}
+
+/**
+ * A display segment is one "page" of the video — it can be an intro
+ * (ta'awwudh / bismillah), or a chunk of a verse.
+ */
+interface DisplaySegment {
+  type: 'intro' | 'verse-chunk'
+  /** For intro segments */
+  introText?: string
+  /** Index into the verses array (for verse-chunk) */
+  verseIndex?: number
+  /** Override text (chunk text, for verse-chunk) */
+  chunkText?: string
+  /** Whether to show the ayah marker (only on last chunk of a verse) */
+  showMarker: boolean
+  /** Whether to show translation (only on last chunk of a verse) */
+  showTranslationForChunk: boolean
+  /** Time boundaries */
+  startMs: number
+  endMs: number
 }
 
 /** Convert a number to Arabic-Indic (Eastern Arabic) numerals */
@@ -56,6 +78,14 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
+/**
+ * Draw a single frame on the canvas.
+ *
+ * @param chunkText    If provided, renders this text instead of the full verse text.
+ * @param showMarker   If false, hides the ayah number marker (used for non-last chunks).
+ * @param showTranslationOverride  If false, suppresses translation even if showTranslation is true.
+ * @param fadeOpacity  0–1 opacity for fade transitions between chunks.
+ */
 function drawFrame(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -68,6 +98,10 @@ function drawFrame(
   displayMode: 'minimal' | 'classic',
   taawudhText?: string,
   animTimeMs?: number,
+  chunkText?: string,
+  showMarker: boolean = true,
+  showTranslationOverride: boolean = true,
+  fadeOpacity: number = 1,
 ) {
   // ── Rendering quality ──────────────────────────────────────────────────────
   ctx.imageSmoothingEnabled = true
@@ -139,8 +173,11 @@ function drawFrame(
 
   if (!verse) return
 
-  // ── Arabic verse text ───────────────────────────────────────────────────────
+  // ── Apply fade opacity for chunk transitions ──
   ctx.save()
+  ctx.globalAlpha = fadeOpacity
+
+  // ── Arabic verse text ───────────────────────────────────────────────────────
   ctx.fillStyle = 'white'
 
   // Minimal matches reference style (smaller, elegant). Classic keeps larger size.
@@ -152,7 +189,8 @@ function drawFrame(
   ctx.shadowBlur = displayMode === 'minimal' ? 18 : 24
   ctx.direction = 'rtl'
 
-  const verseText = verse.text_uthmani || verse.words?.map(w => w.text_uthmani).join(' ') || ''
+  // Use chunk text if provided, otherwise fall back to full verse text
+  const verseText = chunkText || verse.text_uthmani || verse.words?.map(w => w.text_uthmani).join(' ') || ''
 
   // Ayah marker: Arabic-Indic numerals with U+06DD — canvas lacks font-feature-settings
   // so we must use Eastern Arabic digits for UthmanicHafs to render the circle glyph
@@ -175,32 +213,40 @@ function drawFrame(
       lines.push(currentLine); currentLine = word
     } else { currentLine = testLine }
   }
-  // Check if marker fits on the last line, otherwise give it its own line
-  if (currentLine) {
-    const lastLineWidth = ctx.measureText(currentLine).width
-    const spaceW = ctx.measureText(' ').width
-    if (lastLineWidth + spaceW + markerWidth > maxWidth) {
-      lines.push(currentLine)
-      lines.push('') // marker-only line
-    } else {
-      lines.push(currentLine)
+
+  // Only add marker on the last chunk
+  if (showMarker) {
+    // Check if marker fits on the last line, otherwise give it its own line
+    if (currentLine) {
+      const lastLineWidth = ctx.measureText(currentLine).width
+      const spaceW = ctx.measureText(' ').width
+      if (lastLineWidth + spaceW + markerWidth > maxWidth) {
+        lines.push(currentLine)
+        lines.push('') // marker-only line
+      } else {
+        lines.push(currentLine)
+      }
     }
+  } else {
+    // No marker — just push last line of text
+    if (currentLine) lines.push(currentLine)
   }
 
   const lineHeight = arabicFontSize * 1.6
   const totalTextHeight = lines.length * lineHeight
 
   // Minimal: slightly above center to give room for translation below (matches reference)
+  const shouldShowTranslation = showTranslation && showTranslationOverride
   const textCenterY = displayMode === 'minimal'
     ? height * 0.44
-    : height / 2 - (showTranslation ? 80 : 0)
+    : height / 2 - (shouldShowTranslation ? 80 : 0)
   const textStartY = textCenterY - totalTextHeight / 2
 
   lines.forEach((line, i) => {
     const y = textStartY + i * lineHeight
     const isLastLine = i === lines.length - 1
 
-    if (!isLastLine) {
+    if (!showMarker || !isLastLine) {
       // Regular verse line — Nabi font, centered
       ctx.font = nabiFont
       ctx.textAlign = 'center'
@@ -232,11 +278,9 @@ function drawFrame(
     }
   })
   ctx.shadowBlur = 0
-  ctx.restore()
 
   // ── Translation ─────────────────────────────────────────────────────────────
-  if (showTranslation && verse.translations?.[0]) {
-    ctx.save()
+  if (shouldShowTranslation && verse.translations?.[0]) {
     const rawTranslation = verse.translations[0].text.replace(/<[^>]+>/g, '')
     ctx.fillStyle = displayMode === 'minimal' ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.78)'
     const transFontSize = displayMode === 'minimal' ? 28 : 34
@@ -260,8 +304,9 @@ function drawFrame(
     const transLineHeight = transFontSize * 1.5
     const transY = textStartY + totalTextHeight + (displayMode === 'minimal' ? 44 : 70)
     transLines.forEach((line, i) => ctx.fillText(line, width / 2, transY + i * transLineHeight))
-    ctx.restore()
   }
+
+  ctx.restore() // restore globalAlpha
 }
 
 async function exportVerseImages(
@@ -284,6 +329,90 @@ async function exportVerseImages(
     if (i < verses.length - 1) await new Promise((r) => setTimeout(r, 100))
   }
 }
+
+/**
+ * Build display segments from verse timings.
+ * Long verses are split into chunks with proportional timing.
+ */
+function buildDisplaySegments(
+  verseTimings: Array<{ startMs: number; endMs: number }>,
+  verses: Verse[],
+  introOffset: number,
+  taawudhIdx: number,
+  bismillahIdx: number,
+  taawudhText: string,
+  bismillahText: string,
+  displayMode: 'minimal' | 'classic',
+  showTranslation: boolean,
+): DisplaySegment[] {
+  const segments: DisplaySegment[] = []
+  const arabicFontSize = displayMode === 'minimal' ? 58 : 68
+
+  for (let i = 0; i < verseTimings.length; i++) {
+    const timing = verseTimings[i]
+
+    if (i === taawudhIdx) {
+      segments.push({
+        type: 'intro',
+        introText: taawudhText,
+        showMarker: false,
+        showTranslationForChunk: false,
+        startMs: timing.startMs,
+        endMs: timing.endMs,
+      })
+    } else if (i === bismillahIdx) {
+      segments.push({
+        type: 'intro',
+        introText: bismillahText,
+        showMarker: false,
+        showTranslationForChunk: false,
+        startMs: timing.startMs,
+        endMs: timing.endMs,
+      })
+    } else {
+      // Actual verse — check if it needs chunking
+      const verseArrayIdx = i - introOffset
+      if (verseArrayIdx < 0 || verseArrayIdx >= verses.length) continue
+      const verse = verses[verseArrayIdx]
+      const verseText = verse.text_uthmani || ''
+      const chunks = splitVerseIntoChunks(verseText, arabicFontSize, 2)
+
+      if (chunks.length === 1) {
+        // Short verse — single segment, show everything
+        segments.push({
+          type: 'verse-chunk',
+          verseIndex: verseArrayIdx,
+          chunkText: undefined, // use full verse text
+          showMarker: true,
+          showTranslationForChunk: showTranslation,
+          startMs: timing.startMs,
+          endMs: timing.endMs,
+        })
+      } else {
+        // Long verse — split into equal-duration chunks
+        const verseDuration = timing.endMs - timing.startMs
+        const chunkDuration = verseDuration / chunks.length
+
+        for (const chunk of chunks) {
+          segments.push({
+            type: 'verse-chunk',
+            verseIndex: verseArrayIdx,
+            chunkText: chunk.text,
+            showMarker: chunk.isLastChunk,
+            showTranslationForChunk: chunk.isLastChunk && showTranslation,
+            startMs: timing.startMs + chunk.chunkIndex * chunkDuration,
+            endMs: timing.startMs + (chunk.chunkIndex + 1) * chunkDuration,
+          })
+        }
+      }
+    }
+  }
+
+  return segments
+}
+
+/** Duration of fade transition in ms */
+const FADE_DURATION_MS = 250
 
 export function useVideoGenerator(): UseVideoGeneratorReturn {
   const [isGenerating, setIsGenerating] = useState(false)
@@ -410,6 +539,18 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         try { await document.fonts.load('58px "Scheherazade New"') } catch { /* optional */ }
         setProgress(40)
 
+        // ── 2b. Build display segments (with verse chunking) ──
+        const taawudhIdx = taawudhBuffer ? 0 : -1
+        const bismillahIdx = bismillahBuffer ? (taawudhBuffer ? 1 : 0) : -1
+        const introOffset = (taawudhBuffer ? 1 : 0) + (bismillahBuffer ? 1 : 0)
+
+        const displaySegments = buildDisplaySegments(
+          verseTimings, verses, introOffset,
+          taawudhIdx, bismillahIdx,
+          taawudhText, BISMILLAH_TEXT,
+          displayMode, showTranslation,
+        )
+
         // ── 3. Test MediaRecorder ──────────────────────────────────────────
         let useMediaRecorder = false
         try {
@@ -493,13 +634,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           const audioStartTime = audioCtx.currentTime
           source.start(audioStartTime)
 
-          let currentVerseIndex = 0
+          let currentSegmentIndex = 0
           let recordingFinished = false
-
-          // Compute intro slot indices
-          const taawudhIdx = taawudhBuffer ? 0 : -1
-          const bismillahIdx = bismillahBuffer ? (taawudhBuffer ? 1 : 0) : -1
-          const introOffset = (taawudhBuffer ? 1 : 0) + (bismillahBuffer ? 1 : 0)
 
           // Use a Web Worker timer instead of requestAnimationFrame.
           // rAF is paused when the tab is in the background, which freezes
@@ -516,22 +652,42 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             // Elapsed time in ms, locked to the audio clock
             const elapsedMs = (audioCtx.currentTime - audioStartTime) * 1000
 
-            for (let i = 0; i < verseTimings.length; i++) {
-              if (elapsedMs >= verseTimings[i].startMs && elapsedMs < verseTimings[i].endMs) {
-                currentVerseIndex = i
+            // Find current display segment
+            for (let i = 0; i < displaySegments.length; i++) {
+              if (elapsedMs >= displaySegments[i].startMs && elapsedMs < displaySegments[i].endMs) {
+                currentSegmentIndex = i
                 break
               }
             }
 
+            const seg = displaySegments[currentSegmentIndex]
+            if (!seg) return
+
             const videoProgress = Math.min(elapsedMs / totalDurationMs, 1)
 
-            if (currentVerseIndex === taawudhIdx) {
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, taawudhText, elapsedMs)
-            } else if (currentVerseIndex === bismillahIdx) {
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, BISMILLAH_TEXT, elapsedMs)
+            // Compute fade opacity for smooth chunk transitions
+            let fadeOpacity = 1
+            const msIntoSegment = elapsedMs - seg.startMs
+            const msBeforeEnd = seg.endMs - elapsedMs
+            if (msIntoSegment < FADE_DURATION_MS) {
+              fadeOpacity = Math.min(1, msIntoSegment / FADE_DURATION_MS)
+            } else if (msBeforeEnd < FADE_DURATION_MS && currentSegmentIndex < displaySegments.length - 1) {
+              fadeOpacity = Math.max(0, msBeforeEnd / FADE_DURATION_MS)
+            }
+
+            if (seg.type === 'intro') {
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs)
             } else {
-              const verseArrayIndex = currentVerseIndex - introOffset
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, verses[verseArrayIndex], showTranslation, displayMode, undefined, elapsedMs)
+              const verse = seg.verseIndex !== undefined ? verses[seg.verseIndex] : undefined
+              drawFrame(
+                ctx, width, height, backgroundImage, background, surahName,
+                verse, showTranslation, displayMode,
+                undefined, elapsedMs,
+                seg.chunkText,
+                seg.showMarker,
+                seg.showTranslationForChunk,
+                fadeOpacity,
+              )
             }
 
             setProgress(50 + videoProgress * 48)

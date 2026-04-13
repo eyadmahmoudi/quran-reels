@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Play, Pause, RotateCcw, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
 import { useQuranAudio } from '@/hooks/use-quran-audio'
 import { fetchVerses } from '@/lib/quran-api'
 import { formatTime } from '@/lib/quran-api'
+import { splitVerseForPreview, type VerseChunk } from '@/lib/verse-chunking'
 
 // FORMATTER: Gives standard English numbers to the Uthmani font so it converts them into Arabic numerals INSIDE the circle
 function formatAyahNumber(verseKey: string | number) {
@@ -96,6 +97,63 @@ export function VideoPreview() {
 
   const currentVerse = verses[audioVerseIndex]
 
+  // ── Verse chunking for the preview ──
+  const chunks = useMemo<VerseChunk[]>(() => {
+    if (!currentVerse?.text_uthmani) return []
+    return splitVerseForPreview(currentVerse.text_uthmani, 80)
+  }, [currentVerse?.text_uthmani])
+
+  // Track which chunk is displayed (auto-cycle when audio is playing)
+  const [currentChunkIndex, setCurrentChunkIndex] = useState(0)
+  const chunkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const prevVerseIndexRef = useRef(audioVerseIndex)
+
+  // Reset chunk index when verse changes
+  useEffect(() => {
+    if (audioVerseIndex !== prevVerseIndexRef.current) {
+      setCurrentChunkIndex(0)
+      prevVerseIndexRef.current = audioVerseIndex
+    }
+  }, [audioVerseIndex])
+
+  // Auto-cycle through chunks proportionally to the verse's audio duration
+  useEffect(() => {
+    // Clear any existing timer
+    if (chunkTimerRef.current) {
+      clearInterval(chunkTimerRef.current)
+      chunkTimerRef.current = null
+    }
+
+    if (!audioIsPlaying || chunks.length <= 1) return
+
+    // Estimate per-verse duration from overall progress
+    // Each verse gets roughly equal time (since we don't have per-verse timing in preview)
+    const verseDurationMs = verses.length > 0 ? (duration / verses.length) : 5000
+    const chunkDurationMs = verseDurationMs / chunks.length
+
+    if (chunkDurationMs <= 0 || !isFinite(chunkDurationMs)) return
+
+    chunkTimerRef.current = setInterval(() => {
+      setCurrentChunkIndex((prev) => {
+        if (prev < chunks.length - 1) return prev + 1
+        return prev // stay on last chunk until verse changes
+      })
+    }, chunkDurationMs)
+
+    return () => {
+      if (chunkTimerRef.current) {
+        clearInterval(chunkTimerRef.current)
+        chunkTimerRef.current = null
+      }
+    }
+  }, [audioIsPlaying, chunks.length, duration, verses.length, audioVerseIndex])
+
+  // Determine which chunk to show
+  const activeChunk = chunks.length > 0 ? chunks[Math.min(currentChunkIndex, chunks.length - 1)] : null
+  const displayText = activeChunk?.text || currentVerse?.text_uthmani || ''
+  const showMarker = !activeChunk || activeChunk.isLastChunk
+  const showTranslation = config.showTranslation && (!activeChunk || activeChunk.isLastChunk)
+
   const backgroundStyle =
     config.background?.type === 'gradient'
       ? { background: config.background.value }
@@ -154,23 +212,24 @@ export function VideoPreview() {
                 
                 {/* EXACT FONT SPLIT USING STRICT CSS CLASSES */}
                 <p
-                  className="text-[#c9a84c] text-3xl leading-loose text-center"
+                  className="text-[#c9a84c] text-3xl leading-loose text-center transition-opacity duration-300"
                   dir="rtl"
                   style={{ textShadow: '0 2px 10px rgba(0,0,0,0.8)' }}
                 >
-                  {/* VERSE: Strictly forced to use Nabi class */}
-                  {/* IMPORTANT: If Nabi doesn't load here, change text_uthmani to text */}
+                  {/* VERSE TEXT (chunk or full) */}
                   <span className="font-nabi">
-                    {currentVerse.text_uthmani}
+                    {displayText}
                   </span>
                   
-                  {/* NUMBER: Strictly forced to use Uthmani class (renders circle perfectly!) */}
-                  <span className="font-uthmani text-[2.5rem] mr-2 align-middle text-white/90">
-                    {formatAyahNumber(currentVerse.verse_key)}
-                  </span>
+                  {/* NUMBER: Only shown on last chunk */}
+                  {showMarker && (
+                    <span className="font-uthmani text-[2.5rem] mr-2 align-middle text-white/90">
+                      {formatAyahNumber(currentVerse.verse_key)}
+                    </span>
+                  )}
                 </p>
 
-                {config.showTranslation && currentVerse.translations?.[0] && (
+                {showTranslation && currentVerse.translations?.[0] && (
                   <p className="text-white/80 text-sm leading-relaxed font-sans" dir="ltr">
                     {currentVerse.translations[0].text}
                   </p>
@@ -179,6 +238,11 @@ export function VideoPreview() {
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-primary text-xs bg-primary/20 px-3 py-1 rounded-full">
                     {currentVerse.verse_key}
+                    {chunks.length > 1 && (
+                      <span className="ml-1 opacity-70">
+                        ({currentChunkIndex + 1}/{chunks.length})
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>

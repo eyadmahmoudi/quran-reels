@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react'
 import type { Verse, BackgroundOption } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
-import { splitVerseIntoChunks } from '@/lib/verse-chunking'
+import { splitVerseIntoChunks, splitTranslation } from '@/lib/verse-chunking'
 // fix-webm-duration imported dynamically below
 
 interface VideoGeneratorOptions {
@@ -40,8 +40,10 @@ interface DisplaySegment {
   chunkText?: string
   /** Whether to show the ayah marker (only on last chunk of a verse) */
   showMarker: boolean
-  /** Whether to show translation (only on last chunk of a verse) */
+  /** Whether to show translation for this chunk */
   showTranslationForChunk: boolean
+  /** Override translation text (split portion for this chunk) */
+  translationChunkText?: string
   /** Time boundaries */
   startMs: number
   endMs: number
@@ -102,6 +104,7 @@ function drawFrame(
   showMarker: boolean = true,
   showTranslationOverride: boolean = true,
   fadeOpacity: number = 1,
+  translationChunkText?: string,
 ) {
   // ── Rendering quality ──────────────────────────────────────────────────────
   ctx.imageSmoothingEnabled = true
@@ -232,7 +235,7 @@ function drawFrame(
     if (currentLine) lines.push(currentLine)
   }
 
-  const lineHeight = arabicFontSize * 1.6
+  const lineHeight = arabicFontSize * 2.0
   const totalTextHeight = lines.length * lineHeight
 
   // Minimal: slightly above center to give room for translation below (matches reference)
@@ -280,30 +283,34 @@ function drawFrame(
   ctx.shadowBlur = 0
 
   // ── Translation ─────────────────────────────────────────────────────────────
-  if (shouldShowTranslation && verse.translations?.[0]) {
-    const rawTranslation = verse.translations[0].text.replace(/<[^>]+>/g, '')
-    ctx.fillStyle = displayMode === 'minimal' ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.78)'
-    const transFontSize = displayMode === 'minimal' ? 28 : 34
-    ctx.font = `${transFontSize}px Georgia, serif`
-    ctx.textAlign = 'center'
-    ctx.direction = 'ltr'
-    ctx.shadowColor = 'rgba(0,0,0,0.9)'
-    ctx.shadowBlur = 12
+  if (shouldShowTranslation) {
+    // Use chunk-specific translation if provided, otherwise fall back to full translation
+    const rawTranslation = translationChunkText
+      || (verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? '')
+    if (rawTranslation) {
+      ctx.fillStyle = displayMode === 'minimal' ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.78)'
+      const transFontSize = displayMode === 'minimal' ? 28 : 34
+      ctx.font = `${transFontSize}px Georgia, serif`
+      ctx.textAlign = 'center'
+      ctx.direction = 'ltr'
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'
+      ctx.shadowBlur = 12
 
-    const transWords = rawTranslation.split(' ')
-    const transLines: string[] = []
-    let transLine = ''
-    for (const word of transWords) {
-      const testLine = transLine ? `${transLine} ${word}` : word
-      if (ctx.measureText(testLine).width > width - 160 && transLine) {
-        transLines.push(transLine); transLine = word
-      } else { transLine = testLine }
+      const transWords = rawTranslation.split(' ')
+      const transLines: string[] = []
+      let transLine = ''
+      for (const word of transWords) {
+        const testLine = transLine ? `${transLine} ${word}` : word
+        if (ctx.measureText(testLine).width > width - 160 && transLine) {
+          transLines.push(transLine); transLine = word
+        } else { transLine = testLine }
+      }
+      if (transLine) transLines.push(transLine)
+
+      const transLineHeight = transFontSize * 1.5
+      const transY = textStartY + totalTextHeight + (displayMode === 'minimal' ? 44 : 70)
+      transLines.forEach((line, i) => ctx.fillText(line, width / 2, transY + i * transLineHeight))
     }
-    if (transLine) transLines.push(transLine)
-
-    const transLineHeight = transFontSize * 1.5
-    const transY = textStartY + totalTextHeight + (displayMode === 'minimal' ? 44 : 70)
-    transLines.forEach((line, i) => ctx.fillText(line, width / 2, transY + i * transLineHeight))
   }
 
   ctx.restore() // restore globalAlpha
@@ -377,6 +384,10 @@ function buildDisplaySegments(
       const verseText = verse.text_uthmani || ''
       const chunks = splitVerseIntoChunks(verseText, arabicFontSize, 2)
 
+      // Split translation to match Arabic chunks
+      const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
+      const translationChunks = splitTranslation(fullTranslation, chunks)
+
       if (chunks.length === 1) {
         // Short verse — single segment, show everything
         segments.push({
@@ -385,24 +396,32 @@ function buildDisplaySegments(
           chunkText: undefined, // use full verse text
           showMarker: true,
           showTranslationForChunk: showTranslation,
+          translationChunkText: undefined, // use full translation
           startMs: timing.startMs,
           endMs: timing.endMs,
         })
       } else {
-        // Long verse — split into equal-duration chunks
+        // Long verse — split with word-count proportional timing
         const verseDuration = timing.endMs - timing.startMs
-        const chunkDuration = verseDuration / chunks.length
+        const totalChars = chunks.reduce((s, c) => s + c.charCount, 0)
 
+        let chunkStartMs = timing.startMs
         for (const chunk of chunks) {
+          // Proportional duration based on character count (better audio correlation)
+          const ratio = totalChars > 0 ? chunk.charCount / totalChars : 1 / chunks.length
+          const chunkDurationMs = verseDuration * ratio
+
           segments.push({
             type: 'verse-chunk',
             verseIndex: verseArrayIdx,
             chunkText: chunk.text,
             showMarker: chunk.isLastChunk,
-            showTranslationForChunk: chunk.isLastChunk && showTranslation,
-            startMs: timing.startMs + chunk.chunkIndex * chunkDuration,
-            endMs: timing.startMs + (chunk.chunkIndex + 1) * chunkDuration,
+            showTranslationForChunk: showTranslation,
+            translationChunkText: translationChunks[chunk.chunkIndex] || '',
+            startMs: chunkStartMs,
+            endMs: chunkStartMs + chunkDurationMs,
           })
+          chunkStartMs += chunkDurationMs
         }
       }
     }
@@ -687,6 +706,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
                 seg.showMarker,
                 seg.showTranslationForChunk,
                 fadeOpacity,
+                seg.translationChunkText,
               )
             }
 

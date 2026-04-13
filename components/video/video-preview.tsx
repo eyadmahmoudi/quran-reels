@@ -7,7 +7,7 @@ import { useReel } from '@/lib/reel-context'
 import { useQuranAudio } from '@/hooks/use-quran-audio'
 import { fetchVerses } from '@/lib/quran-api'
 import { formatTime } from '@/lib/quran-api'
-import { splitVerseForPreview, type VerseChunk } from '@/lib/verse-chunking'
+import { splitVerseForPreview, splitTranslation, type VerseChunk } from '@/lib/verse-chunking'
 
 // FORMATTER: Gives standard English numbers to the Uthmani font so it converts them into Arabic numerals INSIDE the circle
 function formatAyahNumber(verseKey: string | number) {
@@ -103,6 +103,14 @@ export function VideoPreview() {
     return splitVerseForPreview(currentVerse.text_uthmani, 80)
   }, [currentVerse?.text_uthmani])
 
+  // Split translation to match Arabic chunks
+  const translationChunks = useMemo<string[]>(() => {
+    if (!currentVerse?.translations?.[0]?.text || chunks.length <= 1) {
+      return [currentVerse?.translations?.[0]?.text || '']
+    }
+    return splitTranslation(currentVerse.translations[0].text, chunks)
+  }, [currentVerse?.translations, chunks])
+
   // Track which chunk is displayed (auto-cycle when audio is playing)
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0)
   const chunkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -152,7 +160,9 @@ export function VideoPreview() {
   const activeChunk = chunks.length > 0 ? chunks[Math.min(currentChunkIndex, chunks.length - 1)] : null
   const displayText = activeChunk?.text || currentVerse?.text_uthmani || ''
   const showMarker = !activeChunk || activeChunk.isLastChunk
-  const showTranslation = config.showTranslation && (!activeChunk || activeChunk.isLastChunk)
+  // Show translation on every chunk (with the matching split portion)
+  const showTranslation = config.showTranslation
+  const currentTranslationText = translationChunks[Math.min(currentChunkIndex, translationChunks.length - 1)] || ''
 
   const backgroundStyle =
     config.background?.type === 'gradient'
@@ -229,9 +239,9 @@ export function VideoPreview() {
                   )}
                 </p>
 
-                {showTranslation && currentVerse.translations?.[0] && (
+                {showTranslation && currentTranslationText && (
                   <p className="text-white/80 text-sm leading-relaxed font-sans" dir="ltr">
-                    {currentVerse.translations[0].text}
+                    {currentTranslationText.replace(/<[^>]+>/g, '')}
                   </p>
                 )}
 

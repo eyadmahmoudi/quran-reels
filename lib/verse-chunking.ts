@@ -3,7 +3,7 @@
  *
  * Splits long Quran verses into display chunks so they fit comfortably
  * on screen (max N lines per page). Chunks are timed proportionally
- * to the verse's total audio duration.
+ * to word count for better audio sync.
  */
 
 const VIDEO_WIDTH = 1080
@@ -12,12 +12,16 @@ const MAX_TEXT_WIDTH = VIDEO_WIDTH - 100 // 980px — matches drawFrame padding
 export interface VerseChunk {
   /** The Arabic text for this chunk */
   text: string
-  /** Whether this is the last chunk (ayah marker + translation shown here) */
+  /** Whether this is the last chunk (ayah marker shown here) */
   isLastChunk: boolean
   /** Zero-based chunk index */
   chunkIndex: number
   /** Total number of chunks for this verse */
   totalChunks: number
+  /** Number of Arabic words in this chunk (for proportional audio timing) */
+  wordCount: number
+  /** Number of Arabic base characters excluding diacritics (better audio-proportional weight) */
+  charCount: number
 }
 
 /**
@@ -59,6 +63,22 @@ function measureLines(
   return lines
 }
 
+function countWords(text: string): number {
+  return text.split(' ').filter((w) => w.length > 0).length
+}
+
+/**
+ * Count Arabic base characters, stripping tashkeel (diacritics) and spaces.
+ * This correlates better with spoken duration than word count:
+ * diacritical marks don't add pronunciation time, but more base
+ * letters generally mean longer recitation.
+ */
+function countBaseChars(text: string): number {
+  // Unicode ranges for Arabic tashkeel / diacritics
+  const stripped = text.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7-\u06E8\u06EA-\u06ED\u08D3-\u08E1\u08E3-\u08FF\s]/g, '')
+  return stripped.length
+}
+
 /**
  * Split verse text into display chunks.
  *
@@ -73,14 +93,14 @@ export function splitVerseIntoChunks(
   maxLinesPerChunk: number = 2,
 ): VerseChunk[] {
   if (!verseText || verseText.trim().length === 0) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1 }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: countWords(verseText || ''), charCount: countBaseChars(verseText || '') }]
   }
 
   const lines = measureLines(verseText, fontSize)
 
   // Fits in one page — no splitting
   if (lines.length <= maxLinesPerChunk) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1 }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: countWords(verseText), charCount: countBaseChars(verseText) }]
   }
 
   // Determine number of chunks & distribute lines as evenly as possible
@@ -97,10 +117,62 @@ export function splitVerseIntoChunks(
       isLastChunk: i === numChunks - 1,
       chunkIndex: i,
       totalChunks: numChunks,
+      wordCount: countWords(chunkText),
+      charCount: countBaseChars(chunkText),
     })
   }
 
   return chunks
+}
+
+/**
+ * Split a translation string into the same number of chunks
+ * as the Arabic text, proportionally by Arabic word ratio.
+ *
+ * @param translationText  Full English/other translation text
+ * @param arabicChunks     The Arabic VerseChunk[] for this verse
+ * @returns Array of translation strings, one per chunk
+ */
+export function splitTranslation(
+  translationText: string,
+  arabicChunks: VerseChunk[],
+): string[] {
+  if (!translationText || arabicChunks.length <= 1) {
+    return [translationText]
+  }
+
+  // Strip HTML tags from translation
+  const clean = translationText.replace(/<[^>]+>/g, '')
+  const transWords = clean.split(' ').filter((w) => w.length > 0)
+  if (transWords.length === 0) return arabicChunks.map(() => '')
+
+  // Distribute translation words proportionally to Arabic word counts
+  const totalArabicWords = arabicChunks.reduce((s, c) => s + c.wordCount, 0)
+  if (totalArabicWords === 0) return [clean]
+
+  const result: string[] = []
+  let wordIdx = 0
+  for (let i = 0; i < arabicChunks.length; i++) {
+    const ratio = arabicChunks[i].wordCount / totalArabicWords
+    // How many translation words this chunk gets
+    let count: number
+    if (i === arabicChunks.length - 1) {
+      // Last chunk gets all remaining words
+      count = transWords.length - wordIdx
+    } else {
+      count = Math.max(1, Math.round(ratio * transWords.length))
+    }
+    const end = Math.min(wordIdx + count, transWords.length)
+    result.push(transWords.slice(wordIdx, end).join(' '))
+    wordIdx = end
+  }
+
+  // If we ran out of translation words early, fill empties
+  while (result.length < arabicChunks.length) {
+    result.push('')
+  }
+
+  return result
 }
 
 /**
@@ -117,12 +189,12 @@ export function splitVerseForPreview(
   maxCharsPerChunk: number = 80,
 ): VerseChunk[] {
   if (!verseText || verseText.length <= maxCharsPerChunk) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1 }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: countWords(verseText || ''), charCount: countBaseChars(verseText || '') }]
   }
 
   const words = verseText.split(' ').filter((w) => w.length > 0)
   if (words.length <= 2) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1 }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: words.length, charCount: countBaseChars(verseText) }]
   }
 
   // Build chunks by accumulating words until we exceed maxCharsPerChunk
@@ -141,7 +213,7 @@ export function splitVerseForPreview(
 
   // If only one chunk resulted, no split needed
   if (chunks.length <= 1) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1 }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: words.length, charCount: countBaseChars(verseText) }]
   }
 
   // Re-balance: try to make chunks roughly equal length
@@ -152,11 +224,15 @@ export function splitVerseForPreview(
   for (let i = 0; i < numChunks; i++) {
     const start = i * wordsPerChunk
     const end = Math.min((i + 1) * wordsPerChunk, totalWords)
+    const chunkWords = words.slice(start, end)
+    const chunkStr = chunkWords.join(' ')
     balanced.push({
-      text: words.slice(start, end).join(' '),
+      text: chunkStr,
       isLastChunk: i === numChunks - 1,
       chunkIndex: i,
       totalChunks: numChunks,
+      wordCount: chunkWords.length,
+      charCount: countBaseChars(chunkStr),
     })
   }
   return balanced

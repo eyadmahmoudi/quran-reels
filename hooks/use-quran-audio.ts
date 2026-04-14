@@ -31,6 +31,7 @@ interface UseQuranAudioReturn {
   currentTime: number
   error: string | null
   verseTimings: VerseTimingInfo[]
+  audioBuffers: (AudioBuffer | null)[]
   play: () => Promise<void>
   pause: () => void
   stop: () => void
@@ -60,6 +61,7 @@ export function useQuranAudio({
   const startTimeRef = useRef(0)
   const pauseTimeRef = useRef(0)
   const verseTimingsRef = useRef<VerseTimingInfo[]>([])
+  const audioBuffersRef = useRef<(AudioBuffer | null)[]>([])
   const animationFrameRef = useRef<number | null>(null)
   const audioElementsRef = useRef<HTMLAudioElement[]>([])
   const currentAudioIndexRef = useRef(0)
@@ -99,7 +101,15 @@ export function useQuranAudio({
     try {
       const audioElements: HTMLAudioElement[] = []
       const timings: VerseTimingInfo[] = []
+      const audioBuffers: (AudioBuffer | null)[] = []
       let cumulativeTime = 0
+
+      if (!audioContextRef.current) {
+        // @ts-ignore - Safari fallback
+        const AudioCtx = window.AudioContext || window.webkitAudioContext
+        audioContextRef.current = new AudioCtx()
+      }
+      const audioCtx = audioContextRef.current
 
       // Create audio elements for each verse
       for (let i = startVerse; i <= endVerse; i++) {
@@ -129,6 +139,16 @@ export function useQuranAudio({
           audio.load()
         })
 
+        try {
+          const resp = await fetch(audioUrl)
+          const ab = await resp.arrayBuffer()
+          const audioBuffer = await audioCtx.decodeAudioData(ab)
+          audioBuffers.push(audioBuffer)
+        } catch (e) {
+          console.error('Failed to decode buffer for verse', i, e)
+          audioBuffers.push(null)
+        }
+
         const audioDuration = audio.duration * 1000 // Convert to ms
 
         timings.push({
@@ -145,6 +165,7 @@ export function useQuranAudio({
 
       audioElementsRef.current = audioElements
       verseTimingsRef.current = timings
+      audioBuffersRef.current = audioBuffers
       setDuration(cumulativeTime)
       setIsLoading(false)
 
@@ -311,6 +332,7 @@ export function useQuranAudio({
     stop()
     audioElementsRef.current = []
     verseTimingsRef.current = []
+    audioBuffersRef.current = []
     setDuration(0)
   }, [recitationId, surahId, startVerse, endVerse, stop])
 
@@ -323,6 +345,7 @@ export function useQuranAudio({
     currentTime,
     error,
     verseTimings: verseTimingsRef.current,
+    audioBuffers: audioBuffersRef.current,
     play,
     pause,
     stop,

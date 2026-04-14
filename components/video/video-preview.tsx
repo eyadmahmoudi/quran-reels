@@ -7,7 +7,7 @@ import { useReel } from '@/lib/reel-context'
 import { useQuranAudio } from '@/hooks/use-quran-audio'
 import { fetchVerses } from '@/lib/quran-api'
 import { formatTime } from '@/lib/quran-api'
-import { splitVerseForPreview, splitTranslation, type VerseChunk } from '@/lib/verse-chunking'
+import { splitVerseWithAudioSilences, splitTranslation, type VerseChunk } from '@/lib/verse-chunking'
 
 // FORMATTER: Gives standard English numbers to the Uthmani font so it converts them into Arabic numerals INSIDE the circle
 function formatAyahNumber(verseKey: string | number) {
@@ -66,6 +66,7 @@ export function VideoPreview() {
     currentTime,
     error: audioError,
     verseTimings,
+    audioBuffers,
     play,
     pause,
     stop,
@@ -101,8 +102,9 @@ export function VideoPreview() {
   // ── Verse chunking for the preview ──
   const chunks = useMemo<VerseChunk[]>(() => {
     if (!currentVerse?.text_uthmani) return []
-    return splitVerseForPreview(currentVerse.text_uthmani, 80)
-  }, [currentVerse?.text_uthmani])
+    const audioBuffer = audioBuffers[audioVerseIndex]
+    return splitVerseWithAudioSilences(currentVerse.text_uthmani, audioBuffer || null, 80)
+  }, [currentVerse?.text_uthmani, audioBuffers, audioVerseIndex])
 
   // Split translation to match Arabic chunks
   const translationChunks = useMemo<string[]>(() => {
@@ -115,24 +117,11 @@ export function VideoPreview() {
   // Build per-chunk time boundaries from actual verse audio duration
   const chunkTimeBoundaries = useMemo<Array<{ startMs: number; endMs: number }>>(() => {
     if (chunks.length <= 1) return []
-    // Get actual verse duration from audio timings
-    const timing = verseTimings[audioVerseIndex]
-    const verseDurationMs = timing
-      ? (timing.endTime - timing.startTime)
-      : (verses.length > 0 ? (duration / verses.length) : 5000)
-    const totalChars = chunks.reduce((s, c) => s + c.charCount, 0)
-    if (totalChars === 0) return []
-
-    const boundaries: Array<{ startMs: number; endMs: number }> = []
-    let offset = 0
-    for (const chunk of chunks) {
-      const ratio = chunk.charCount / totalChars
-      const chunkDur = verseDurationMs * ratio
-      boundaries.push({ startMs: offset, endMs: offset + chunkDur })
-      offset += chunkDur
-    }
-    return boundaries
-  }, [chunks, verseTimings, audioVerseIndex, duration, verses.length])
+    return chunks.map(c => ({
+      startMs: c.startMs || 0,
+      endMs: c.endMs || c.startMs || 0
+    }))
+  }, [chunks])
 
   // Determine current chunk from audio currentTime (synced to recitation)
   const currentChunkIndex = useMemo(() => {

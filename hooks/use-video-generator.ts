@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react'
 import type { Verse, BackgroundOption } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
-import { splitVerseIntoChunks, splitTranslation } from '@/lib/verse-chunking'
+import { splitVerseWithAudioSilences, splitTranslation } from '@/lib/verse-chunking'
 // fix-webm-duration imported dynamically below
 
 interface VideoGeneratorOptions {
@@ -351,6 +351,7 @@ function buildDisplaySegments(
   bismillahText: string,
   displayMode: 'minimal' | 'classic',
   showTranslation: boolean,
+  decodedBuffers: AudioBuffer[]
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
   const arabicFontSize = displayMode === 'minimal' ? 58 : 68
@@ -382,7 +383,8 @@ function buildDisplaySegments(
       if (verseArrayIdx < 0 || verseArrayIdx >= verses.length) continue
       const verse = verses[verseArrayIdx]
       const verseText = verse.text_uthmani || ''
-      const chunks = splitVerseIntoChunks(verseText, arabicFontSize, 2)
+      const maxChars = displayMode === 'minimal' ? 80 : 90
+      const chunks = splitVerseWithAudioSilences(verseText, decodedBuffers[i] || null, maxChars)
 
       // Split translation to match Arabic chunks
       const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
@@ -401,16 +403,7 @@ function buildDisplaySegments(
           endMs: timing.endMs,
         })
       } else {
-        // Long verse — split with word-count proportional timing
-        const verseDuration = timing.endMs - timing.startMs
-        const totalChars = chunks.reduce((s, c) => s + c.charCount, 0)
-
-        let chunkStartMs = timing.startMs
         for (const chunk of chunks) {
-          // Proportional duration based on character count (better audio correlation)
-          const ratio = totalChars > 0 ? chunk.charCount / totalChars : 1 / chunks.length
-          const chunkDurationMs = verseDuration * ratio
-
           segments.push({
             type: 'verse-chunk',
             verseIndex: verseArrayIdx,
@@ -418,10 +411,9 @@ function buildDisplaySegments(
             showMarker: chunk.isLastChunk,
             showTranslationForChunk: showTranslation,
             translationChunkText: translationChunks[chunk.chunkIndex] || '',
-            startMs: chunkStartMs,
-            endMs: chunkStartMs + chunkDurationMs,
+            startMs: timing.startMs + (chunk.startMs || 0),
+            endMs: timing.startMs + (chunk.endMs || 0),
           })
-          chunkStartMs += chunkDurationMs
         }
       }
     }
@@ -568,6 +560,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           taawudhIdx, bismillahIdx,
           taawudhText, BISMILLAH_TEXT,
           displayMode, showTranslation,
+          decodedBuffers
         )
 
         // ── 3. Test MediaRecorder ──────────────────────────────────────────

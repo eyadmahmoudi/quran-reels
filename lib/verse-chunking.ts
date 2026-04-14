@@ -264,52 +264,48 @@ export function splitVerseByWordTimings(
 
   // Determine base timeline offset (first word's start time becomes 0)
   const baseMs = segments[0][1]
-  const gapThresholdMs = 300 // pause threshold to consider a boundary
 
   const baseChunks: Array<{ text: string; startMs: number; endMs: number }> = []
 
   let currentWords: string[] = []
-  let chunkStartRelative = 0
   let chunkChars = 0
+  let chunkStartMs = Math.max(0, segments[0][1] - baseMs)
 
   for (let i = 0; i < words.length; i++) {
     const word = words[i]
-    // segment array: [word_id, start_ms, end_ms]
+    const wordBaseChars = countBaseChars(word)
+    
+    // Map word to its segment (or last available if array mismatch)
     const currentSegment = i < segments.length ? segments[i] : segments[segments.length - 1]
-    const nextSegment = i + 1 < segments.length ? segments[i + 1] : null
 
-    currentWords.push(word)
-    chunkChars += countBaseChars(word)
-
-    const isLastWord = i === words.length - 1
-
-    let shouldSplit = isLastWord
-
-    if (!shouldSplit && nextSegment) {
-      const currentEnd = currentSegment[2]
-      const nextStart = nextSegment[1]
-      const gapMs = nextStart - currentEnd
-
-      // Check if there is a silence gap large enough to pause, OR if chunk is getting too long visually
-      if (gapMs >= gapThresholdMs || chunkChars >= maxChars) {
-        shouldSplit = true
-      }
-    }
-
-    if (shouldSplit) {
-      const chunkEndRelative = Math.max(0, currentSegment[2] - baseMs)
+    if (currentWords.length > 0 && chunkChars + 1 + wordBaseChars > maxChars) {
+      // Pushing the current chunk BEFORE this word
+      const prevSegment = i - 1 >= 0 ? (i - 1 < segments.length ? segments[i - 1] : segments[segments.length - 1]) : currentSegment
       baseChunks.push({
         text: currentWords.join(' '),
-        startMs: chunkStartRelative,
-        endMs: chunkEndRelative
+        startMs: chunkStartMs,
+        endMs: Math.max(0, prevSegment[2] - baseMs)
       })
 
-      if (nextSegment) {
-        chunkStartRelative = Math.max(0, nextSegment[1] - baseMs)
-      }
-      currentWords = []
-      chunkChars = 0
+      // Start new chunk with current word
+      currentWords = [word]
+      chunkChars = wordBaseChars
+      chunkStartMs = Math.max(0, currentSegment[1] - baseMs)
+    } else {
+      currentWords.push(word)
+      chunkChars += currentWords.length > 1 ? wordBaseChars + 1 : wordBaseChars
     }
+  }
+
+  // push whatever remains
+  if (currentWords.length > 0) {
+    const lastIdx = words.length - 1
+    const lastSegment = lastIdx < segments.length ? segments[lastIdx] : segments[segments.length - 1]
+    baseChunks.push({
+      text: currentWords.join(' '),
+      startMs: chunkStartMs,
+      endMs: Math.max(0, lastSegment[2] - baseMs)
+    })
   }
 
   return baseChunks.map((c, idx) => ({

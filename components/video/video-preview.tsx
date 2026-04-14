@@ -7,7 +7,7 @@ import { useReel } from '@/lib/reel-context'
 import { useQuranAudio } from '@/hooks/use-quran-audio'
 import { fetchVerses } from '@/lib/quran-api'
 import { formatTime } from '@/lib/quran-api'
-import { splitVerseWithAudioSilences, splitTranslation, type VerseChunk } from '@/lib/verse-chunking'
+import { splitVerseByWordTimings, splitTranslation, type VerseChunk } from '@/lib/verse-chunking'
 
 // FORMATTER: Gives standard English numbers to the Uthmani font so it converts them into Arabic numerals INSIDE the circle
 function formatAyahNumber(verseKey: string | number) {
@@ -20,11 +20,11 @@ export function VideoPreview() {
     config,
     verses,
     setVerses,
-    isPlaying,
-    setIsPlaying,
     currentVerseIndex,
     setCurrentVerseIndex,
   } = useReel()
+
+  const [isPlaying, setIsPlaying] = useState(false)
 
   const [isLoadingVerses, setIsLoadingVerses] = useState(false)
 
@@ -66,12 +66,12 @@ export function VideoPreview() {
     currentTime,
     error: audioError,
     verseTimings,
-    audioBuffers,
+    verseSegments,
     play,
     pause,
     stop,
   } = useQuranAudio({
-    recitationId: config.recitationId || 7,
+    recitationId: config.reciterId || 7,
     surahId: config.surah?.id || 1,
     startVerse: config.startVerse,
     endVerse: config.endVerse,
@@ -102,9 +102,9 @@ export function VideoPreview() {
   // ── Verse chunking for the preview ──
   const chunks = useMemo<VerseChunk[]>(() => {
     if (!currentVerse?.text_uthmani) return []
-    const audioBuffer = audioBuffers[audioVerseIndex]
-    return splitVerseWithAudioSilences(currentVerse.text_uthmani, audioBuffer || null, 80)
-  }, [currentVerse?.text_uthmani, audioBuffers, audioVerseIndex])
+    const segments = verseSegments[audioVerseIndex]
+    return splitVerseByWordTimings(currentVerse.text_uthmani, segments || null, 80)
+  }, [currentVerse?.text_uthmani, verseSegments, audioVerseIndex])
 
   // Split translation to match Arabic chunks
   const translationChunks = useMemo<string[]>(() => {

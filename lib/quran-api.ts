@@ -134,13 +134,16 @@ export async function fetchAudioSegments(
   }>
 > {
   const res = await fetch(
-    `${API_BASE}/recitations/${recitationId}/by_chapter/${surahId}?segments=true`
+    `https://api.qurancdn.com/api/qdc/audio/reciters/${recitationId}/audio_files?chapter=${surahId}&segments=true`
   )
-  if (!res.ok) throw new Error('Failed to fetch audio segments')
+  if (!res.ok) {
+    console.warn('Failed to fetch audio segments from QDC API')
+    return []
+  }
   const data = await res.json()
 
   // Filter to selected verse range
-  const audioFiles = data.audio_files || []
+  const audioFiles = data.audio_files?.[0]?.verse_timings || []
   return audioFiles.filter((af: { verse_key: string }) => {
     const verseNum = parseInt(af.verse_key.split(':')[1])
     return verseNum >= verseStart && verseNum <= verseEnd

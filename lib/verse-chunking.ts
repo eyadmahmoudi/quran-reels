@@ -242,152 +242,81 @@ export function splitVerseForPreview(
 }
 
 /**
- * Detect silences (pauses/breaths) in an AudioBuffer.
- * Returns an array of silence midpoints in ms.
+ * Splits verse text precisely according to QDC word-level timestamps.
+ * Gaps between words (e.g., > 300ms) signify breath pauses and become natural chunk boundaries.
+ * Falls back to proportional splitting if segments are unavailable.
  */
-function detectSilences(buffer: AudioBuffer, minSilenceMs = 400, threshold = 0.035): number[] {
-  const data = buffer.getChannelData(0)
-  const sr = buffer.sampleRate
-  const minSilenceSamples = (minSilenceMs / 1000) * sr
-  const windowSize = Math.floor(sr * 0.05) // 50ms windows
-
-  const silences: number[] = []
-  let silenceLen = 0
-  let startSilence = -1
-
-  for (let i = 0; i < data.length; i += windowSize) {
-    const end = Math.min(i + windowSize, data.length)
-    let maxAmp = 0
-    for (let j = i; j < end; j++) {
-      const abs = Math.abs(data[j])
-      if (abs > maxAmp) maxAmp = abs
-    }
-
-    if (maxAmp < threshold) {
-      if (silenceLen === 0) startSilence = i
-      silenceLen += (end - i)
-    } else {
-      if (silenceLen >= minSilenceSamples) {
-        // Find midpoint of the silence
-        const midPoint = startSilence + (silenceLen / 2)
-        silences.push((midPoint / sr) * 1000)
-      }
-      silenceLen = 0
-    }
-  }
-  return silences
-}
-
-/**
- * Splits verse text precisely according to detected silences (breaths) 
- * in the corresponding audio. Gives perfect word-audio matching.
- * Falls back to proportional splitting if the verse has no breaths or sections are too long.
- */
-export function splitVerseWithAudioSilences(
+export function splitVerseByWordTimings(
   verseText: string,
-  audioBuffer: AudioBuffer | null,
+  segments: number[][] | null,
   maxChars = 90
 ): VerseChunk[] {
-  const audioDurationMs = audioBuffer ? audioBuffer.duration * 1000 : 5000
-
   if (!verseText || verseText.trim().length === 0) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: 0, charCount: 0, startMs: 0, endMs: audioDurationMs }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: 0, charCount: 0, startMs: 0, endMs: 0 }]
   }
 
-  const totalChars = countBaseChars(verseText)
   const words = verseText.split(' ').filter(w => w.trim().length > 0)
 
-  if (words.length <= 2) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: words.length, charCount: totalChars, startMs: 0, endMs: audioDurationMs }]
+  if (!segments || segments.length === 0 || words.length <= 2) {
+    // Fallback if no timeline segments exist
+    return splitVerseForPreview(verseText, maxChars)
   }
 
-  // Find audio pauses
-  const silences = audioBuffer ? detectSilences(audioBuffer) : []
+  // Determine base timeline offset (first word's start time becomes 0)
+  const baseMs = segments[0][1]
+  const gapThresholdMs = 300 // pause threshold to consider a boundary
 
-  // Create duration segments between silences
-  const audioSegments: Array<{ startMs: number; endMs: number; duration: number }> = []
-  let lastT = 0
-  for (const s of silences) {
-    audioSegments.push({ startMs: lastT, endMs: s, duration: s - lastT })
-    lastT = s
-  }
-  audioSegments.push({ startMs: lastT, endMs: audioDurationMs, duration: audioDurationMs - lastT })
-
-  // Distribute text to audio segments proportionally by character count
-  // This correctly maps continuous text boundaries to natural audio breath boundaries
   const baseChunks: Array<{ text: string; startMs: number; endMs: number }> = []
-  let currentWordIdx = 0
 
-  for (let i = 0; i < audioSegments.length; i++) {
-    const seg = audioSegments[i]
-    if (seg.duration <= 0) continue
+  let currentWords: string[] = []
+  let chunkStartRelative = 0
+  let chunkChars = 0
 
-    const targetSegChars = totalChars * (seg.duration / audioDurationMs)
-    const segWords: string[] = []
-    let segChars = 0
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i]
+    // segment array: [word_id, start_ms, end_ms]
+    const currentSegment = i < segments.length ? segments[i] : segments[segments.length - 1]
+    const nextSegment = i + 1 < segments.length ? segments[i + 1] : null
 
-    if (i === audioSegments.length - 1) {
-      // Last segment guarantees we swallow remaining words
-      while (currentWordIdx < words.length) {
-        segWords.push(words[currentWordIdx++])
-      }
-    } else {
-      // Add words until we're closest to the expected split boundary
-      while (currentWordIdx < words.length) {
-        const w = words[currentWordIdx]
-        const c = countBaseChars(w)
-        if (segChars + c > targetSegChars && segWords.length > 0) {
-          const diffWithout = Math.abs(segChars - targetSegChars)
-          const diffWith = Math.abs((segChars + c) - targetSegChars)
-          if (diffWith < diffWithout) {
-            segWords.push(w)
-            segChars += c
-            currentWordIdx++
-          }
-          break // Reached boundary block
-        }
-        segWords.push(w)
-        segChars += c
-        currentWordIdx++
+    currentWords.push(word)
+    chunkChars += countBaseChars(word)
+
+    const isLastWord = i === words.length - 1
+
+    let shouldSplit = isLastWord
+
+    if (!shouldSplit && nextSegment) {
+      const currentEnd = currentSegment[2]
+      const nextStart = nextSegment[1]
+      const gapMs = nextStart - currentEnd
+
+      // Check if there is a silence gap large enough to pause, OR if chunk is getting too long visually
+      if (gapMs >= gapThresholdMs || chunkChars >= maxChars) {
+        shouldSplit = true
       }
     }
 
-    const segText = segWords.join(' ')
-    if (segText.trim().length === 0) continue
-
-    // If an audio segment is visually too long (reciter didn't pause for a long time), sub-divide it proportional to char count
-    if (segText.length > maxChars * 1.3) {
-      const subChunks = splitVerseForPreview(segText, maxChars)
-      const subTotalChars = subChunks.reduce((a, b) => a + b.charCount, 0)
-      let currentSubMs = seg.startMs
-
-      for (let j = 0; j < subChunks.length; j++) {
-        const subC = subChunks[j]
-        const subRatio = subTotalChars > 0 ? subC.charCount / subTotalChars : 1 / subChunks.length
-        const subDur = seg.duration * subRatio
-        baseChunks.push({
-          text: subC.text,
-          startMs: currentSubMs,
-          endMs: currentSubMs + subDur
-        })
-        currentSubMs += subDur
-      }
-    } else {
+    if (shouldSplit) {
+      const chunkEndRelative = Math.max(0, currentSegment[2] - baseMs)
       baseChunks.push({
-        text: segText,
-        startMs: seg.startMs,
-        endMs: seg.endMs
+        text: currentWords.join(' '),
+        startMs: chunkStartRelative,
+        endMs: chunkEndRelative
       })
+
+      if (nextSegment) {
+        chunkStartRelative = Math.max(0, nextSegment[1] - baseMs)
+      }
+      currentWords = []
+      chunkChars = 0
     }
   }
 
-  const finalChunks = baseChunks.length > 0 ? baseChunks : [{ text: verseText, startMs: 0, endMs: audioDurationMs }]
-  
-  return finalChunks.map((c, idx) => ({
+  return baseChunks.map((c, idx) => ({
     text: c.text,
-    isLastChunk: idx === finalChunks.length - 1,
+    isLastChunk: idx === baseChunks.length - 1,
     chunkIndex: idx,
-    totalChunks: finalChunks.length,
+    totalChunks: baseChunks.length,
     wordCount: countWords(c.text),
     charCount: countBaseChars(c.text),
     startMs: c.startMs,

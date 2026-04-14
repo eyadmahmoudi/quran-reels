@@ -3,7 +3,8 @@
 import { useState, useCallback, useRef } from 'react'
 import type { Verse, BackgroundOption } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
-import { splitVerseWithAudioSilences, splitTranslation } from '@/lib/verse-chunking'
+import { splitVerseByWordTimings, splitTranslation } from '@/lib/verse-chunking'
+import { fetchAudioSegments } from '@/lib/quran-api'
 // fix-webm-duration imported dynamically below
 
 interface VideoGeneratorOptions {
@@ -11,6 +12,7 @@ interface VideoGeneratorOptions {
   background: BackgroundOption
   showTranslation: boolean
   surahName: string
+  recitationId?: number
   reciterFolder: string
   surahId: number
   startVerse: number
@@ -351,7 +353,7 @@ function buildDisplaySegments(
   bismillahText: string,
   displayMode: 'minimal' | 'classic',
   showTranslation: boolean,
-  decodedBuffers: AudioBuffer[]
+  verseSegments: number[][][]
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
   const arabicFontSize = displayMode === 'minimal' ? 58 : 68
@@ -384,7 +386,7 @@ function buildDisplaySegments(
       const verse = verses[verseArrayIdx]
       const verseText = verse.text_uthmani || ''
       const maxChars = displayMode === 'minimal' ? 80 : 90
-      const chunks = splitVerseWithAudioSilences(verseText, decodedBuffers[i] || null, maxChars)
+      const chunks = splitVerseByWordTimings(verseText, verseSegments[i] || null, maxChars)
 
       // Split translation to match Arabic chunks
       const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
@@ -462,6 +464,9 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const audioCtx = new AudioContext({ sampleRate: 48000 })
         const decodedBuffers: AudioBuffer[] = []
         const verseTimings: Array<{ startMs: number; endMs: number }> = []
+        
+        const segmentsData = await fetchAudioSegments(options.recitationId || 7, surahId, startVerse, endVerse).catch(() => [])
+        const matchedSegments: number[][][] = []
 
         // ── Intro sequence ────────────────────────────────────────────────
         // 1. Ta'awwudh: Al-Husary saying أعوذ بالله من الشيطان الرجيم (served locally)
@@ -504,12 +509,22 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           const arrayBuf = await resp.arrayBuffer()
           const audioBuf = await audioCtx.decodeAudioData(arrayBuf)
           decodedBuffers.push(audioBuf)
+
+          const segmentInfo = segmentsData.find((s: any) => s.verse_key === `${surahId}:${i}`)
+          matchedSegments.push(segmentInfo?.segments || [])
+
           setProgress(5 + ((i - startVerse + 1) / (endVerse - startVerse + 1)) * 25)
         }
 
         // Prepend intro buffers: [ta'awwudh?, bismillah?, ...verses]
-        if (bismillahBuffer) decodedBuffers.unshift(bismillahBuffer)
-        if (taawudhBuffer) decodedBuffers.unshift(taawudhBuffer)
+        if (bismillahBuffer) {
+          decodedBuffers.unshift(bismillahBuffer)
+          matchedSegments.unshift([])
+        }
+        if (taawudhBuffer) {
+          decodedBuffers.unshift(taawudhBuffer)
+          matchedSegments.unshift([])
+        }
 
         if (cancelledRef.current) { audioCtx.close(); return }
 
@@ -560,7 +575,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           taawudhIdx, bismillahIdx,
           taawudhText, BISMILLAH_TEXT,
           displayMode, showTranslation,
-          decodedBuffers
+          matchedSegments
         )
 
         // ── 3. Test MediaRecorder ──────────────────────────────────────────

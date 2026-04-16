@@ -5,7 +5,6 @@ import type { Verse, BackgroundOption } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
 import { splitVerseByWordTimings, splitTranslation } from '@/lib/verse-chunking'
 import { fetchAudioSegments } from '@/lib/quran-api'
-// fix-webm-duration imported dynamically below
 
 interface VideoGeneratorOptions {
   verses: Verse[]
@@ -28,46 +27,31 @@ interface UseVideoGeneratorReturn {
   cancelGeneration: () => void
 }
 
-/**
- * A display segment is one "page" of the video — it can be an intro
- * (ta'awwudh / bismillah), or a chunk of a verse.
- */
 interface DisplaySegment {
   type: 'intro' | 'verse-chunk'
-  /** For intro segments */
   introText?: string
-  /** Index into the verses array (for verse-chunk) */
   verseIndex?: number
-  /** Override text (chunk text, for verse-chunk) */
   chunkText?: string
-  /** Whether to show the ayah marker (only on last chunk of a verse) */
   showMarker: boolean
-  /** Whether to show translation for this chunk */
   showTranslationForChunk: boolean
-  /** Override translation text (split portion for this chunk) */
   translationChunkText?: string
-  /** Time boundaries */
   startMs: number
   endMs: number
 }
 
-/** Convert a number to Arabic-Indic (Eastern Arabic) numerals */
 function toArabicNumerals(n: number): string {
   return n.toString().replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[+d])
 }
 
-/** Load an HTMLImageElement from a URL */
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
-    // Don't set crossOrigin for blob/data URLs — it breaks loading
     if (!src.startsWith('blob:') && !src.startsWith('data:')) {
       img.crossOrigin = 'anonymous'
     }
     img.onload = () => resolve(img); img.onerror = reject; img.src = src
   })
 }
-
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath()
@@ -82,14 +66,6 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
-/**
- * Draw a single frame on the canvas.
- *
- * @param chunkText    If provided, renders this text instead of the full verse text.
- * @param showMarker   If false, hides the ayah number marker (used for non-last chunks).
- * @param showTranslationOverride  If false, suppresses translation even if showTranslation is true.
- * @param fadeOpacity  0–1 opacity for fade transitions between chunks.
- */
 function drawFrame(
   ctx: CanvasRenderingContext2D,
   width: number,
@@ -108,11 +84,9 @@ function drawFrame(
   fadeOpacity: number = 1,
   translationChunkText?: string,
 ) {
-  // ── Rendering quality ──────────────────────────────────────────────────────
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
-  // ── Background ─────────────────────────────────────────────────────────────
   if (background.type === 'animated') {
     drawAnimatedBackground(ctx, width, height, animTimeMs ?? 0, background.value)
   } else if (backgroundImage) {
@@ -121,7 +95,6 @@ function drawFrame(
     const y = (height - backgroundImage.height * scale) / 2
     ctx.drawImage(backgroundImage, x, y, backgroundImage.width * scale, backgroundImage.height * scale)
   } else {
-    // Gradient fallback
     const gradient = ctx.createLinearGradient(0, 0, 0, height)
     if (background.value.includes('emerald')) {
       gradient.addColorStop(0, '#0a1a14'); gradient.addColorStop(0.5, '#0d2818'); gradient.addColorStop(1, '#0a1a14')
@@ -138,7 +111,6 @@ function drawFrame(
     ctx.fillRect(0, 0, width, height)
   }
 
-  // Dark overlay
   const hasRichBg = background.type === 'animated' || !!backgroundImage
   if (displayMode === 'minimal') {
     ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.20)'
@@ -147,7 +119,6 @@ function drawFrame(
   }
   ctx.fillRect(0, 0, width, height)
 
-  // ── Ta'awwudh / Bismillah frame: draw intro text when taawudhText is provided and no verse ──
   if (taawudhText && !verse) {
     ctx.save()
     ctx.fillStyle = 'white'
@@ -162,7 +133,6 @@ function drawFrame(
     return
   }
 
-  // ── Classic mode: Surah name header ────────────────────────────────────────
   if (displayMode === 'classic') {
     ctx.save()
     ctx.fillStyle = 'rgba(0,0,0,0.45)'
@@ -178,14 +148,10 @@ function drawFrame(
 
   if (!verse) return
 
-  // ── Apply fade opacity for chunk transitions ──
   ctx.save()
   ctx.globalAlpha = fadeOpacity
 
-  // ── Arabic verse text ───────────────────────────────────────────────────────
   ctx.fillStyle = 'white'
-
-  // Minimal matches reference style (smaller, elegant). Classic keeps larger size.
   const arabicFontSize = displayMode === 'minimal' ? 58 : 68
   const nabiFont = `${arabicFontSize}px "Nabi", sans-serif`
   const uthmanicFont = `${arabicFontSize}px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif`
@@ -194,19 +160,13 @@ function drawFrame(
   ctx.shadowBlur = displayMode === 'minimal' ? 18 : 24
   ctx.direction = 'rtl'
 
-  // Use chunk text if provided, otherwise fall back to full verse text
   const verseText = chunkText || verse.text_uthmani || verse.words?.map(w => w.text_uthmani).join(' ') || ''
-
-  // Ayah marker: Arabic-Indic numerals with U+06DD — canvas lacks font-feature-settings
-  // so we must use Eastern Arabic digits for UthmanicHafs to render the circle glyph
   const verseNumber = parseInt(verse.verse_key.split(':')[1])
   const markerChar = `\u06DD${toArabicNumerals(verseNumber)}`
 
-  // Measure marker width in UthmanicHafs
   ctx.font = uthmanicFont
   const markerWidth = ctx.measureText(markerChar).width
 
-  // Word-wrap verse text using Nabi font (marker handled separately)
   ctx.font = nabiFont
   const maxWidth = width - 100
   const words = verseText.split(' ')
@@ -219,28 +179,24 @@ function drawFrame(
     } else { currentLine = testLine }
   }
 
-  // Only add marker on the last chunk
   if (showMarker) {
-    // Check if marker fits on the last line, otherwise give it its own line
     if (currentLine) {
       const lastLineWidth = ctx.measureText(currentLine).width
       const spaceW = ctx.measureText(' ').width
       if (lastLineWidth + spaceW + markerWidth > maxWidth) {
         lines.push(currentLine)
-        lines.push('') // marker-only line
+        lines.push('') 
       } else {
         lines.push(currentLine)
       }
     }
   } else {
-    // No marker — just push last line of text
     if (currentLine) lines.push(currentLine)
   }
 
   const lineHeight = arabicFontSize * 2.0
   const totalTextHeight = lines.length * lineHeight
 
-  // Minimal: slightly above center to give room for translation below (matches reference)
   const shouldShowTranslation = showTranslation && showTranslationOverride
   const textCenterY = displayMode === 'minimal'
     ? height * 0.44
@@ -252,24 +208,20 @@ function drawFrame(
     const isLastLine = i === lines.length - 1
 
     if (!showMarker || !isLastLine) {
-      // Regular verse line — Nabi font, centered
       ctx.font = nabiFont
       ctx.textAlign = 'center'
       ctx.fillText(line, width / 2, y)
     } else if (line === '') {
-      // Marker-only line — UthmanicHafs, centered
       ctx.font = uthmanicFont
       ctx.textAlign = 'center'
       ctx.fillText(markerChar, width / 2, y)
     } else {
-      // Last line with verse text + marker — two fonts, positioned as a centered block
       ctx.font = nabiFont
       const lineW = ctx.measureText(line).width
       const spaceW = ctx.measureText(' ').width
       ctx.font = uthmanicFont
       const mw = ctx.measureText(markerChar).width
       const totalW = lineW + spaceW + mw
-      // RTL: verse text on the right, marker on the left
       const rightEdge = width / 2 + totalW / 2
       const leftEdge = width / 2 - totalW / 2
 
@@ -284,9 +236,7 @@ function drawFrame(
   })
   ctx.shadowBlur = 0
 
-  // ── Translation ─────────────────────────────────────────────────────────────
   if (shouldShowTranslation) {
-    // Use chunk-specific translation if provided, otherwise fall back to full translation
     const rawTranslation = translationChunkText
       || (verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? '')
     if (rawTranslation) {
@@ -315,7 +265,7 @@ function drawFrame(
     }
   }
 
-  ctx.restore() // restore globalAlpha
+  ctx.restore() 
 }
 
 async function exportVerseImages(
@@ -339,10 +289,6 @@ async function exportVerseImages(
   }
 }
 
-/**
- * Build display segments from verse timings.
- * Long verses are split into chunks with proportional timing.
- */
 function buildDisplaySegments(
   verseTimings: Array<{ startMs: number; endMs: number }>,
   verses: Verse[],
@@ -429,7 +375,6 @@ function buildDisplaySegments(
             endMs: Math.max(timing.startMs + calcStartMs + 100, timing.startMs + calcEndMs), 
           })
 
-          // THE OVERLAP FIX: Force the previous chunk to end exactly when this new chunk starts
           if (chunk.chunkIndex > 0) {
             const prevSegment = segments[segments.length - 2];
             if (prevSegment && prevSegment.type === 'verse-chunk') {
@@ -446,7 +391,6 @@ function buildDisplaySegments(
   return segments
 }
 
-/** Duration of fade transition in ms */
 const FADE_DURATION_MS = 250
 
 export function useVideoGenerator(): UseVideoGeneratorReturn {
@@ -481,7 +425,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         canvas.height = height
         const ctx = canvas.getContext('2d')!
 
-        // ── 1. Fetch + decode all audio ────────────────────────────────────
         setProgress(5)
         const audioCtx = new AudioContext({ sampleRate: 48000 })
         const decodedBuffers: AudioBuffer[] = []
@@ -493,7 +436,18 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           : []
         const matchedSegments: number[][][] = []
 
-        // ── Intro sequence ────────────────────────────────────────────────
+        // Fetch precise QDC Audio URLs to match timestamps
+        let qdcAudioFiles: any[] = [];
+        if (qdcRecitationId) {
+          try {
+            const res = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/${surahId}`);
+            const data = await res.json();
+            qdcAudioFiles = data.audio_files || [];
+          } catch (e) {
+            console.warn('Failed to fetch QDC audio URLs', e);
+          }
+        }
+
         const taawudhText = 'أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ'
         const BISMILLAH_TEXT = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ'
 
@@ -506,12 +460,25 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           }
         } catch { /* skip if fails */ }
 
-        // Bismillah: fetched from the selected reciter's 001001.mp3 on EveryAyah
         const needsBismillah = startVerse === 1 && surahId !== 1 && surahId !== 9
         let bismillahBuffer: AudioBuffer | null = null
         if (needsBismillah) {
           try {
-            const bUrl = `/api/audio?url=${encodeURIComponent(`https://everyayah.com/data/${reciterFolder}/001001.mp3`)}`
+            let originalUrl = '';
+            if (qdcRecitationId) {
+              const bRes = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/1`);
+              const bData = await bRes.json();
+              const bFile = bData.audio_files?.find((a: any) => a.verse_key === '1:1');
+              if (bFile && bFile.url) {
+                originalUrl = bFile.url;
+                if (originalUrl.startsWith('//')) originalUrl = `https:${originalUrl}`;
+              }
+            }
+            if (!originalUrl) {
+              originalUrl = `https://everyayah.com/data/${reciterFolder}/001001.mp3`;
+            }
+
+            const bUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
             const resp = await fetch(bUrl)
             if (resp.ok) {
               const ab = await resp.arrayBuffer()
@@ -523,16 +490,18 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         for (let i = startVerse; i <= endVerse; i++) {
           if (cancelledRef.current) { audioCtx.close(); return }
 
-          const segmentInfo = segmentsData.find((s: any) => s.verse_key === `${surahId}:${i}`)
-          matchedSegments.push(segmentInfo?.segments || [])
-
-          // Prefer QDC Audio URL if available, otherwise fallback to EveryAyah
-          let originalUrl = ''
-          if (segmentInfo && segmentInfo.url) {
-            originalUrl = segmentInfo.url.startsWith('http') 
-              ? segmentInfo.url 
-              : `https://audio.qurancdn.com/${segmentInfo.url}`
-          } else {
+          const verseKey = `${surahId}:${i}`;
+          let originalUrl = '';
+          
+          if (qdcRecitationId) {
+            const qdcFile = qdcAudioFiles.find((a: any) => a.verse_key === verseKey);
+            if (qdcFile && qdcFile.url) {
+              originalUrl = qdcFile.url;
+              if (originalUrl.startsWith('//')) originalUrl = `https:${originalUrl}`;
+            }
+          }
+          
+          if (!originalUrl) {
             const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
             originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
           }
@@ -545,10 +514,12 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           const audioBuf = await audioCtx.decodeAudioData(arrayBuf)
           decodedBuffers.push(audioBuf)
 
+          const segmentInfo = segmentsData.find((s: any) => s.verse_key === verseKey)
+          matchedSegments.push(segmentInfo?.segments || [])
+
           setProgress(5 + ((i - startVerse + 1) / (endVerse - startVerse + 1)) * 25)
         }
 
-        // Prepend intro buffers: [ta'awwudh?, bismillah?, ...verses]
         if (bismillahBuffer) {
           decodedBuffers.unshift(bismillahBuffer)
           matchedSegments.unshift([])
@@ -560,7 +531,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
         if (cancelledRef.current) { audioCtx.close(); return }
 
-        // Concatenate all decoded PCM buffers into one seamless AudioBuffer
         const sampleRate = audioCtx.sampleRate
         const totalSamples = decodedBuffers.reduce((s, b) => s + b.length, 0)
         const combined = audioCtx.createBuffer(2, totalSamples, sampleRate)
@@ -579,7 +549,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const totalDurationMs = timeOffset
         setProgress(35)
 
-        // ── 2. Load background image (animated backgrounds need no asset) ──
         let backgroundImage: HTMLImageElement | null = null
 
         if (background.type === 'custom' || background.type === 'preset') {
@@ -597,7 +566,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         try { await document.fonts.load('58px "Scheherazade New"') } catch { /* optional */ }
         setProgress(40)
 
-        // ── 2b. Build display segments (with verse chunking) ──
         const taawudhIdx = taawudhBuffer ? 0 : -1
         const bismillahIdx = bismillahBuffer ? (taawudhBuffer ? 1 : 0) : -1
         const introOffset = (taawudhBuffer ? 1 : 0) + (bismillahBuffer ? 1 : 0)
@@ -610,7 +578,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           matchedSegments
         )
 
-        // ── 3. Test MediaRecorder ──────────────────────────────────────────
         let useMediaRecorder = false
         try {
           const testCanvas = document.createElement('canvas')
@@ -627,7 +594,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
         setProgress(50)
 
-        // ── 4a. IMAGE FALLBACK ─────────────────────────────────────────────
         if (!useMediaRecorder) {
           audioCtx.close()
           await exportVerseImages(ctx, canvas, verses, background, backgroundImage, surahName, showTranslation, displayMode, setProgress)
@@ -637,7 +603,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           return
         }
 
-        // ── 4b. RECORD: canvas video + seamless decoded audio ──────────────
         try {
           const audioDest = audioCtx.createMediaStreamDestination()
           const source = audioCtx.createBufferSource()
@@ -650,9 +615,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             ...audioDest.stream.getAudioTracks(),
           ])
 
-          // Prefer MP4 (H.264+AAC) — plays natively in phone galleries.
-          // Chrome 130+ on Windows/Android supports this via hardware encoding.
-          // Fall back to WebM if MP4 is unavailable.
           const MP4_TYPES = [
             'video/mp4;codecs=avc1,mp4a.40.2',
             'video/mp4;codecs=h264,aac',
@@ -680,26 +642,14 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             mediaRecorder.onerror = (e) => reject(new Error('MediaRecorder: ' + (e as ErrorEvent).message))
           })
 
-          // No timeslice — record as a single blob so the container header
-          // gets the correct total duration.  Using start(1000) wrote duration
-          // from only the first 1-second chunk, which made phones/stories show
-          // the video as ~3 s even though it plays longer.
           mediaRecorder.start()
 
-          // Start audio and capture the audio-clock start time.
-          // We use audioCtx.currentTime (not performance.now()) as the timing
-          // source so the canvas render loop stays perfectly in sync with the
-          // audio — the two clocks can drift apart over longer recordings.
           const audioStartTime = audioCtx.currentTime
           source.start(audioStartTime)
 
           let currentSegmentIndex = 0
           let recordingFinished = false
 
-          // Use a Web Worker timer instead of requestAnimationFrame.
-          // rAF is paused when the tab is in the background, which freezes
-          // the canvas while audio keeps playing — corrupting the recording.
-          // Web Worker setInterval runs unthrottled regardless of tab focus.
           const timerBlob = new Blob([
             `let id;self.onmessage=e=>{if(e.data==="start")id=setInterval(()=>self.postMessage("t"),33);else{clearInterval(id);close()}}`
           ], { type: 'application/javascript' })
@@ -708,10 +658,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
           const render = () => {
             if (cancelledRef.current || recordingFinished) return
-            // Elapsed time in ms, locked to the audio clock
             const elapsedMs = (audioCtx.currentTime - audioStartTime) * 1000
 
-            // Find current display segment
             for (let i = 0; i < displaySegments.length; i++) {
               if (elapsedMs >= displaySegments[i].startMs && elapsedMs < displaySegments[i].endMs) {
                 currentSegmentIndex = i
@@ -724,7 +672,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
             const videoProgress = Math.min(elapsedMs / totalDurationMs, 1)
 
-            // Compute fade opacity for smooth chunk transitions
             let fadeOpacity = 1
             const msIntoSegment = elapsedMs - seg.startMs
             const msBeforeEnd = seg.endMs - elapsedMs
@@ -771,7 +718,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           let videoBlob = await recordingComplete
           if (cancelledRef.current) return
 
-          // Patch WebM duration metadata (only needed for WebM, not MP4)
           setProgress(98)
           if (!isMp4) {
             try {

@@ -68,7 +68,7 @@ export function useQuranAudio({
   const audioElementsRef = useRef<HTMLAudioElement[]>([])
   const currentAudioIndexRef = useRef(0)
 
-  // Build fallback audio URL using everyayah.com CDN
+  // Build audio URL using everyayah.com CDN with the reciter folder from config
   const buildAudioUrl = useCallback(
     (surahId: number, verseNumber: number): string => {
       const filename = `${surahId.toString().padStart(3, '0')}${verseNumber.toString().padStart(3, '0')}.mp3`
@@ -92,19 +92,35 @@ export function useQuranAudio({
         ? await fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => [])
         : []
 
+      // Fetch precise QDC Audio URLs to guarantee they match the timestamps
+      let qdcAudioFiles: any[] = [];
+      if (qdcRecitationId) {
+        try {
+          const res = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/${surahId}`);
+          const data = await res.json();
+          qdcAudioFiles = data.audio_files || [];
+        } catch (e) {
+          console.warn('Failed to fetch QDC audio URLs', e);
+        }
+      }
+
       // Create audio elements for each verse
       for (let i = startVerse; i <= endVerse; i++) {
-        const segmentInfo = segmentsData.find((s: any) => s.verse_key === `${surahId}:${i}`)
-        matchedSegments.push(segmentInfo?.segments || [])
+        const verseKey = `${surahId}:${i}`
+        let originalUrl = '';
 
-        // Prefer QDC Audio URL if available, otherwise fallback to EveryAyah
-        let originalUrl = ''
-        if (segmentInfo && segmentInfo.url) {
-          originalUrl = segmentInfo.url.startsWith('http') 
-            ? segmentInfo.url 
-            : `https://audio.qurancdn.com/${segmentInfo.url}`
-        } else {
-          originalUrl = buildAudioUrl(surahId, i)
+        // 1. Try to get the exact QDC audio file
+        if (qdcRecitationId) {
+          const qdcFile = qdcAudioFiles.find((a: any) => a.verse_key === verseKey);
+          if (qdcFile && qdcFile.url) {
+            originalUrl = qdcFile.url;
+            if (originalUrl.startsWith('//')) originalUrl = `https:${originalUrl}`;
+          }
+        }
+
+        // 2. Fallback to EveryAyah if QDC fails or isn't available
+        if (!originalUrl) {
+          originalUrl = buildAudioUrl(surahId, i);
         }
 
         // Use proxy to avoid CORS issues
@@ -131,10 +147,13 @@ export function useQuranAudio({
           audio.load()
         })
 
+        const segmentInfo = segmentsData.find(s => s.verse_key === verseKey)
+        matchedSegments.push(segmentInfo?.segments || [])
+
         const audioDuration = audio.duration * 1000 // Convert to ms
 
         timings.push({
-          verseKey: `${surahId}:${i}`,
+          verseKey,
           verseNumber: i,
           startTime: cumulativeTime,
           endTime: cumulativeTime + audioDuration,

@@ -391,19 +391,9 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const decodedBuffers: AudioBuffer[] = []
         const verseTimings: Array<{ startMs: number; endMs: number }> = []
         
+        // Only fetch QDC timestamps, NOT QDC audio
         const segmentsData = qdcRecitationId ? await fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => []) : []
         const matchedSegments: number[][][] = []
-
-        let qdcAudioFiles: any[] = [];
-        if (qdcRecitationId) {
-          try {
-            const res = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/${surahId}`);
-            if (res.ok) {
-              const data = await res.json();
-              qdcAudioFiles = data.audio_files || [];
-            }
-          } catch (e) { console.warn('Failed to fetch QDC audio URLs', e); }
-        }
 
         const taawudhText = 'أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ'
         const BISMILLAH_TEXT = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ'
@@ -421,26 +411,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         let bismillahBuffer: AudioBuffer | null = null
         if (needsBismillah) {
           try {
-            let originalUrl = '';
-            if (qdcRecitationId) {
-              try {
-                const bRes = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/1`);
-                if (bRes.ok) {
-                  const bData = await bRes.json();
-                  const bFile = bData.audio_files?.find((a: any) => a.verse_key === '1:1');
-                  if (bFile && bFile.url) {
-                    originalUrl = bFile.url;
-                    if (originalUrl.startsWith('//')) originalUrl = `https:${originalUrl}`;
-                    else if (originalUrl.startsWith('/')) originalUrl = `https://verses.quran.foundation${originalUrl}`;
-                    else if (!originalUrl.startsWith('http')) originalUrl = `https://verses.quran.foundation/${originalUrl}`;
-                  }
-                }
-              } catch (e) { console.warn('Failed QDC Bismillah', e); }
-            }
-            if (!originalUrl) {
-              originalUrl = `https://everyayah.com/data/${reciterFolder}/001001.mp3`;
-            }
-
+            // ALWAYS use EveryAyah. It is reliable.
+            const originalUrl = `https://everyayah.com/data/${reciterFolder}/001001.mp3`;
             const bUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
             const resp = await fetch(bUrl)
             if (resp.ok) {
@@ -453,24 +425,9 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         for (let i = startVerse; i <= endVerse; i++) {
           if (cancelledRef.current) { audioCtx.close(); return }
 
-          const verseKey = `${surahId}:${i}`;
-          let originalUrl = '';
+          const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
+          const originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
           
-          if (qdcRecitationId) {
-            const qdcFile = qdcAudioFiles.find((a: any) => a.verse_key === verseKey);
-            if (qdcFile && qdcFile.url) {
-              originalUrl = qdcFile.url;
-              if (originalUrl.startsWith('//')) originalUrl = `https:${originalUrl}`;
-              else if (originalUrl.startsWith('/')) originalUrl = `https://verses.quran.foundation${originalUrl}`;
-              else if (!originalUrl.startsWith('http')) originalUrl = `https://verses.quran.foundation/${originalUrl}`;
-            }
-          }
-          
-          if (!originalUrl) {
-            const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
-            originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
-          }
-
           const proxyUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
 
           const resp = await fetch(proxyUrl)
@@ -479,7 +436,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           const audioBuf = await audioCtx.decodeAudioData(arrayBuf)
           decodedBuffers.push(audioBuf)
 
-          const segmentInfo = segmentsData.find((s: any) => s.verse_key === verseKey)
+          const segmentInfo = segmentsData.find((s: any) => s.verse_key === `${surahId}:${i}`)
           matchedSegments.push(segmentInfo?.segments || [])
 
           setProgress(5 + ((i - startVerse + 1) / (endVerse - startVerse + 1)) * 25)

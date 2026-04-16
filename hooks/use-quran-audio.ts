@@ -82,47 +82,16 @@ export function useQuranAudio({
       const matchedSegments: number[][][] = []
       let cumulativeTime = 0
 
+      // Only fetch QDC timestamps, NOT QDC audio
       const segmentsData = qdcRecitationId
         ? await fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => [])
         : []
 
-      let qdcAudioFiles: any[] = [];
-      if (qdcRecitationId) {
-        try {
-          const res = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/${surahId}`);
-          if (res.ok) {
-            const data = await res.json();
-            qdcAudioFiles = data.audio_files || [];
-          }
-        } catch (e) {
-          console.warn('Failed to fetch QDC audio URLs', e);
-        }
-      }
-
       for (let i = startVerse; i <= endVerse; i++) {
-        const verseKey = `${surahId}:${i}`
-        let originalUrl = '';
-
-        if (qdcRecitationId) {
-          const qdcFile = qdcAudioFiles.find((a: any) => a.verse_key === verseKey);
-          if (qdcFile && qdcFile.url) {
-            originalUrl = qdcFile.url;
-            // CRITICAL FIX: Handle broken relative URLs from QDC
-            if (originalUrl.startsWith('//')) {
-              originalUrl = `https:${originalUrl}`;
-            } else if (originalUrl.startsWith('/')) {
-              originalUrl = `https://verses.quran.foundation${originalUrl}`;
-            } else if (!originalUrl.startsWith('http')) {
-              originalUrl = `https://verses.quran.foundation/${originalUrl}`;
-            }
-          }
-        }
-
-        if (!originalUrl) {
-          originalUrl = buildAudioUrl(surahId, i);
-        }
-
+        // ALWAYS use EveryAyah. It is reliable.
+        const originalUrl = buildAudioUrl(surahId, i)
         const audioUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
+
         const audio = new Audio()
         audio.preload = 'auto'
         audio.src = audioUrl
@@ -134,11 +103,17 @@ export function useQuranAudio({
           audio.load()
         })
 
-        const segmentInfo = segmentsData.find(s => s.verse_key === verseKey)
+        const segmentInfo = segmentsData.find(s => s.verse_key === `${surahId}:${i}`)
         matchedSegments.push(segmentInfo?.segments || [])
 
         const audioDuration = audio.duration * 1000 
-        timings.push({ verseKey, verseNumber: i, startTime: cumulativeTime, endTime: cumulativeTime + audioDuration, audioUrl })
+        timings.push({ 
+          verseKey: `${surahId}:${i}`, 
+          verseNumber: i, 
+          startTime: cumulativeTime, 
+          endTime: cumulativeTime + audioDuration, 
+          audioUrl 
+        })
         cumulativeTime += audioDuration
         audioElements.push(audio)
       }

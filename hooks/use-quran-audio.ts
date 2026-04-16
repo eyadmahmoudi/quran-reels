@@ -13,7 +13,8 @@ interface VerseTimingInfo {
 }
 
 interface UseQuranAudioProps {
-  recitationId: number
+  qdcRecitationId: number | null
+  reciterFolder: string
   surahId: number
   startVerse: number
   endVerse: number
@@ -39,7 +40,8 @@ interface UseQuranAudioReturn {
 }
 
 export function useQuranAudio({
-  recitationId,
+  qdcRecitationId,
+  reciterFolder,
   surahId,
   startVerse,
   endVerse,
@@ -66,31 +68,13 @@ export function useQuranAudio({
   const audioElementsRef = useRef<HTMLAudioElement[]>([])
   const currentAudioIndexRef = useRef(0)
 
-  // Get reciter folder name for everyayah.com CDN
-  const getReciterFolder = useCallback((recitationId: number): string => {
-    // Using everyayah.com folder names - verified working folders
-    const folders: Record<number, string> = {
-      7: 'Alafasy_128kbps',                              // Mishary Alafasy
-      2: 'Abdul_Basit_Murattal_128kbps',                 // Abdul Basit (Murattal)
-      5: 'Abu_Bakr_Ash-Shaatree_128kbps',                // Abu Bakr Ash-Shaatree
-      6: 'Husary_128kbps',                               // Mahmoud Khalil Al-Husary
-      3: 'Abdurrahmaan_As-Sudais_192kbps',               // Sudais
-      4: 'Ghamadi_40kbps',                               // Ghamadi
-      1: 'Alafasy_128kbps',                              // Fallback to Alafasy
-      9: 'Alafasy_128kbps',                              // Fallback to Alafasy
-    }
-    return folders[recitationId] || 'Alafasy_128kbps'
-  }, [])
-
-  // Build audio URL using everyayah.com CDN (reliable, surah:verse format)
+  // Build audio URL using everyayah.com CDN with the reciter folder from config
   const buildAudioUrl = useCallback(
-    (surahId: number, verseNumber: number, recitationId: number): string => {
-      const folder = getReciterFolder(recitationId)
-      // Format: {surah_3digits}{verse_3digits}.mp3 (e.g., 001001.mp3 for 1:1)
+    (surahId: number, verseNumber: number): string => {
       const filename = `${surahId.toString().padStart(3, '0')}${verseNumber.toString().padStart(3, '0')}.mp3`
-      return `https://everyayah.com/data/${folder}/${filename}`
+      return `https://everyayah.com/data/${reciterFolder}/${filename}`
     },
-    [getReciterFolder]
+    [reciterFolder]
   )
 
   // Load audio files using HTML5 Audio for seamless playback
@@ -104,12 +88,13 @@ export function useQuranAudio({
       const matchedSegments: number[][][] = []
       let cumulativeTime = 0
 
-      const segmentsData = await fetchAudioSegments(recitationId, surahId, startVerse, endVerse).catch(() => [])
+      const segmentsData = qdcRecitationId
+        ? await fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => [])
+        : []
 
       // Create audio elements for each verse
       for (let i = startVerse; i <= endVerse; i++) {
-        // Use the reliable Islamic Network CDN
-        const originalUrl = buildAudioUrl(surahId, i, recitationId)
+        const originalUrl = buildAudioUrl(surahId, i)
         // Use proxy to avoid CORS issues
         const audioUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
 
@@ -163,7 +148,7 @@ export function useQuranAudio({
       setIsLoading(false)
       return false
     }
-  }, [recitationId, surahId, startVerse, endVerse, buildAudioUrl])
+  }, [qdcRecitationId, surahId, startVerse, endVerse, buildAudioUrl])
 
   // Play audio sequentially
   const playAudioSequence = useCallback(
@@ -322,7 +307,7 @@ export function useQuranAudio({
     verseTimingsRef.current = []
     verseSegmentsRef.current = []
     setDuration(0)
-  }, [recitationId, surahId, startVerse, endVerse, stop])
+  }, [qdcRecitationId, reciterFolder, surahId, startVerse, endVerse, stop])
 
   return {
     isLoading,

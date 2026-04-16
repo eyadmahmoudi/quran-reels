@@ -12,7 +12,7 @@ export function ReciterSelector() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const handleSelect = (reciter: typeof POPULAR_RECITERS[0]) => {
-    setConfig({ reciterId: reciter.id, reciterFolder: reciter.folder })
+    setConfig({ reciterId: reciter.id, reciterFolder: reciter.folder, qdcRecitationId: reciter.qdcRecitationId })
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
     setPreviewPlaying(null)
   }

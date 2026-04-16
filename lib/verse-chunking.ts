@@ -262,25 +262,33 @@ export function splitVerseByWordTimings(
     return splitVerseForPreview(verseText, maxChars)
   }
 
+  // Align segments to words: QDC segments may include bismillah words
+  // for verse 1 of each surah, but text_uthmani does not contain them.
+  // Trim excess segments from the front to match word count.
+  let alignedSegments = segments
+  if (alignedSegments.length > words.length) {
+    alignedSegments = alignedSegments.slice(alignedSegments.length - words.length)
+  }
+
   // Determine base timeline offset (first word's start time becomes 0)
-  const baseMs = segments[0][1]
+  const baseMs = alignedSegments[0][1]
 
   const baseChunks: Array<{ text: string; startMs: number; endMs: number }> = []
 
   let currentWords: string[] = []
   let chunkChars = 0
-  let chunkStartMs = Math.max(0, segments[0][1] - baseMs)
+  let chunkStartMs = Math.max(0, alignedSegments[0][1] - baseMs)
 
   for (let i = 0; i < words.length; i++) {
     const word = words[i]
     const wordBaseChars = countBaseChars(word)
-    
+
     // Map word to its segment (or last available if array mismatch)
-    const currentSegment = i < segments.length ? segments[i] : segments[segments.length - 1]
+    const currentSegment = i < alignedSegments.length ? alignedSegments[i] : alignedSegments[alignedSegments.length - 1]
 
     if (currentWords.length > 0 && chunkChars + 1 + wordBaseChars > maxChars) {
       // Pushing the current chunk BEFORE this word
-      const prevSegment = i - 1 >= 0 ? (i - 1 < segments.length ? segments[i - 1] : segments[segments.length - 1]) : currentSegment
+      const prevSegment = i - 1 >= 0 ? (i - 1 < alignedSegments.length ? alignedSegments[i - 1] : alignedSegments[alignedSegments.length - 1]) : currentSegment
       baseChunks.push({
         text: currentWords.join(' '),
         startMs: chunkStartMs,
@@ -300,7 +308,7 @@ export function splitVerseByWordTimings(
   // push whatever remains
   if (currentWords.length > 0) {
     const lastIdx = words.length - 1
-    const lastSegment = lastIdx < segments.length ? segments[lastIdx] : segments[segments.length - 1]
+    const lastSegment = lastIdx < alignedSegments.length ? alignedSegments[lastIdx] : alignedSegments[alignedSegments.length - 1]
     baseChunks.push({
       text: currentWords.join(' '),
       startMs: chunkStartMs,

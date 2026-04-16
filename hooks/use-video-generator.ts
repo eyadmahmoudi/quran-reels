@@ -12,7 +12,7 @@ interface VideoGeneratorOptions {
   background: BackgroundOption
   showTranslation: boolean
   surahName: string
-  recitationId?: number
+  qdcRecitationId: number | null
   reciterFolder: string
   surahId: number
   startVerse: number
@@ -405,17 +405,43 @@ function buildDisplaySegments(
           endMs: timing.endMs,
         })
       } else {
-        for (const chunk of chunks) {
-          segments.push({
-            type: 'verse-chunk',
-            verseIndex: verseArrayIdx,
-            chunkText: chunk.text,
-            showMarker: chunk.isLastChunk,
-            showTranslationForChunk: showTranslation,
-            translationChunkText: translationChunks[chunk.chunkIndex] || '',
-            startMs: timing.startMs + (chunk.startMs || 0),
-            endMs: timing.startMs + (chunk.endMs || 0),
-          })
+        const actualVerseDuration = timing.endMs - timing.startMs
+        const lastChunkEndMs = chunks[chunks.length - 1].endMs
+        const hasQdcTiming = lastChunkEndMs !== undefined && lastChunkEndMs > 0
+
+        if (hasQdcTiming) {
+          // Scale QDC timing to match actual per-verse audio duration
+          const scaleFactor = actualVerseDuration / lastChunkEndMs
+          for (const chunk of chunks) {
+            segments.push({
+              type: 'verse-chunk',
+              verseIndex: verseArrayIdx,
+              chunkText: chunk.text,
+              showMarker: chunk.isLastChunk,
+              showTranslationForChunk: showTranslation,
+              translationChunkText: translationChunks[chunk.chunkIndex] || '',
+              startMs: timing.startMs + (chunk.startMs || 0) * scaleFactor,
+              endMs: timing.startMs + (chunk.endMs || 0) * scaleFactor,
+            })
+          }
+        } else {
+          // No QDC timing — distribute proportionally by character count
+          const totalChars = chunks.reduce((s, c) => s + c.charCount, 0) || 1
+          let offset = 0
+          for (const chunk of chunks) {
+            const chunkDuration = actualVerseDuration * (chunk.charCount / totalChars)
+            segments.push({
+              type: 'verse-chunk',
+              verseIndex: verseArrayIdx,
+              chunkText: chunk.text,
+              showMarker: chunk.isLastChunk,
+              showTranslationForChunk: showTranslation,
+              translationChunkText: translationChunks[chunk.chunkIndex] || '',
+              startMs: timing.startMs + offset,
+              endMs: timing.startMs + offset + chunkDuration,
+            })
+            offset += chunkDuration
+          }
         }
       }
     }
@@ -465,7 +491,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const decodedBuffers: AudioBuffer[] = []
         const verseTimings: Array<{ startMs: number; endMs: number }> = []
         
-        const segmentsData = await fetchAudioSegments(options.recitationId || 7, surahId, startVerse, endVerse).catch(() => [])
+        const { qdcRecitationId } = options
+        const segmentsData = qdcRecitationId
+          ? await fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => [])
+          : []
         const matchedSegments: number[][][] = []
 
         // ── Intro sequence ────────────────────────────────────────────────

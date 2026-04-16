@@ -71,7 +71,8 @@ export function VideoPreview() {
     pause,
     stop,
   } = useQuranAudio({
-    recitationId: config.reciterId || 7,
+    qdcRecitationId: config.qdcRecitationId ?? null,
+    reciterFolder: config.reciterFolder || 'Alafasy_128kbps',
     surahId: config.surah?.id || 1,
     startVerse: config.startVerse,
     endVerse: config.endVerse,

@@ -22,6 +22,7 @@ const defaultConfig: ReelConfig = {
   endVerse: 1,
   reciterId: 1,
   reciterFolder: 'Alafasy_128kbps',
+  qdcRecitationId: 7,
   background: PRESET_BACKGROUNDS[0],
   showTranslation: true,
   translationId: 20,

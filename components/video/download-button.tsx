@@ -17,7 +17,7 @@ export function DownloadButton() {
       showTranslation: config.showTranslation,
       surahName: config.surah.name_arabic,
       reciterFolder: config.reciterFolder || 'Alafasy_128kbps',
-      recitationId: config.reciterId || undefined,
+      qdcRecitationId: config.qdcRecitationId ?? null,
       surahId: config.surah.id,
       startVerse: config.startVerse,
       endVerse: config.endVerse,

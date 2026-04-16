@@ -68,7 +68,7 @@ export function useQuranAudio({
   const audioElementsRef = useRef<HTMLAudioElement[]>([])
   const currentAudioIndexRef = useRef(0)
 
-  // Build audio URL using everyayah.com CDN with the reciter folder from config
+  // Build fallback audio URL using everyayah.com CDN
   const buildAudioUrl = useCallback(
     (surahId: number, verseNumber: number): string => {
       const filename = `${surahId.toString().padStart(3, '0')}${verseNumber.toString().padStart(3, '0')}.mp3`
@@ -94,7 +94,19 @@ export function useQuranAudio({
 
       // Create audio elements for each verse
       for (let i = startVerse; i <= endVerse; i++) {
-        const originalUrl = buildAudioUrl(surahId, i)
+        const segmentInfo = segmentsData.find((s: any) => s.verse_key === `${surahId}:${i}`)
+        matchedSegments.push(segmentInfo?.segments || [])
+
+        // Prefer QDC Audio URL if available, otherwise fallback to EveryAyah
+        let originalUrl = ''
+        if (segmentInfo && segmentInfo.url) {
+          originalUrl = segmentInfo.url.startsWith('http') 
+            ? segmentInfo.url 
+            : `https://audio.qurancdn.com/${segmentInfo.url}`
+        } else {
+          originalUrl = buildAudioUrl(surahId, i)
+        }
+
         // Use proxy to avoid CORS issues
         const audioUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
 
@@ -118,9 +130,6 @@ export function useQuranAudio({
           }
           audio.load()
         })
-
-        const segmentInfo = segmentsData.find(s => s.verse_key === `${surahId}:${i}`)
-        matchedSegments.push(segmentInfo?.segments || [])
 
         const audioDuration = audio.duration * 1000 // Convert to ms
 

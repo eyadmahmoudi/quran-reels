@@ -494,9 +494,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const matchedSegments: number[][][] = []
 
         // ── Intro sequence ────────────────────────────────────────────────
-        // 1. Ta'awwudh: Al-Husary saying أعوذ بالله من الشيطان الرجيم (served locally)
-        // 2. Bismillah from selected reciter: only when startVerse===1,
-        //    surah≠1 (Fatiha already has it as v1) and surah≠9 (At-Tawbah)
         const taawudhText = 'أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ'
         const BISMILLAH_TEXT = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ'
 
@@ -509,7 +506,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           }
         } catch { /* skip if fails */ }
 
-        // Bismillah: fetched from the selected reciter's 001001.mp3
+        // Bismillah: fetched from the selected reciter's 001001.mp3 on EveryAyah
         const needsBismillah = startVerse === 1 && surahId !== 1 && surahId !== 9
         let bismillahBuffer: AudioBuffer | null = null
         if (needsBismillah) {
@@ -525,8 +522,21 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
         for (let i = startVerse; i <= endVerse; i++) {
           if (cancelledRef.current) { audioCtx.close(); return }
-          const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
-          const originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
+
+          const segmentInfo = segmentsData.find((s: any) => s.verse_key === `${surahId}:${i}`)
+          matchedSegments.push(segmentInfo?.segments || [])
+
+          // Prefer QDC Audio URL if available, otherwise fallback to EveryAyah
+          let originalUrl = ''
+          if (segmentInfo && segmentInfo.url) {
+            originalUrl = segmentInfo.url.startsWith('http') 
+              ? segmentInfo.url 
+              : `https://audio.qurancdn.com/${segmentInfo.url}`
+          } else {
+            const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
+            originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
+          }
+
           const proxyUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
 
           const resp = await fetch(proxyUrl)
@@ -534,9 +544,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           const arrayBuf = await resp.arrayBuffer()
           const audioBuf = await audioCtx.decodeAudioData(arrayBuf)
           decodedBuffers.push(audioBuf)
-
-          const segmentInfo = segmentsData.find((s: any) => s.verse_key === `${surahId}:${i}`)
-          matchedSegments.push(segmentInfo?.segments || [])
 
           setProgress(5 + ((i - startVerse + 1) / (endVerse - startVerse + 1)) * 25)
         }

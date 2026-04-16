@@ -377,10 +377,8 @@ function buildDisplaySegments(
       const verseText = verse.text_uthmani || ''
       const maxChars = displayMode === 'minimal' ? 80 : 90
       
-      // Extract Surah and Verse numbers from the verse_key (e.g. "9:1")
       const [surahNum, verseNum] = verse.verse_key.split(':').map(Number)
       
-      // Pass the numbers down so the chunker knows when to trim Bismillah
       const chunks = splitVerseByWordTimings(verseText, verseSegments[i] || null, maxChars, surahNum, verseNum)
 
       const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
@@ -409,14 +407,12 @@ function buildDisplaySegments(
             calcStartMs = chunk.startMs * scaleFactor;
             calcEndMs = chunk.endMs * scaleFactor;
           } else {
-            // Bulletproof proportional fallback
             const proportionStart = precedingCharCount / totalChars;
             const proportionEnd = (precedingCharCount + chunk.charCount) / totalChars;
             calcStartMs = proportionStart * actualVerseDuration;
             calcEndMs = proportionEnd * actualVerseDuration;
           }
 
-          // Safety clamp: Ensure the text ALWAYS triggers before the verse audio ends
           const maxAllowedStart = Math.max(0, actualVerseDuration - Math.min(1000, actualVerseDuration / 2));
           if (calcStartMs > maxAllowedStart) {
             calcStartMs = maxAllowedStart;
@@ -432,6 +428,14 @@ function buildDisplaySegments(
             startMs: timing.startMs + calcStartMs,
             endMs: Math.max(timing.startMs + calcStartMs + 100, timing.startMs + calcEndMs), 
           })
+
+          // THE OVERLAP FIX: Force the previous chunk to end exactly when this new chunk starts
+          if (chunk.chunkIndex > 0) {
+            const prevSegment = segments[segments.length - 2];
+            if (prevSegment && prevSegment.type === 'verse-chunk') {
+              prevSegment.endMs = Math.min(prevSegment.endMs, timing.startMs + calcStartMs);
+            }
+          }
 
           precedingCharCount += chunk.charCount;
         }

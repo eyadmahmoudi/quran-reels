@@ -97,8 +97,10 @@ export function useQuranAudio({
       if (qdcRecitationId) {
         try {
           const res = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/${surahId}`);
-          const data = await res.json();
-          qdcAudioFiles = data.audio_files || [];
+          if (res.ok) {
+            const data = await res.json();
+            qdcAudioFiles = data.audio_files || [];
+          }
         } catch (e) {
           console.warn('Failed to fetch QDC audio URLs', e);
         }
@@ -114,7 +116,12 @@ export function useQuranAudio({
           const qdcFile = qdcAudioFiles.find((a: any) => a.verse_key === verseKey);
           if (qdcFile && qdcFile.url) {
             originalUrl = qdcFile.url;
-            if (originalUrl.startsWith('//')) originalUrl = `https:${originalUrl}`;
+            // FIX: If QDC returns a relative URL without the domain, prepend it
+            if (originalUrl.startsWith('//')) {
+              originalUrl = `https:${originalUrl}`;
+            } else if (!originalUrl.startsWith('http')) {
+              originalUrl = `https://verses.quran.foundation/${originalUrl}`;
+            }
           }
         }
 

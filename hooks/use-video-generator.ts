@@ -441,8 +441,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         if (qdcRecitationId) {
           try {
             const res = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/${surahId}`);
-            const data = await res.json();
-            qdcAudioFiles = data.audio_files || [];
+            if (res.ok) {
+              const data = await res.json();
+              qdcAudioFiles = data.audio_files || [];
+            }
           } catch (e) {
             console.warn('Failed to fetch QDC audio URLs', e);
           }
@@ -466,13 +468,22 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           try {
             let originalUrl = '';
             if (qdcRecitationId) {
-              const bRes = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/1`);
-              const bData = await bRes.json();
-              const bFile = bData.audio_files?.find((a: any) => a.verse_key === '1:1');
-              if (bFile && bFile.url) {
-                originalUrl = bFile.url;
-                if (originalUrl.startsWith('//')) originalUrl = `https:${originalUrl}`;
-              }
+              try {
+                const bRes = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/1`);
+                if (bRes.ok) {
+                  const bData = await bRes.json();
+                  const bFile = bData.audio_files?.find((a: any) => a.verse_key === '1:1');
+                  if (bFile && bFile.url) {
+                    originalUrl = bFile.url;
+                    // FIX: If QDC returns a relative URL without the domain, prepend it
+                    if (originalUrl.startsWith('//')) {
+                       originalUrl = `https:${originalUrl}`;
+                    } else if (!originalUrl.startsWith('http')) {
+                       originalUrl = `https://verses.quran.foundation/${originalUrl}`;
+                    }
+                  }
+                }
+              } catch (e) { console.warn('Failed QDC Bismillah', e); }
             }
             if (!originalUrl) {
               originalUrl = `https://everyayah.com/data/${reciterFolder}/001001.mp3`;
@@ -497,7 +508,12 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             const qdcFile = qdcAudioFiles.find((a: any) => a.verse_key === verseKey);
             if (qdcFile && qdcFile.url) {
               originalUrl = qdcFile.url;
-              if (originalUrl.startsWith('//')) originalUrl = `https:${originalUrl}`;
+              // FIX: If QDC returns a relative URL without the domain, prepend it
+              if (originalUrl.startsWith('//')) {
+                 originalUrl = `https:${originalUrl}`;
+              } else if (!originalUrl.startsWith('http')) {
+                 originalUrl = `https://verses.quran.foundation/${originalUrl}`;
+              }
             }
           }
           

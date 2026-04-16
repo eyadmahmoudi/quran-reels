@@ -1,7 +1,3 @@
-/**
- * Verse Chunking Utility
- */
-
 const VIDEO_WIDTH = 1080
 const MAX_TEXT_WIDTH = VIDEO_WIDTH - 100 
 
@@ -12,8 +8,6 @@ export interface VerseChunk {
   totalChunks: number
   wordCount: number
   charCount: number
-  startMs?: number
-  endMs?: number
 }
 
 function countWords(text: string): number {
@@ -104,120 +98,75 @@ export function splitTranslation(translationText: string, arabicChunks: VerseChu
 }
 
 /**
- * Splits verse based on actual Audio Timestamps (silence/breaths).
- * Includes Grammar Guards to prevent splitting on conjunctions like "ولا".
+ * GRAMMAR & MEANING ALGORITHM (No QDC Timestamps)
+ * Splits on Quranic stop marks, prevents splitting on "ولا", 
+ * and relies on proportional audio duration.
  */
 export function splitVerseByWordTimings(
   verseText: string,
-  segments: number[][] | null,
-  maxChars = 90,
-  surahNumber: number = 0,
-  verseNumber: number = 0
+  segments: any | null, // Ignored entirely
+  maxChars = 90
 ): VerseChunk[] {
   if (!verseText || verseText.trim().length === 0) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: 0, charCount: 0, startMs: 0, endMs: 0 }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: 0, charCount: 0 }]
   }
 
   const words = verseText.split(' ').filter(w => w.trim().length > 0)
 
-  if (!segments || segments.length === 0 || words.length <= 2) {
-    return splitVerseForPreview(verseText, maxChars)
+  if (words.length <= 2) {
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: words.length, charCount: countBaseChars(verseText) }]
   }
 
-  let alignedSegments = segments
-  const isFirstVerse = verseNumber === 1;
-  const isNotTawbah = surahNumber !== 9;
+  const baseChunks: string[] = []
+  let currentChunkWords: string[] = []
+  let currentChars = 0
 
-  if (isFirstVerse && isNotTawbah && alignedSegments.length > words.length) {
-    const difference = alignedSegments.length - words.length;
-    alignedSegments = alignedSegments.slice(difference);
-  }
-
-  const baseMs = alignedSegments[0][1]
-  const baseChunks: Array<{ text: string; startMs: number; endMs: number }> = []
-
-  let currentWords: string[] = []
-  let chunkChars = 0
-  let chunkStartMs = Math.max(0, alignedSegments[0][1] - baseMs)
-
-  // Configuration
-  const PAUSE_THRESHOLD_MS = 300; 
-  const MIN_CHARS_FOR_CHUNK = 20;
-
-  // GRAMMAR GUARD: Never split after these words, even if there is a pause or length limit hit.
-  const dontSplitAfter = ['و', 'ف', 'ب', 'ك', 'ل', 'ولا', 'لا', 'ما', 'يا', 'إن', 'أن', 'هل', 'في', 'من', 'عن', 'على', 'إلى', 'حتى', 'أو', 'ثم']
+  // Quranic Waqf (Stop) Marks
+  const waqfMarks = ['ۖ', 'ۗ', 'ۚ', 'ۛ', 'ۙ', 'مۘ', '۩']
+  
+  // GRAMMAR GUARD: Never split after these words
+  const dontSplitAfter = ['و', 'ف', 'ب', 'ك', 'ل', 'ولا', 'لا', 'ما', 'يا', 'إن', 'أن', 'هل', 'في', 'من', 'عن', 'على', 'إلى', 'حتى', 'أو', 'ثم', 'إنما', 'إلا', 'فلا']
 
   for (let i = 0; i < words.length; i++) {
     const word = words[i]
-    const wordBaseChars = countBaseChars(word)
+    currentChunkWords.push(word)
+    currentChars += countBaseChars(word)
 
-    const currentSegment = i < alignedSegments.length ? alignedSegments[i] : alignedSegments[alignedSegments.length - 1]
-    const prevSegment = i > 0 ? (i - 1 < alignedSegments.length ? alignedSegments[i - 1] : alignedSegments[alignedSegments.length - 1]) : currentSegment;
+    const cleanWord = word.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7-\u06E8\u06EA-\u06ED\u08D3-\u08E1\u08E3-\u08FF]/g, '')
+    const hasWaqf = waqfMarks.some(mark => word.includes(mark))
+    const isForbiddenEnd = dontSplitAfter.includes(cleanWord)
+    const isTooLong = currentChars >= maxChars
 
-    // Detect breath pause
-    let isBreathPause = false;
-    if (i > 0) {
-       const gap = currentSegment[1] - prevSegment[2];
-       if (gap >= PAUSE_THRESHOLD_MS) {
-           isBreathPause = true;
-       }
+    if (i === words.length - 1) {
+      baseChunks.push(currentChunkWords.join(' '))
+      break
     }
 
-    // Check if the last word we added was a grammar guard word
-    const lastWordAdded = currentWords.length > 0 ? currentWords[currentWords.length - 1].replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7-\u06E8\u06EA-\u06ED\u08D3-\u08E1\u08E3-\u08FF]/g, '') : '';
-    const isProtectedGrammar = dontSplitAfter.includes(lastWordAdded);
-
-    const isTooLong = (chunkChars + 1 + wordBaseChars) > maxChars;
-    const isNaturalBreak = isBreathPause && (chunkChars >= MIN_CHARS_FOR_CHUNK);
-
-    // Split ONLY IF we hit a breath/limit AND the previous word wasn't a protected conjunction
-    if (currentWords.length > 0 && (isTooLong || isNaturalBreak) && !isProtectedGrammar) {
-      baseChunks.push({
-        text: currentWords.join(' '),
-        startMs: chunkStartMs,
-        endMs: Math.max(0, prevSegment[2] - baseMs)
-      })
-
-      currentWords = [word]
-      chunkChars = wordBaseChars
-      chunkStartMs = Math.max(0, currentSegment[1] - baseMs)
-    } else {
-      currentWords.push(word)
-      chunkChars += currentWords.length > 1 ? wordBaseChars + 1 : wordBaseChars
+    // Split if we hit a Stop Mark, or if it's getting too long, BUT NEVER if it's a forbidden word like "ولا"
+    if ((hasWaqf || isTooLong) && !isForbiddenEnd) {
+      if (currentChars >= 25 || hasWaqf) {
+        baseChunks.push(currentChunkWords.join(' '))
+        currentChunkWords = []
+        currentChars = 0
+      }
     }
-  }
-
-  if (currentWords.length > 0) {
-    const lastIdx = words.length - 1
-    const lastSegment = lastIdx < alignedSegments.length ? alignedSegments[lastIdx] : alignedSegments[alignedSegments.length - 1]
-    baseChunks.push({
-      text: currentWords.join(' '),
-      startMs: chunkStartMs,
-      endMs: Math.max(0, lastSegment[2] - baseMs)
-    })
   }
 
   // ORPHAN PROTECTION
   if (baseChunks.length > 1) {
-      const lastChunk = baseChunks[baseChunks.length - 1];
-      const prevChunk = baseChunks[baseChunks.length - 2];
-      const lastChunkWords = lastChunk.text.split(' ').filter(w => w.trim().length > 0).length;
-
-      if (lastChunkWords <= 2) {
-         prevChunk.text += ' ' + lastChunk.text;
-         prevChunk.endMs = lastChunk.endMs;
-         baseChunks.pop(); 
-      }
+    const lastChunk = baseChunks[baseChunks.length - 1]
+    if (countWords(lastChunk) <= 2) {
+      baseChunks[baseChunks.length - 2] += ' ' + lastChunk
+      baseChunks.pop()
+    }
   }
 
-  return baseChunks.map((c, idx) => ({
-    text: c.text,
+  return baseChunks.map((text, idx) => ({
+    text,
     isLastChunk: idx === baseChunks.length - 1,
     chunkIndex: idx,
     totalChunks: baseChunks.length,
-    wordCount: countWords(c.text),
-    charCount: countBaseChars(c.text),
-    startMs: c.startMs,
-    endMs: c.endMs,
+    wordCount: countWords(text),
+    charCount: countBaseChars(text),
   }))
 }

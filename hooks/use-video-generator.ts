@@ -278,7 +278,7 @@ function buildDisplaySegments(
   verseTimings: Array<{ startMs: number; endMs: number }>,
   verses: Verse[], introOffset: number, taawudhIdx: number, bismillahIdx: number,
   taawudhText: string, bismillahText: string, displayMode: 'minimal' | 'classic',
-  showTranslation: boolean, verseSegments: number[][][]
+  showTranslation: boolean
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
 
@@ -295,9 +295,8 @@ function buildDisplaySegments(
       const verse = verses[verseArrayIdx]
       const verseText = verse.text_uthmani || ''
       const maxChars = displayMode === 'minimal' ? 80 : 90
-      const [surahNum, verseNum] = verse.verse_key.split(':').map(Number)
       
-      const chunks = splitVerseByWordTimings(verseText, verseSegments[i] || null, maxChars, surahNum, verseNum)
+      const chunks = splitVerseByWordTimings(verseText, null, maxChars)
       const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
       const translationChunks = splitTranslation(fullTranslation, chunks)
 
@@ -305,46 +304,24 @@ function buildDisplaySegments(
         segments.push({ type: 'verse-chunk', verseIndex: verseArrayIdx, chunkText: undefined, showMarker: true, showTranslationForChunk: showTranslation, translationChunkText: undefined, startMs: timing.startMs, endMs: timing.endMs })
       } else {
         const actualVerseDuration = timing.endMs - timing.startMs
-        const lastChunkEndMs = chunks[chunks.length - 1].endMs
-        const hasQdcTiming = lastChunkEndMs !== undefined && lastChunkEndMs > 0
-        const scaleFactor = hasQdcTiming ? (actualVerseDuration / lastChunkEndMs) : 1
-
         const totalChars = chunks.reduce((s, c) => s + c.charCount, 0) || 1
         let precedingCharCount = 0
 
-        for (const chunk of chunks) {
-          let calcStartMs = 0;
-          let calcEndMs = 0;
-
-          if (hasQdcTiming && chunk.startMs !== undefined && chunk.endMs !== undefined) {
-            calcStartMs = chunk.startMs * scaleFactor;
-            calcEndMs = chunk.endMs * scaleFactor;
-          } else {
-            const proportionStart = precedingCharCount / totalChars;
-            const proportionEnd = (precedingCharCount + chunk.charCount) / totalChars;
-            calcStartMs = proportionStart * actualVerseDuration;
-            calcEndMs = proportionEnd * actualVerseDuration;
-          }
-
-          const maxAllowedStart = Math.max(0, actualVerseDuration - Math.min(1000, actualVerseDuration / 2));
-          if (calcStartMs > maxAllowedStart) {
-            calcStartMs = maxAllowedStart;
-          }
+        for (let j = 0; j < chunks.length; j++) {
+          const chunk = chunks[j];
+          const proportionStart = precedingCharCount / totalChars;
+          const proportionEnd = (precedingCharCount + chunk.charCount) / totalChars;
+          
+          let calcStartMs = proportionStart * actualVerseDuration;
+          let calcEndMs = proportionEnd * actualVerseDuration;
 
           segments.push({
             type: 'verse-chunk', verseIndex: verseArrayIdx, chunkText: chunk.text,
             showMarker: chunk.isLastChunk, showTranslationForChunk: showTranslation,
             translationChunkText: translationChunks[chunk.chunkIndex] || '',
             startMs: timing.startMs + calcStartMs,
-            endMs: Math.max(timing.startMs + calcStartMs + 100, timing.startMs + calcEndMs), 
+            endMs: timing.startMs + calcEndMs, 
           })
-
-          if (chunk.chunkIndex > 0) {
-            const prevSegment = segments[segments.length - 2];
-            if (prevSegment && prevSegment.type === 'verse-chunk') {
-              prevSegment.endMs = Math.min(prevSegment.endMs, timing.startMs + calcStartMs);
-            }
-          }
 
           precedingCharCount += chunk.charCount;
         }
@@ -368,7 +345,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
       const {
         verses, background, showTranslation, surahName,
         reciterFolder, surahId, startVerse, endVerse,
-        displayMode = 'minimal', qdcRecitationId
+        displayMode = 'minimal'
       } = options
 
       if (verses.length === 0) { setError('No verses to generate video from'); return }
@@ -390,10 +367,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const audioCtx = new AudioContext({ sampleRate: 48000 })
         const decodedBuffers: AudioBuffer[] = []
         const verseTimings: Array<{ startMs: number; endMs: number }> = []
-        
-        // Only fetch QDC timestamps, NOT QDC audio
-        const segmentsData = qdcRecitationId ? await fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => []) : []
-        const matchedSegments: number[][][] = []
 
         const taawudhText = 'أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ'
         const BISMILLAH_TEXT = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ'
@@ -411,7 +384,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         let bismillahBuffer: AudioBuffer | null = null
         if (needsBismillah) {
           try {
-            // ALWAYS use EveryAyah. It is reliable.
             const originalUrl = `https://everyayah.com/data/${reciterFolder}/001001.mp3`;
             const bUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
             const resp = await fetch(bUrl)
@@ -436,14 +408,11 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           const audioBuf = await audioCtx.decodeAudioData(arrayBuf)
           decodedBuffers.push(audioBuf)
 
-          const segmentInfo = segmentsData.find((s: any) => s.verse_key === `${surahId}:${i}`)
-          matchedSegments.push(segmentInfo?.segments || [])
-
           setProgress(5 + ((i - startVerse + 1) / (endVerse - startVerse + 1)) * 25)
         }
 
-        if (bismillahBuffer) { decodedBuffers.unshift(bismillahBuffer); matchedSegments.unshift([]) }
-        if (taawudhBuffer) { decodedBuffers.unshift(taawudhBuffer); matchedSegments.unshift([]) }
+        if (bismillahBuffer) { decodedBuffers.unshift(bismillahBuffer); }
+        if (taawudhBuffer) { decodedBuffers.unshift(taawudhBuffer); }
 
         if (cancelledRef.current) { audioCtx.close(); return }
 
@@ -487,7 +456,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
         const displaySegments = buildDisplaySegments(
           verseTimings, verses, introOffset, taawudhIdx, bismillahIdx,
-          taawudhText, BISMILLAH_TEXT, displayMode, showTranslation, matchedSegments
+          taawudhText, BISMILLAH_TEXT, displayMode, showTranslation
         )
 
         let useMediaRecorder = false

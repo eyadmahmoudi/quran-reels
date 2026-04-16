@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { fetchAudioSegments, fetchChapterAudio } from '@/lib/quran-api'
+import { fetchAudioSegments } from '@/lib/quran-api'
 import type { Verse } from '@/lib/quran-types'
 
 interface VerseTimingInfo {
@@ -58,17 +58,12 @@ export function useQuranAudio({
   const [error, setError] = useState<string | null>(null)
 
   const audioContextRef = useRef<AudioContext | null>(null)
-  const audioBuffersRef = useRef<AudioBuffer[]>([])
-  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null)
-  const startTimeRef = useRef(0)
-  const pauseTimeRef = useRef(0)
-  const verseTimingsRef = useRef<VerseTimingInfo[]>([])
-  const verseSegmentsRef = useRef<number[][][]>([])
-  const animationFrameRef = useRef<number | null>(null)
   const audioElementsRef = useRef<HTMLAudioElement[]>([])
   const currentAudioIndexRef = useRef(0)
+  const animationFrameRef = useRef<number | null>(null)
+  const verseTimingsRef = useRef<VerseTimingInfo[]>([])
+  const verseSegmentsRef = useRef<number[][][]>([])
 
-  // Build audio URL using everyayah.com CDN with the reciter folder from config
   const buildAudioUrl = useCallback(
     (surahId: number, verseNumber: number): string => {
       const filename = `${surahId.toString().padStart(3, '0')}${verseNumber.toString().padStart(3, '0')}.mp3`
@@ -77,7 +72,6 @@ export function useQuranAudio({
     [reciterFolder]
   )
 
-  // Load audio files using HTML5 Audio for seamless playback
   const loadAudio = useCallback(async () => {
     setIsLoading(true)
     setError(null)
@@ -92,46 +86,59 @@ export function useQuranAudio({
         ? await fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => [])
         : []
 
-      // Create audio elements for each verse
-      for (let i = startVerse; i <= endVerse; i++) {
-        const originalUrl = buildAudioUrl(surahId, i)
-        // Use proxy to avoid CORS issues
-        const audioUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
+      let qdcAudioFiles: any[] = [];
+      if (qdcRecitationId) {
+        try {
+          const res = await fetch(`https://api.quran.com/api/v4/recitations/${qdcRecitationId}/by_chapter/${surahId}`);
+          if (res.ok) {
+            const data = await res.json();
+            qdcAudioFiles = data.audio_files || [];
+          }
+        } catch (e) {
+          console.warn('Failed to fetch QDC audio URLs', e);
+        }
+      }
 
+      for (let i = startVerse; i <= endVerse; i++) {
+        const verseKey = `${surahId}:${i}`
+        let originalUrl = '';
+
+        if (qdcRecitationId) {
+          const qdcFile = qdcAudioFiles.find((a: any) => a.verse_key === verseKey);
+          if (qdcFile && qdcFile.url) {
+            originalUrl = qdcFile.url;
+            // CRITICAL FIX: Handle broken relative URLs from QDC
+            if (originalUrl.startsWith('//')) {
+              originalUrl = `https:${originalUrl}`;
+            } else if (originalUrl.startsWith('/')) {
+              originalUrl = `https://verses.quran.foundation${originalUrl}`;
+            } else if (!originalUrl.startsWith('http')) {
+              originalUrl = `https://verses.quran.foundation/${originalUrl}`;
+            }
+          }
+        }
+
+        if (!originalUrl) {
+          originalUrl = buildAudioUrl(surahId, i);
+        }
+
+        const audioUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
         const audio = new Audio()
         audio.preload = 'auto'
         audio.src = audioUrl
 
-        // Wait for metadata to get duration
         await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            reject(new Error(`Timeout loading audio for verse ${i}`))
-          }, 10000)
-
-          audio.onloadedmetadata = () => {
-            clearTimeout(timeout)
-            resolve()
-          }
-          audio.onerror = () => {
-            clearTimeout(timeout)
-            reject(new Error(`Failed to load audio for verse ${i}`))
-          }
+          const timeout = setTimeout(() => reject(new Error(`Timeout loading audio for verse ${i}`)), 15000)
+          audio.onloadedmetadata = () => { clearTimeout(timeout); resolve() }
+          audio.onerror = () => { clearTimeout(timeout); reject(new Error(`Failed to load audio for verse ${i}`)) }
           audio.load()
         })
 
-        const segmentInfo = segmentsData.find(s => s.verse_key === `${surahId}:${i}`)
+        const segmentInfo = segmentsData.find(s => s.verse_key === verseKey)
         matchedSegments.push(segmentInfo?.segments || [])
 
-        const audioDuration = audio.duration * 1000 // Convert to ms
-
-        timings.push({
-          verseKey: `${surahId}:${i}`,
-          verseNumber: i,
-          startTime: cumulativeTime,
-          endTime: cumulativeTime + audioDuration,
-          audioUrl,
-        })
-
+        const audioDuration = audio.duration * 1000 
+        timings.push({ verseKey, verseNumber: i, startTime: cumulativeTime, endTime: cumulativeTime + audioDuration, audioUrl })
         cumulativeTime += audioDuration
         audioElements.push(audio)
       }
@@ -141,7 +148,6 @@ export function useQuranAudio({
       verseSegmentsRef.current = matchedSegments
       setDuration(cumulativeTime)
       setIsLoading(false)
-
       return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load audio')
@@ -150,7 +156,6 @@ export function useQuranAudio({
     }
   }, [qdcRecitationId, surahId, startVerse, endVerse, buildAudioUrl])
 
-  // Play audio sequentially
   const playAudioSequence = useCallback(
     async (startIndex: number = 0) => {
       const audioElements = audioElementsRef.current
@@ -172,7 +177,6 @@ export function useQuranAudio({
         setCurrentVerseIndex(index)
         onVerseChange?.(index)
 
-        // Update progress tracking
         const updateProgress = () => {
           if (!audioElements[index]) return
           const timing = verseTimingsRef.current[index]
@@ -187,9 +191,7 @@ export function useQuranAudio({
         }
 
         audio.onended = () => {
-          if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current)
-          }
+          if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
           playNext(index + 1)
         }
 
@@ -206,7 +208,6 @@ export function useQuranAudio({
           await audio.play()
           animationFrameRef.current = requestAnimationFrame(updateProgress)
         } catch (err) {
-          console.error('Failed to play audio:', err)
           setError('Failed to play audio')
           setIsPlaying(false)
         }
@@ -218,36 +219,24 @@ export function useQuranAudio({
   )
 
   const play = useCallback(async () => {
-    // Load audio if not loaded
     if (audioElementsRef.current.length === 0) {
       const loaded = await loadAudio()
       if (!loaded) return
     }
-
     setIsPlaying(true)
     await playAudioSequence(currentAudioIndexRef.current)
   }, [loadAudio, playAudioSequence])
 
   const pause = useCallback(() => {
     const currentAudio = audioElementsRef.current[currentAudioIndexRef.current]
-    if (currentAudio) {
-      currentAudio.pause()
-    }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-    }
+    if (currentAudio) currentAudio.pause()
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
     setIsPlaying(false)
   }, [])
 
   const stop = useCallback(() => {
-    // Stop all audio elements
-    audioElementsRef.current.forEach((audio) => {
-      audio.pause()
-      audio.currentTime = 0
-    })
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-    }
+    audioElementsRef.current.forEach((audio) => { audio.pause(); audio.currentTime = 0 })
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
     currentAudioIndexRef.current = 0
     setIsPlaying(false)
     setCurrentVerseIndex(0)
@@ -258,49 +247,31 @@ export function useQuranAudio({
   const seekToVerse = useCallback(
     async (verseIndex: number) => {
       if (verseIndex < 0 || verseIndex >= audioElementsRef.current.length) return
-
-      // Stop current playback
       const currentAudio = audioElementsRef.current[currentAudioIndexRef.current]
-      if (currentAudio) {
-        currentAudio.pause()
-        currentAudio.currentTime = 0
-      }
+      if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0 }
 
       currentAudioIndexRef.current = verseIndex
       setCurrentVerseIndex(verseIndex)
 
-      // Update progress
       const timing = verseTimingsRef.current[verseIndex]
       if (timing) {
         setCurrentTime(timing.startTime)
         setProgress((timing.startTime / duration) * 100)
       }
 
-      // If was playing, continue from new position
-      if (isPlaying) {
-        await playAudioSequence(verseIndex)
-      }
+      if (isPlaying) await playAudioSequence(verseIndex)
     },
     [duration, isPlaying, playAudioSequence]
   )
 
-  // Cleanup
   useEffect(() => {
     return () => {
-      audioElementsRef.current.forEach((audio) => {
-        audio.pause()
-        audio.src = ''
-      })
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close()
-      }
+      audioElementsRef.current.forEach((audio) => { audio.pause(); audio.src = '' })
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current)
+      if (audioContextRef.current) audioContextRef.current.close()
     }
   }, [])
 
-  // Reload audio when config changes
   useEffect(() => {
     stop()
     audioElementsRef.current = []
@@ -309,19 +280,5 @@ export function useQuranAudio({
     setDuration(0)
   }, [qdcRecitationId, reciterFolder, surahId, startVerse, endVerse, stop])
 
-  return {
-    isLoading,
-    isPlaying,
-    currentVerseIndex,
-    progress,
-    duration,
-    currentTime,
-    error,
-    verseTimings: verseTimingsRef.current,
-    verseSegments: verseSegmentsRef.current,
-    play,
-    pause,
-    stop,
-    seekToVerse,
-  }
+  return { isLoading, isPlaying, currentVerseIndex, progress, duration, currentTime, error, verseTimings: verseTimingsRef.current, verseSegments: verseSegmentsRef.current, play, pause, stop, seekToVerse }
 }

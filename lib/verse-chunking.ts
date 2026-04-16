@@ -8,6 +8,7 @@ export interface VerseChunk {
   totalChunks: number
   wordCount: number
   charCount: number
+  endsWithWaqf: boolean
 }
 
 function countWords(text: string): number {
@@ -19,14 +20,16 @@ function countBaseChars(text: string): number {
   return stripped.length
 }
 
+const waqfMarks = ['ۖ', 'ۗ', 'ۚ', 'ۛ', 'ۙ', 'مۘ', '۩']
+
 export function splitVerseForPreview(verseText: string, maxCharsPerChunk: number = 80): VerseChunk[] {
   if (!verseText || verseText.length <= maxCharsPerChunk) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: countWords(verseText || ''), charCount: countBaseChars(verseText || '') }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: countWords(verseText || ''), charCount: countBaseChars(verseText || ''), endsWithWaqf: false }]
   }
 
   const words = verseText.split(' ').filter((w) => w.length > 0)
   if (words.length <= 2) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: words.length, charCount: countBaseChars(verseText) }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: words.length, charCount: countBaseChars(verseText), endsWithWaqf: false }]
   }
 
   const chunks: string[] = []
@@ -58,6 +61,7 @@ export function splitVerseForPreview(verseText: string, maxCharsPerChunk: number
       totalChunks: numChunks,
       wordCount: chunkWords.length,
       charCount: countBaseChars(chunkStr),
+      endsWithWaqf: waqfMarks.some(mark => chunkStr.includes(mark))
     })
   }
   return balanced
@@ -108,21 +112,18 @@ export function splitVerseByWordTimings(
   maxChars = 90
 ): VerseChunk[] {
   if (!verseText || verseText.trim().length === 0) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: 0, charCount: 0 }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: 0, charCount: 0, endsWithWaqf: false }]
   }
 
   const words = verseText.split(' ').filter(w => w.trim().length > 0)
 
   if (words.length <= 2) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: words.length, charCount: countBaseChars(verseText) }]
+    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: words.length, charCount: countBaseChars(verseText), endsWithWaqf: false }]
   }
 
   const baseChunks: string[] = []
   let currentChunkWords: string[] = []
   let currentChars = 0
-
-  // Quranic Waqf (Stop) Marks
-  const waqfMarks = ['ۖ', 'ۗ', 'ۚ', 'ۛ', 'ۙ', 'مۘ', '۩']
   
   // GRAMMAR GUARD: Never split after these words
   const dontSplitAfter = ['و', 'ف', 'ب', 'ك', 'ل', 'ولا', 'لا', 'ما', 'يا', 'إن', 'أن', 'هل', 'في', 'من', 'عن', 'على', 'إلى', 'حتى', 'أو', 'ثم', 'إنما', 'إلا', 'فلا']
@@ -168,5 +169,6 @@ export function splitVerseByWordTimings(
     totalChunks: baseChunks.length,
     wordCount: countWords(text),
     charCount: countBaseChars(text),
+    endsWithWaqf: waqfMarks.some(mark => text.includes(mark)),
   }))
 }

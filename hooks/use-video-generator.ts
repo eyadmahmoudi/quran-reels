@@ -304,13 +304,21 @@ function buildDisplaySegments(
         segments.push({ type: 'verse-chunk', verseIndex: verseArrayIdx, chunkText: undefined, showMarker: true, showTranslationForChunk: showTranslation, translationChunkText: undefined, startMs: timing.startMs, endMs: timing.endMs })
       } else {
         const actualVerseDuration = timing.endMs - timing.startMs
-        const totalChars = chunks.reduce((s, c) => s + c.charCount, 0) || 1
-        let precedingCharCount = 0
+
+        // Each chunk's weight = its base chars + a pause bonus if it ends on a waqf mark.
+        // WAQF_PAUSE_CHARS is the equivalent "character cost" of a natural recitation pause.
+        const WAQF_PAUSE_CHARS = 12
+
+        const weights = chunks.map(c => c.charCount + (c.endsWithWaqf ? WAQF_PAUSE_CHARS : 0))
+        const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
+
+        let cumulativeWeight = 0
 
         for (let j = 0; j < chunks.length; j++) {
           const chunk = chunks[j];
-          const proportionStart = precedingCharCount / totalChars;
-          const proportionEnd = (precedingCharCount + chunk.charCount) / totalChars;
+          const proportionStart = cumulativeWeight / totalWeight;
+          cumulativeWeight += weights[j];
+          const proportionEnd = cumulativeWeight / totalWeight;
           
           let calcStartMs = proportionStart * actualVerseDuration;
           let calcEndMs = proportionEnd * actualVerseDuration;
@@ -322,8 +330,6 @@ function buildDisplaySegments(
             startMs: timing.startMs + calcStartMs,
             endMs: timing.startMs + calcEndMs, 
           })
-
-          precedingCharCount += chunk.charCount;
         }
       }
     }
@@ -332,7 +338,7 @@ function buildDisplaySegments(
   return segments
 }
 
-const FADE_DURATION_MS = 250
+const FADE_DURATION_MS = 180
 
 export function useVideoGenerator(): UseVideoGeneratorReturn {
   const [isGenerating, setIsGenerating] = useState(false)

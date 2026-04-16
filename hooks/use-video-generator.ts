@@ -356,92 +356,84 @@ function buildDisplaySegments(
   verseSegments: number[][][]
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
-  const arabicFontSize = displayMode === 'minimal' ? 58 : 68
 
   for (let i = 0; i < verseTimings.length; i++) {
     const timing = verseTimings[i]
 
     if (i === taawudhIdx) {
       segments.push({
-        type: 'intro',
-        introText: taawudhText,
-        showMarker: false,
-        showTranslationForChunk: false,
-        startMs: timing.startMs,
-        endMs: timing.endMs,
+        type: 'intro', introText: taawudhText, showMarker: false,
+        showTranslationForChunk: false, startMs: timing.startMs, endMs: timing.endMs,
       })
     } else if (i === bismillahIdx) {
       segments.push({
-        type: 'intro',
-        introText: bismillahText,
-        showMarker: false,
-        showTranslationForChunk: false,
-        startMs: timing.startMs,
-        endMs: timing.endMs,
+        type: 'intro', introText: bismillahText, showMarker: false,
+        showTranslationForChunk: false, startMs: timing.startMs, endMs: timing.endMs,
       })
     } else {
-      // Actual verse — check if it needs chunking
       const verseArrayIdx = i - introOffset
       if (verseArrayIdx < 0 || verseArrayIdx >= verses.length) continue
       const verse = verses[verseArrayIdx]
       const verseText = verse.text_uthmani || ''
       const maxChars = displayMode === 'minimal' ? 80 : 90
-      const chunks = splitVerseByWordTimings(verseText, verseSegments[i] || null, maxChars)
+      
+      // Extract Surah and Verse numbers from the verse_key (e.g. "9:1")
+      const [surahNum, verseNum] = verse.verse_key.split(':').map(Number)
+      
+      // Pass the numbers down so the chunker knows when to trim Bismillah
+      const chunks = splitVerseByWordTimings(verseText, verseSegments[i] || null, maxChars, surahNum, verseNum)
 
-      // Split translation to match Arabic chunks
       const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
       const translationChunks = splitTranslation(fullTranslation, chunks)
 
       if (chunks.length === 1) {
-        // Short verse — single segment, show everything
         segments.push({
-          type: 'verse-chunk',
-          verseIndex: verseArrayIdx,
-          chunkText: undefined, // use full verse text
-          showMarker: true,
-          showTranslationForChunk: showTranslation,
-          translationChunkText: undefined, // use full translation
-          startMs: timing.startMs,
-          endMs: timing.endMs,
+          type: 'verse-chunk', verseIndex: verseArrayIdx, chunkText: undefined,
+          showMarker: true, showTranslationForChunk: showTranslation,
+          translationChunkText: undefined, startMs: timing.startMs, endMs: timing.endMs,
         })
       } else {
         const actualVerseDuration = timing.endMs - timing.startMs
         const lastChunkEndMs = chunks[chunks.length - 1].endMs
         const hasQdcTiming = lastChunkEndMs !== undefined && lastChunkEndMs > 0
+        const scaleFactor = hasQdcTiming ? (actualVerseDuration / lastChunkEndMs) : 1
 
-        if (hasQdcTiming) {
-          // Scale QDC timing to match actual per-verse audio duration
-          const scaleFactor = actualVerseDuration / lastChunkEndMs
-          for (const chunk of chunks) {
-            segments.push({
-              type: 'verse-chunk',
-              verseIndex: verseArrayIdx,
-              chunkText: chunk.text,
-              showMarker: chunk.isLastChunk,
-              showTranslationForChunk: showTranslation,
-              translationChunkText: translationChunks[chunk.chunkIndex] || '',
-              startMs: timing.startMs + (chunk.startMs || 0) * scaleFactor,
-              endMs: timing.startMs + (chunk.endMs || 0) * scaleFactor,
-            })
+        const totalChars = chunks.reduce((s, c) => s + c.charCount, 0) || 1
+        let precedingCharCount = 0
+
+        for (const chunk of chunks) {
+          let calcStartMs = 0;
+          let calcEndMs = 0;
+
+          if (hasQdcTiming && chunk.startMs !== undefined && chunk.endMs !== undefined) {
+            calcStartMs = chunk.startMs * scaleFactor;
+            calcEndMs = chunk.endMs * scaleFactor;
+          } else {
+            // Bulletproof proportional fallback
+            const proportionStart = precedingCharCount / totalChars;
+            const proportionEnd = (precedingCharCount + chunk.charCount) / totalChars;
+            calcStartMs = proportionStart * actualVerseDuration;
+            calcEndMs = proportionEnd * actualVerseDuration;
           }
-        } else {
-          // No QDC timing — distribute proportionally by character count
-          const totalChars = chunks.reduce((s, c) => s + c.charCount, 0) || 1
-          let offset = 0
-          for (const chunk of chunks) {
-            const chunkDuration = actualVerseDuration * (chunk.charCount / totalChars)
-            segments.push({
-              type: 'verse-chunk',
-              verseIndex: verseArrayIdx,
-              chunkText: chunk.text,
-              showMarker: chunk.isLastChunk,
-              showTranslationForChunk: showTranslation,
-              translationChunkText: translationChunks[chunk.chunkIndex] || '',
-              startMs: timing.startMs + offset,
-              endMs: timing.startMs + offset + chunkDuration,
-            })
-            offset += chunkDuration
+
+          // Safety clamp: Ensure the text ALWAYS triggers before the verse audio ends
+          const maxAllowedStart = Math.max(0, actualVerseDuration - Math.min(1000, actualVerseDuration / 2));
+          if (calcStartMs > maxAllowedStart) {
+            calcStartMs = maxAllowedStart;
           }
+
+          segments.push({
+            type: 'verse-chunk',
+            verseIndex: verseArrayIdx,
+            chunkText: chunk.text,
+            showMarker: chunk.isLastChunk,
+            showTranslationForChunk: showTranslation,
+            translationChunkText: translationChunks[chunk.chunkIndex] || '',
+            startMs: timing.startMs + calcStartMs,
+            endMs: Math.max(timing.startMs + calcStartMs + 100, timing.startMs + calcEndMs), 
+          })
+
+          precedingCharCount += chunk.charCount;
         }
       }
     }

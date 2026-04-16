@@ -8,7 +8,10 @@ export interface VerseChunk {
   totalChunks: number
   wordCount: number
   charCount: number
-  endsWithWaqf: boolean // NEW: used by video generator for waqf-aware timing
+  endsWithWaqf: boolean
+  /** 0-based index of the first word of this chunk within the full verse word array.
+   *  Used by the video generator to look up exact QDC word timestamps. */
+  wordStartIndex: number
 }
 
 function countWords(text: string): number {
@@ -33,6 +36,7 @@ export function splitVerseForPreview(verseText: string, maxCharsPerChunk: number
       wordCount: countWords(verseText || ''),
       charCount: countBaseChars(verseText || ''),
       endsWithWaqf: false,
+      wordStartIndex: 0,
     }]
   }
 
@@ -46,6 +50,7 @@ export function splitVerseForPreview(verseText: string, maxCharsPerChunk: number
       wordCount: words.length,
       charCount: countBaseChars(verseText),
       endsWithWaqf: false,
+      wordStartIndex: 0,
     }]
   }
 
@@ -66,6 +71,7 @@ export function splitVerseForPreview(verseText: string, maxCharsPerChunk: number
   const totalWords = words.length
   const wordsPerChunk = Math.ceil(totalWords / numChunks)
   const balanced: VerseChunk[] = []
+  let wordStart = 0
   for (let i = 0; i < numChunks; i++) {
     const start = i * wordsPerChunk
     const end = Math.min((i + 1) * wordsPerChunk, totalWords)
@@ -79,7 +85,9 @@ export function splitVerseForPreview(verseText: string, maxCharsPerChunk: number
       wordCount: chunkWords.length,
       charCount: countBaseChars(chunkStr),
       endsWithWaqf: WAQF_MARKS.some(mark => chunkStr.includes(mark)),
+      wordStartIndex: wordStart,
     })
+    wordStart += chunkWords.length
   }
   return balanced
 }
@@ -129,7 +137,7 @@ export function splitTranslation(translationText: string, arabicChunks: VerseChu
  */
 export function splitVerseByWordTimings(
   verseText: string,
-  segments: any | null, // Ignored entirely
+  segments: any | null, // Ignored — timing is handled in the video generator via QDC data
   maxChars = 90
 ): VerseChunk[] {
   if (!verseText || verseText.trim().length === 0) {
@@ -141,6 +149,7 @@ export function splitVerseByWordTimings(
       wordCount: 0,
       charCount: 0,
       endsWithWaqf: false,
+      wordStartIndex: 0,
     }]
   }
 
@@ -155,6 +164,7 @@ export function splitVerseByWordTimings(
       wordCount: words.length,
       charCount: countBaseChars(verseText),
       endsWithWaqf: WAQF_MARKS.some(mark => verseText.includes(mark)),
+      wordStartIndex: 0,
     }]
   }
 
@@ -205,13 +215,21 @@ export function splitVerseByWordTimings(
     }
   }
 
-  return baseChunks.map((text, idx) => ({
-    text,
-    isLastChunk: idx === baseChunks.length - 1,
-    chunkIndex: idx,
-    totalChunks: baseChunks.length,
-    wordCount: countWords(text),
-    charCount: countBaseChars(text),
-    endsWithWaqf: WAQF_MARKS.some(mark => text.includes(mark)),
-  }))
+  // Build final chunks with accurate wordStartIndex
+  let wordStart = 0
+  return baseChunks.map((text, idx) => {
+    const chunkWordCount = countWords(text)
+    const chunk: VerseChunk = {
+      text,
+      isLastChunk: idx === baseChunks.length - 1,
+      chunkIndex: idx,
+      totalChunks: baseChunks.length,
+      wordCount: chunkWordCount,
+      charCount: countBaseChars(text),
+      endsWithWaqf: WAQF_MARKS.some(mark => text.includes(mark)),
+      wordStartIndex: wordStart,
+    }
+    wordStart += chunkWordCount
+    return chunk
+  })
 }

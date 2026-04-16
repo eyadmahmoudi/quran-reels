@@ -274,22 +274,54 @@ async function exportVerseImages(
   }
 }
 
+/**
+ * Look up the start and end time (ms, relative to verse audio start) for a
+ * range of words using QDC segment data.
+ *
+ * QDC segment format: number[][] where each entry is
+ *   [word_number_1indexed, start_ms, end_ms]
+ *
+ * Returns null if the required segments cannot be found.
+ */
+function getChunkTimingFromQdc(
+  qdcSegs: number[][],
+  firstWordIndex: number,   // 0-based index of the first word in this chunk
+  lastWordIndex: number,    // 0-based index of the last word in this chunk
+): { startMs: number; endMs: number } | null {
+  // QDC word numbers are 1-indexed
+  const firstWordNum = firstWordIndex + 1
+  const lastWordNum = lastWordIndex + 1
+
+  const firstSeg = qdcSegs.find(s => s[0] === firstWordNum)
+  const lastSeg = qdcSegs.find(s => s[0] === lastWordNum)
+
+  if (!firstSeg || !lastSeg) return null
+
+  return { startMs: firstSeg[1], endMs: lastSeg[2] }
+}
+
 function buildDisplaySegments(
   verseTimings: Array<{ startMs: number; endMs: number }>,
-  verses: Verse[], introOffset: number, taawudhIdx: number, bismillahIdx: number,
-  taawudhText: string, bismillahText: string, displayMode: 'minimal' | 'classic',
-  showTranslation: boolean
+  verses: Verse[],
+  introOffset: number,
+  taawudhIdx: number,
+  bismillahIdx: number,
+  taawudhText: string,
+  bismillahText: string,
+  displayMode: 'minimal' | 'classic',
+  showTranslation: boolean,
+  /**
+   * Per-verse QDC word segments, indexed by verse array position (0 = first verse).
+   * Each entry is the raw segments array from the QDC API:
+   *   [[word_number_1indexed, start_ms, end_ms], ...]
+   * Pass an empty array entry when QDC data is unavailable for a verse.
+   */
+  verseQdcSegments: number[][][]
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
 
-  // WAQF_BONUS_CHARS: the equivalent "phantom character weight" added to any chunk
-  // that ends on a waqf mark. Reciters pause ~300-500ms at these marks, so giving
-  // the chunk more proportional time fixes the drift at ~33s, ~78s, and ~120s.
-  //
-  // Tune this value if sync still feels off for your specific reciter:
-  //   Slow reciters (Menshawi, Tablawi)  → try 18–22
-  //   Medium reciters (Sudais, Ghamdi)   → 14 (default)
-  //   Fast reciters (Husary, Minshawi fast edition) → try 10–12
+  // WAQF_BONUS_CHARS: fallback proportional weight bonus for waqf pauses,
+  // used only when QDC timestamp data is unavailable.
   const WAQF_BONUS_CHARS = 14
 
   for (let i = 0; i < verseTimings.length; i++) {
@@ -297,68 +329,102 @@ function buildDisplaySegments(
 
     if (i === taawudhIdx) {
       segments.push({ type: 'intro', introText: taawudhText, showMarker: false, showTranslationForChunk: false, startMs: timing.startMs, endMs: timing.endMs })
-    } else if (i === bismillahIdx) {
+      continue
+    }
+    if (i === bismillahIdx) {
       segments.push({ type: 'intro', introText: bismillahText, showMarker: false, showTranslationForChunk: false, startMs: timing.startMs, endMs: timing.endMs })
-    } else {
-      const verseArrayIdx = i - introOffset
-      if (verseArrayIdx < 0 || verseArrayIdx >= verses.length) continue
-      const verse = verses[verseArrayIdx]
-      const verseText = verse.text_uthmani || ''
-      const maxChars = displayMode === 'minimal' ? 80 : 90
+      continue
+    }
 
-      const chunks = splitVerseByWordTimings(verseText, null, maxChars)
-      const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
-      const translationChunks = splitTranslation(fullTranslation, chunks)
+    const verseArrayIdx = i - introOffset
+    if (verseArrayIdx < 0 || verseArrayIdx >= verses.length) continue
 
-      if (chunks.length === 1) {
-        segments.push({
-          type: 'verse-chunk',
-          verseIndex: verseArrayIdx,
-          chunkText: undefined,
-          showMarker: true,
-          showTranslationForChunk: showTranslation,
-          translationChunkText: undefined,
-          startMs: timing.startMs,
-          endMs: timing.endMs,
-        })
+    const verse = verses[verseArrayIdx]
+    const verseText = verse.text_uthmani || ''
+    const maxChars = displayMode === 'minimal' ? 80 : 90
+
+    const chunks = splitVerseByWordTimings(verseText, null, maxChars)
+    const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
+    const translationChunks = splitTranslation(fullTranslation, chunks)
+
+    if (chunks.length === 1) {
+      segments.push({
+        type: 'verse-chunk',
+        verseIndex: verseArrayIdx,
+        chunkText: undefined,
+        showMarker: true,
+        showTranslationForChunk: showTranslation,
+        translationChunkText: undefined,
+        startMs: timing.startMs,
+        endMs: timing.endMs,
+      })
+      continue
+    }
+
+    const verseDuration = timing.endMs - timing.startMs
+    const qdcSegs = verseQdcSegments[verseArrayIdx] ?? []
+    const hasQdcData = qdcSegs.length > 0
+
+    for (let j = 0; j < chunks.length; j++) {
+      const chunk = chunks[j]
+      const firstWordIndex = chunk.wordStartIndex
+      const lastWordIndex = chunk.wordStartIndex + chunk.wordCount - 1
+
+      let chunkStartMs: number
+      let chunkEndMs: number
+
+      if (hasQdcData) {
+        // ── PRIMARY PATH: use actual word timestamps from QDC ──────────────
+        // Times from QDC are relative to the verse audio start, in ms.
+        const qdcTiming = getChunkTimingFromQdc(qdcSegs, firstWordIndex, lastWordIndex)
+
+        if (qdcTiming) {
+          chunkStartMs = timing.startMs + qdcTiming.startMs
+          // Last chunk always snaps to the real verse end to prevent gaps/overlaps
+          chunkEndMs = chunk.isLastChunk
+            ? timing.endMs
+            : timing.startMs + qdcTiming.endMs
+        } else {
+          // QDC data exists but is missing this specific word — fall through to
+          // proportional for this chunk only, using a simple word-index ratio.
+          const startRatio = firstWordIndex / (firstWordIndex + chunk.wordCount + 1)
+          const endRatio = (firstWordIndex + chunk.wordCount) / (firstWordIndex + chunk.wordCount + 1)
+          chunkStartMs = timing.startMs + startRatio * verseDuration
+          chunkEndMs = chunk.isLastChunk ? timing.endMs : timing.startMs + endRatio * verseDuration
+        }
       } else {
-        const actualVerseDuration = timing.endMs - timing.startMs
-
-        // FIX: Weight each chunk by its char count PLUS a bonus for waqf marks.
-        // Pure char-count proportion was causing drift because it ignores the real
-        // pause a reciter makes at waqf points — those pauses consume audio time
-        // but add zero characters. The bonus redistributes that time correctly.
+        // ── FALLBACK PATH: proportional by char count + waqf bonus ─────────
+        // Used when qdcRecitationId is null or the fetch failed.
         const weights = chunks.map(c =>
           c.charCount + (c.endsWithWaqf ? WAQF_BONUS_CHARS : 0)
         )
         const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
+        let cumWeight = 0
+        for (let k = 0; k < j; k++) cumWeight += weights[k]
 
-        let cumulativeWeight = 0
-        for (let j = 0; j < chunks.length; j++) {
-          const chunk = chunks[j]
-          const proportionStart = cumulativeWeight / totalWeight
-          cumulativeWeight += weights[j]
-          const proportionEnd = cumulativeWeight / totalWeight
-
-          segments.push({
-            type: 'verse-chunk',
-            verseIndex: verseArrayIdx,
-            chunkText: chunk.text,
-            showMarker: chunk.isLastChunk,
-            showTranslationForChunk: showTranslation,
-            translationChunkText: translationChunks[chunk.chunkIndex] || '',
-            startMs: timing.startMs + proportionStart * actualVerseDuration,
-            endMs: timing.startMs + proportionEnd * actualVerseDuration,
-          })
-        }
+        const proportionStart = cumWeight / totalWeight
+        const proportionEnd = (cumWeight + weights[j]) / totalWeight
+        chunkStartMs = timing.startMs + proportionStart * verseDuration
+        chunkEndMs = chunk.isLastChunk ? timing.endMs : timing.startMs + proportionEnd * verseDuration
       }
+
+      segments.push({
+        type: 'verse-chunk',
+        verseIndex: verseArrayIdx,
+        chunkText: chunk.text,
+        showMarker: chunk.isLastChunk,
+        showTranslationForChunk: showTranslation,
+        translationChunkText: translationChunks[chunk.chunkIndex] || '',
+        startMs: chunkStartMs,
+        endMs: chunkEndMs,
+      })
     }
   }
 
   return segments
 }
 
-// FIX: Reduced from 250ms to 150ms.
+// Reduced from 250ms to 150ms.
 // 250ms fade on short chunks (some are only 1–1.5s of audio) was consuming up to
 // 33% of the chunk's screen time in transition, causing perceived desync on fast phrases.
 const FADE_DURATION_MS = 150
@@ -373,6 +439,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
     async (options: VideoGeneratorOptions) => {
       const {
         verses, background, showTranslation, surahName,
+        qdcRecitationId,          // ← was missing before; now used for word-level sync
         reciterFolder, surahId, startVerse, endVerse,
         displayMode = 'minimal'
       } = options
@@ -413,7 +480,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         let bismillahBuffer: AudioBuffer | null = null
         if (needsBismillah) {
           try {
-            const originalUrl = `https://everyayah.com/data/${reciterFolder}/001001.mp3`;
+            const originalUrl = `https://everyayah.com/data/${reciterFolder}/001001.mp3`
             const bUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
             const resp = await fetch(bUrl)
             if (resp.ok) {
@@ -428,7 +495,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
           const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
           const originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
-
           const proxyUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
 
           const resp = await fetch(proxyUrl)
@@ -440,10 +506,36 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           setProgress(5 + ((i - startVerse + 1) / (endVerse - startVerse + 1)) * 25)
         }
 
-        if (bismillahBuffer) { decodedBuffers.unshift(bismillahBuffer); }
-        if (taawudhBuffer) { decodedBuffers.unshift(taawudhBuffer); }
+        if (bismillahBuffer) { decodedBuffers.unshift(bismillahBuffer) }
+        if (taawudhBuffer) { decodedBuffers.unshift(taawudhBuffer) }
 
         if (cancelledRef.current) { audioCtx.close(); return }
+
+        // ── STEP: Fetch QDC word-level timestamps ─────────────────────────────
+        // These give us the exact millisecond each word starts/ends within its
+        // verse audio file, enabling frame-perfect sub-verse chunk timing.
+        //
+        // Indexed by verse array position: verseQdcSegments[0] = segments for
+        // verses[0], verseQdcSegments[1] = segments for verses[1], etc.
+        // Falls back to [] (empty) per verse when QDC data is unavailable.
+        const verseQdcSegments: number[][][] = verses.map(() => [])
+
+        if (qdcRecitationId) {
+          try {
+            const qdcData = await fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse)
+            for (let i = 0; i < verses.length; i++) {
+              const verseNum = startVerse + i
+              const match = qdcData.find(s => s.verse_key === `${surahId}:${verseNum}`)
+              if (match?.segments?.length) {
+                verseQdcSegments[i] = match.segments
+              }
+            }
+          } catch (e) {
+            // QDC fetch failed — proportional fallback will be used automatically
+            console.warn('[video] QDC segment fetch failed, using proportional timing:', e)
+          }
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         const sampleRate = audioCtx.sampleRate
         const totalSamples = decodedBuffers.reduce((s, b) => s + b.length, 0)
@@ -485,7 +577,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
         const displaySegments = buildDisplaySegments(
           verseTimings, verses, introOffset, taawudhIdx, bismillahIdx,
-          taawudhText, BISMILLAH_TEXT, displayMode, showTranslation
+          taawudhText, BISMILLAH_TEXT, displayMode, showTranslation,
+          verseQdcSegments   // ← actual word timing data, now passed in
         )
 
         let useMediaRecorder = false

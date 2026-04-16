@@ -1,5 +1,5 @@
 const VIDEO_WIDTH = 1080
-const MAX_TEXT_WIDTH = VIDEO_WIDTH - 100 
+const MAX_TEXT_WIDTH = VIDEO_WIDTH - 100
 
 export interface VerseChunk {
   text: string
@@ -8,7 +8,7 @@ export interface VerseChunk {
   totalChunks: number
   wordCount: number
   charCount: number
-  endsWithWaqf: boolean
+  endsWithWaqf: boolean // NEW: used by video generator for waqf-aware timing
 }
 
 function countWords(text: string): number {
@@ -20,16 +20,33 @@ function countBaseChars(text: string): number {
   return stripped.length
 }
 
-const waqfMarks = ['ۖ', 'ۗ', 'ۚ', 'ۛ', 'ۙ', 'مۘ', '۩']
+// Shared waqf mark list — used in both splitting and tagging
+const WAQF_MARKS = ['ۖ', 'ۗ', 'ۚ', 'ۛ', 'ۙ', 'مۘ', '۩']
 
 export function splitVerseForPreview(verseText: string, maxCharsPerChunk: number = 80): VerseChunk[] {
   if (!verseText || verseText.length <= maxCharsPerChunk) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: countWords(verseText || ''), charCount: countBaseChars(verseText || ''), endsWithWaqf: false }]
+    return [{
+      text: verseText,
+      isLastChunk: true,
+      chunkIndex: 0,
+      totalChunks: 1,
+      wordCount: countWords(verseText || ''),
+      charCount: countBaseChars(verseText || ''),
+      endsWithWaqf: false,
+    }]
   }
 
   const words = verseText.split(' ').filter((w) => w.length > 0)
   if (words.length <= 2) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: words.length, charCount: countBaseChars(verseText), endsWithWaqf: false }]
+    return [{
+      text: verseText,
+      isLastChunk: true,
+      chunkIndex: 0,
+      totalChunks: 1,
+      wordCount: words.length,
+      charCount: countBaseChars(verseText),
+      endsWithWaqf: false,
+    }]
   }
 
   const chunks: string[] = []
@@ -61,7 +78,7 @@ export function splitVerseForPreview(verseText: string, maxCharsPerChunk: number
       totalChunks: numChunks,
       wordCount: chunkWords.length,
       charCount: countBaseChars(chunkStr),
-      endsWithWaqf: waqfMarks.some(mark => chunkStr.includes(mark))
+      endsWithWaqf: WAQF_MARKS.some(mark => chunkStr.includes(mark)),
     })
   }
   return balanced
@@ -103,8 +120,12 @@ export function splitTranslation(translationText: string, arabicChunks: VerseChu
 
 /**
  * GRAMMAR & MEANING ALGORITHM (No QDC Timestamps)
- * Splits on Quranic stop marks, prevents splitting on "ولا", 
+ * Splits on Quranic stop marks, prevents splitting on "ولا",
  * and relies on proportional audio duration.
+ *
+ * FIX: Orphan protection now only merges truly single-word orphans,
+ * and never merges across a waqf boundary (which would destroy the
+ * semantic break that the waqf mark represents).
  */
 export function splitVerseByWordTimings(
   verseText: string,
@@ -112,19 +133,35 @@ export function splitVerseByWordTimings(
   maxChars = 90
 ): VerseChunk[] {
   if (!verseText || verseText.trim().length === 0) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: 0, charCount: 0, endsWithWaqf: false }]
+    return [{
+      text: verseText,
+      isLastChunk: true,
+      chunkIndex: 0,
+      totalChunks: 1,
+      wordCount: 0,
+      charCount: 0,
+      endsWithWaqf: false,
+    }]
   }
 
   const words = verseText.split(' ').filter(w => w.trim().length > 0)
 
   if (words.length <= 2) {
-    return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: words.length, charCount: countBaseChars(verseText), endsWithWaqf: false }]
+    return [{
+      text: verseText,
+      isLastChunk: true,
+      chunkIndex: 0,
+      totalChunks: 1,
+      wordCount: words.length,
+      charCount: countBaseChars(verseText),
+      endsWithWaqf: WAQF_MARKS.some(mark => verseText.includes(mark)),
+    }]
   }
 
   const baseChunks: string[] = []
   let currentChunkWords: string[] = []
   let currentChars = 0
-  
+
   // GRAMMAR GUARD: Never split after these words
   const dontSplitAfter = ['و', 'ف', 'ب', 'ك', 'ل', 'ولا', 'لا', 'ما', 'يا', 'إن', 'أن', 'هل', 'في', 'من', 'عن', 'على', 'إلى', 'حتى', 'أو', 'ثم', 'إنما', 'إلا', 'فلا']
 
@@ -134,7 +171,7 @@ export function splitVerseByWordTimings(
     currentChars += countBaseChars(word)
 
     const cleanWord = word.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7-\u06E8\u06EA-\u06ED\u08D3-\u08E1\u08E3-\u08FF]/g, '')
-    const hasWaqf = waqfMarks.some(mark => word.includes(mark))
+    const hasWaqf = WAQF_MARKS.some(mark => word.includes(mark))
     const isForbiddenEnd = dontSplitAfter.includes(cleanWord)
     const isTooLong = currentChars >= maxChars
 
@@ -143,7 +180,8 @@ export function splitVerseByWordTimings(
       break
     }
 
-    // Split if we hit a Stop Mark, or if it's getting too long, BUT NEVER if it's a forbidden word like "ولا"
+    // Split if we hit a Stop Mark, or if it's getting too long,
+    // BUT NEVER if it's a forbidden connector word like "ولا"
     if ((hasWaqf || isTooLong) && !isForbiddenEnd) {
       if (currentChars >= 25 || hasWaqf) {
         baseChunks.push(currentChunkWords.join(' '))
@@ -153,10 +191,15 @@ export function splitVerseByWordTimings(
     }
   }
 
-  // ORPHAN PROTECTION
+  // ORPHAN PROTECTION (fixed)
+  // Only merge a truly single-word orphan, AND only if the previous chunk
+  // does NOT end on a waqf mark. Merging after a waqf boundary would
+  // destroy the semantic break and cause the ~120-125s desync issue.
   if (baseChunks.length > 1) {
     const lastChunk = baseChunks[baseChunks.length - 1]
-    if (countWords(lastChunk) <= 2) {
+    const prevChunk = baseChunks[baseChunks.length - 2]
+    const prevEndsWithWaqf = WAQF_MARKS.some(mark => prevChunk.includes(mark))
+    if (countWords(lastChunk) === 1 && !prevEndsWithWaqf) {
       baseChunks[baseChunks.length - 2] += ' ' + lastChunk
       baseChunks.pop()
     }
@@ -169,6 +212,6 @@ export function splitVerseByWordTimings(
     totalChunks: baseChunks.length,
     wordCount: countWords(text),
     charCount: countBaseChars(text),
-    endsWithWaqf: waqfMarks.some(mark => text.includes(mark)),
+    endsWithWaqf: WAQF_MARKS.some(mark => text.includes(mark)),
   }))
 }

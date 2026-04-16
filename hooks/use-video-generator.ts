@@ -175,7 +175,7 @@ function drawFrame(
       const spaceW = ctx.measureText(' ').width
       if (lastLineWidth + spaceW + markerWidth > maxWidth) {
         lines.push(currentLine)
-        lines.push('') 
+        lines.push('')
       } else {
         lines.push(currentLine)
       }
@@ -252,7 +252,7 @@ function drawFrame(
     }
   }
 
-  ctx.restore() 
+  ctx.restore()
 }
 
 async function exportVerseImages(
@@ -282,6 +282,16 @@ function buildDisplaySegments(
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
 
+  // WAQF_BONUS_CHARS: the equivalent "phantom character weight" added to any chunk
+  // that ends on a waqf mark. Reciters pause ~300-500ms at these marks, so giving
+  // the chunk more proportional time fixes the drift at ~33s, ~78s, and ~120s.
+  //
+  // Tune this value if sync still feels off for your specific reciter:
+  //   Slow reciters (Menshawi, Tablawi)  → try 18–22
+  //   Medium reciters (Sudais, Ghamdi)   → 14 (default)
+  //   Fast reciters (Husary, Minshawi fast edition) → try 10–12
+  const WAQF_BONUS_CHARS = 14
+
   for (let i = 0; i < verseTimings.length; i++) {
     const timing = verseTimings[i]
 
@@ -295,40 +305,50 @@ function buildDisplaySegments(
       const verse = verses[verseArrayIdx]
       const verseText = verse.text_uthmani || ''
       const maxChars = displayMode === 'minimal' ? 80 : 90
-      
+
       const chunks = splitVerseByWordTimings(verseText, null, maxChars)
       const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
       const translationChunks = splitTranslation(fullTranslation, chunks)
 
       if (chunks.length === 1) {
-        segments.push({ type: 'verse-chunk', verseIndex: verseArrayIdx, chunkText: undefined, showMarker: true, showTranslationForChunk: showTranslation, translationChunkText: undefined, startMs: timing.startMs, endMs: timing.endMs })
+        segments.push({
+          type: 'verse-chunk',
+          verseIndex: verseArrayIdx,
+          chunkText: undefined,
+          showMarker: true,
+          showTranslationForChunk: showTranslation,
+          translationChunkText: undefined,
+          startMs: timing.startMs,
+          endMs: timing.endMs,
+        })
       } else {
         const actualVerseDuration = timing.endMs - timing.startMs
 
-        // Each chunk's weight = its base chars + a pause bonus if it ends on a waqf mark.
-        // WAQF_PAUSE_CHARS is the equivalent "character cost" of a natural recitation pause.
-        const WAQF_PAUSE_CHARS = 12
-
-        const weights = chunks.map(c => c.charCount + (c.endsWithWaqf ? WAQF_PAUSE_CHARS : 0))
+        // FIX: Weight each chunk by its char count PLUS a bonus for waqf marks.
+        // Pure char-count proportion was causing drift because it ignores the real
+        // pause a reciter makes at waqf points — those pauses consume audio time
+        // but add zero characters. The bonus redistributes that time correctly.
+        const weights = chunks.map(c =>
+          c.charCount + (c.endsWithWaqf ? WAQF_BONUS_CHARS : 0)
+        )
         const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
 
         let cumulativeWeight = 0
-
         for (let j = 0; j < chunks.length; j++) {
-          const chunk = chunks[j];
-          const proportionStart = cumulativeWeight / totalWeight;
-          cumulativeWeight += weights[j];
-          const proportionEnd = cumulativeWeight / totalWeight;
-          
-          let calcStartMs = proportionStart * actualVerseDuration;
-          let calcEndMs = proportionEnd * actualVerseDuration;
+          const chunk = chunks[j]
+          const proportionStart = cumulativeWeight / totalWeight
+          cumulativeWeight += weights[j]
+          const proportionEnd = cumulativeWeight / totalWeight
 
           segments.push({
-            type: 'verse-chunk', verseIndex: verseArrayIdx, chunkText: chunk.text,
-            showMarker: chunk.isLastChunk, showTranslationForChunk: showTranslation,
+            type: 'verse-chunk',
+            verseIndex: verseArrayIdx,
+            chunkText: chunk.text,
+            showMarker: chunk.isLastChunk,
+            showTranslationForChunk: showTranslation,
             translationChunkText: translationChunks[chunk.chunkIndex] || '',
-            startMs: timing.startMs + calcStartMs,
-            endMs: timing.startMs + calcEndMs, 
+            startMs: timing.startMs + proportionStart * actualVerseDuration,
+            endMs: timing.startMs + proportionEnd * actualVerseDuration,
           })
         }
       }
@@ -338,7 +358,10 @@ function buildDisplaySegments(
   return segments
 }
 
-const FADE_DURATION_MS = 180
+// FIX: Reduced from 250ms to 150ms.
+// 250ms fade on short chunks (some are only 1–1.5s of audio) was consuming up to
+// 33% of the chunk's screen time in transition, causing perceived desync on fast phrases.
+const FADE_DURATION_MS = 150
 
 export function useVideoGenerator(): UseVideoGeneratorReturn {
   const [isGenerating, setIsGenerating] = useState(false)
@@ -405,7 +428,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
           const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
           const originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
-          
+
           const proxyUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
 
           const resp = await fetch(proxyUrl)

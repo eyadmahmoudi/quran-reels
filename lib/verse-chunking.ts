@@ -243,13 +243,15 @@ export function splitVerseForPreview(
 
 /**
  * Splits verse text precisely according to QDC word-level timestamps.
- * Gaps between words (e.g., > 300ms) signify breath pauses and become natural chunk boundaries.
- * Falls back to proportional splitting if segments are unavailable.
+ * Identifies natural breath pauses by analyzing the millisecond gaps between words.
+ * Includes orphan-protection to prevent 1-word chunks.
  */
 export function splitVerseByWordTimings(
   verseText: string,
   segments: number[][] | null,
-  maxChars = 90
+  maxChars = 90,
+  surahNumber: number = 0,
+  verseNumber: number = 0
 ): VerseChunk[] {
   if (!verseText || verseText.trim().length === 0) {
     return [{ text: verseText, isLastChunk: true, chunkIndex: 0, totalChunks: 1, wordCount: 0, charCount: 0, startMs: 0, endMs: 0 }]
@@ -264,38 +266,58 @@ export function splitVerseByWordTimings(
 
   // Align segments to words: QDC segments may include bismillah words
   // for verse 1 of each surah, but text_uthmani does not contain them.
-  // Trim excess segments from the front to match word count.
   let alignedSegments = segments
-  if (alignedSegments.length > words.length) {
-    alignedSegments = alignedSegments.slice(alignedSegments.length - words.length)
+  const isFirstVerse = verseNumber === 1;
+  const isNotTawbah = surahNumber !== 9;
+
+  if (isFirstVerse && isNotTawbah && alignedSegments.length > words.length) {
+    const difference = alignedSegments.length - words.length;
+    alignedSegments = alignedSegments.slice(difference);
   }
 
-  // Determine base timeline offset (first word's start time becomes 0)
   const baseMs = alignedSegments[0][1]
-
   const baseChunks: Array<{ text: string; startMs: number; endMs: number }> = []
 
   let currentWords: string[] = []
   let chunkChars = 0
   let chunkStartMs = Math.max(0, alignedSegments[0][1] - baseMs)
 
+  // Configuration for intelligent splitting
+  const PAUSE_THRESHOLD_MS = 350; // A gap larger than 350ms is likely a breath
+  const MIN_CHARS_FOR_CHUNK = 25; // Minimum size for a chunk (prevents choppy early splits)
+
   for (let i = 0; i < words.length; i++) {
     const word = words[i]
     const wordBaseChars = countBaseChars(word)
 
-    // Map word to its segment (or last available if array mismatch)
+    // Current word timing
     const currentSegment = i < alignedSegments.length ? alignedSegments[i] : alignedSegments[alignedSegments.length - 1]
+    
+    // Previous word timing (to calculate the gap)
+    const prevSegment = i > 0 ? (i - 1 < alignedSegments.length ? alignedSegments[i - 1] : alignedSegments[alignedSegments.length - 1]) : currentSegment;
 
-    if (currentWords.length > 0 && chunkChars + 1 + wordBaseChars > maxChars) {
-      // Pushing the current chunk BEFORE this word
-      const prevSegment = i - 1 >= 0 ? (i - 1 < alignedSegments.length ? alignedSegments[i - 1] : alignedSegments[alignedSegments.length - 1]) : currentSegment
+    // Detect a breath: Look at the gap between the end of the last word and the start of this word
+    let isBreathPause = false;
+    if (i > 0) {
+       const gap = currentSegment[1] - prevSegment[2];
+       if (gap >= PAUSE_THRESHOLD_MS) {
+           isBreathPause = true;
+       }
+    }
+
+    const isTooLong = (chunkChars + 1 + wordBaseChars) > maxChars;
+    const isNaturalBreak = isBreathPause && (chunkChars >= MIN_CHARS_FOR_CHUNK);
+
+    // If the chunk hits the max limit, OR the reciter takes a breath (and the chunk is big enough)
+    if (currentWords.length > 0 && (isTooLong || isNaturalBreak)) {
+      // Push the accumulated words as a complete chunk
       baseChunks.push({
         text: currentWords.join(' '),
         startMs: chunkStartMs,
         endMs: Math.max(0, prevSegment[2] - baseMs)
       })
 
-      // Start new chunk with current word
+      // Start a fresh chunk with the current word
       currentWords = [word]
       chunkChars = wordBaseChars
       chunkStartMs = Math.max(0, currentSegment[1] - baseMs)
@@ -305,7 +327,7 @@ export function splitVerseByWordTimings(
     }
   }
 
-  // push whatever remains
+  // Push whatever is left at the end of the verse
   if (currentWords.length > 0) {
     const lastIdx = words.length - 1
     const lastSegment = lastIdx < alignedSegments.length ? alignedSegments[lastIdx] : alignedSegments[alignedSegments.length - 1]
@@ -314,6 +336,21 @@ export function splitVerseByWordTimings(
       startMs: chunkStartMs,
       endMs: Math.max(0, lastSegment[2] - baseMs)
     })
+  }
+
+  // --- ORPHAN PROTECTION ---
+  // Fix the "1 word chunk" bug at the end of a verse. 
+  // If the very last chunk has only 1 or 2 words, merge it into the previous chunk.
+  if (baseChunks.length > 1) {
+      const lastChunk = baseChunks[baseChunks.length - 1];
+      const prevChunk = baseChunks[baseChunks.length - 2];
+      const lastChunkWords = lastChunk.text.split(' ').filter(w => w.trim().length > 0).length;
+
+      if (lastChunkWords <= 2) {
+         prevChunk.text += ' ' + lastChunk.text;
+         prevChunk.endMs = lastChunk.endMs;
+         baseChunks.pop(); // Remove the tiny trailing chunk entirely
+      }
   }
 
   return baseChunks.map((c, idx) => ({

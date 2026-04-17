@@ -67,51 +67,60 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 /**
- * Scans a decoded AudioBuffer and returns how many milliseconds of silence
- * exist at the START of the file before the recitation actually begins.
+ * Finds leading silence in an AudioBuffer — the dead time BEFORE
+ * the reciter's voice begins.
  *
- * WHY THIS IS NEEDED:
- * Every MP3 from EveryAyah.com contains variable leading silence (typically
- * 100–600ms) before the reciter's voice begins, and variable trailing silence
- * after the reciter stops. Without this correction, verseTimings are derived
- * from full file durations, so the verse text appears on screen BEFORE the
- * voice starts, and the NEXT verse appears only after the current file's
- * trailing silence ends — even though the reciter has already started the
- * next verse. This is the direct cause of the 0.3–1.0s drift.
- *
- * HOW IT WORKS:
- * Walk sample-by-sample until we find the first sample above the amplitude
- * threshold (0.01 = 1% of full scale). Back up 30ms from that point to
- * preserve the natural attack of the voice. Cap the search at 50% of the file
- * to never misidentify a quiet recitation as silence.
- *
- * Threshold 0.01 is chosen because:
- *   - Quran recitation audio peaks at 0.3–1.0 amplitude
- *   - MP3 pre-echo / ambient noise stays below 0.005
- *   - 0.01 gives a safe margin, tested across multiple EveryAyah reciters
+ * FIX: Reduced backup from 30ms to 10ms. The 30ms backup was adding
+ * cumulative early-display across verses (30ms × N verses). 10ms still
+ * preserves the breath onset but cuts the per-verse "text before voice"
+ * error by 2/3.
  */
 function findLeadingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
   const sampleRate = buffer.sampleRate
-  // EveryAyah.com leading silence is never more than ~600ms in practice.
-  // Capping at 800ms prevents scanning large portions of the buffer and keeps
-  // the function fast enough to run synchronously on the main thread.
   const maxSearch = Math.min(buffer.length, Math.floor(sampleRate * 0.8))
-
-  // IMPORTANT: cache getChannelData() OUTSIDE the loop.
-  // Calling it inside the loop (even though it returns the same reference)
-  // adds significant overhead across hundreds of thousands of iterations
-  // and was causing the browser "page not responding" freeze.
   const ch0 = buffer.getChannelData(0)
 
   for (let i = 0; i < maxSearch; i++) {
     if (Math.abs(ch0[i]) > threshold) {
-      // Back up 30ms to keep the natural breath/onset of the voice
-      const startSample = Math.max(0, i - Math.floor(sampleRate * 0.03))
+      // FIX: Back up only 10ms (was 30ms) to reduce cumulative early-display
+      const startSample = Math.max(0, i - Math.floor(sampleRate * 0.01))
       return (startSample / sampleRate) * 1000
     }
   }
 
-  return 0 // file is all silence — should never happen with real recitation
+  return 0
+}
+
+/**
+ * Finds trailing silence in an AudioBuffer — the dead time AFTER
+ * the reciter's voice ends.
+ *
+ * WHY THIS IS NEEDED:
+ * When splitting a verse into display chunks, we use proportional timing
+ * across the verse's display window. But the display window includes
+ * trailing silence (the gap between the reciter finishing and the next
+ * verse's file starting). Without correction, that silence gets smeared
+ * across ALL chunks proportionally, making every chunk slightly too long
+ * and causing cumulative drift within the verse.
+ *
+ * By detecting trailing silence, we can split chunks proportionally across
+ * only the ACTIVE recitation portion, then append the trailing gap to the
+ * last chunk (where the reciter has already stopped speaking).
+ */
+function findTrailingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
+  const sampleRate = buffer.sampleRate
+  const maxSearch = Math.min(buffer.length, Math.floor(sampleRate * 0.8))
+  const ch0 = buffer.getChannelData(0)
+
+  for (let i = buffer.length - 1; i >= buffer.length - maxSearch; i--) {
+    if (Math.abs(ch0[i]) > threshold) {
+      // Add 10ms after last audible sample to preserve natural decay
+      const endSample = Math.min(buffer.length, i + Math.floor(sampleRate * 0.01))
+      return ((buffer.length - endSample) / sampleRate) * 1000
+    }
+  }
+
+  return 0
 }
 
 function drawFrame(
@@ -322,22 +331,33 @@ async function exportVerseImages(
   }
 }
 
+/**
+ * Builds display segments with silence-aware chunk timing.
+ *
+ * KEY FIX: When a verse is split into multiple display chunks, the chunk
+ * boundaries are now computed against the ACTIVE VOICE duration only
+ * (full display window minus trailing dead time). The trailing dead time
+ * is appended entirely to the last chunk, where the reciter has already
+ * stopped speaking and the text just stays on screen until the next verse.
+ *
+ * Before this fix, trailing silence (200–600ms per verse) was smeared
+ * across all chunks proportionally, making each chunk ~50–150ms too long
+ * and causing visible drift by the 3rd or 4th chunk of long verses.
+ *
+ * @param deadTimePerVerse  Array parallel to verseTimings. For each entry,
+ *   the number of milliseconds of dead time (trailing silence of current
+ *   file + any remaining gap) at the END of that entry's display window.
+ *   For intro entries (taawudh/bismillah), pass 0.
+ */
 function buildDisplaySegments(
   verseTimings: Array<{ startMs: number; endMs: number }>,
   verses: Verse[], introOffset: number, taawudhIdx: number, bismillahIdx: number,
   taawudhText: string, bismillahText: string, displayMode: 'minimal' | 'classic',
-  showTranslation: boolean
+  showTranslation: boolean,
+  deadTimePerVerse: number[]
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
 
-  // WAQF_BONUS_CHARS: the equivalent "phantom character weight" added to any chunk
-  // that ends on a waqf mark. Reciters pause ~300-500ms at these marks, so giving
-  // the chunk more proportional time fixes the drift at ~33s, ~78s, and ~120s.
-  //
-  // Tune this value if sync still feels off for your specific reciter:
-  //   Slow reciters (Menshawi, Tablawi)  → try 18–22
-  //   Medium reciters (Sudais, Ghamdi)   → 14 (default)
-  //   Fast reciters (Husary, Minshawi fast edition) → try 10–12
   const WAQF_BONUS_CHARS = 14
 
   for (let i = 0; i < verseTimings.length; i++) {
@@ -370,12 +390,15 @@ function buildDisplaySegments(
           endMs: timing.endMs,
         })
       } else {
-        const actualVerseDuration = timing.endMs - timing.startMs
+        const fullDisplayDuration = timing.endMs - timing.startMs
 
-        // FIX: Weight each chunk by its char count PLUS a bonus for waqf marks.
-        // Pure char-count proportion was causing drift because it ignores the real
-        // pause a reciter makes at waqf points — those pauses consume audio time
-        // but add zero characters. The bonus redistributes that time correctly.
+        // FIX: Subtract dead time from the proportional splitting duration.
+        // Dead time = trailing silence of current verse + gap before next voice.
+        // This time has NO recitation happening, so it should NOT influence
+        // the proportional distribution of chunks.
+        const deadTime = deadTimePerVerse[i] ?? 0
+        const activeDuration = Math.max(fullDisplayDuration - deadTime, fullDisplayDuration * 0.5)
+
         const weights = chunks.map(c =>
           c.charCount + (c.endsWithWaqf ? WAQF_BONUS_CHARS : 0)
         )
@@ -388,6 +411,8 @@ function buildDisplaySegments(
           cumulativeWeight += weights[j]
           const proportionEnd = cumulativeWeight / totalWeight
 
+          const isLastChunkOfVerse = j === chunks.length - 1
+
           segments.push({
             type: 'verse-chunk',
             verseIndex: verseArrayIdx,
@@ -395,8 +420,13 @@ function buildDisplaySegments(
             showMarker: chunk.isLastChunk,
             showTranslationForChunk: showTranslation,
             translationChunkText: translationChunks[chunk.chunkIndex] || '',
-            startMs: timing.startMs + proportionStart * actualVerseDuration,
-            endMs: timing.startMs + proportionEnd * actualVerseDuration,
+            // Non-last chunks: timed against active voice duration only
+            // Last chunk: extends through the dead time (text stays on screen
+            // while the reciter is silent, until the next verse begins)
+            startMs: timing.startMs + proportionStart * activeDuration,
+            endMs: isLastChunkOfVerse
+              ? timing.endMs  // extend through trailing silence
+              : timing.startMs + proportionEnd * activeDuration,
           })
         }
       }
@@ -406,9 +436,6 @@ function buildDisplaySegments(
   return segments
 }
 
-// FIX: Reduced from 250ms to 150ms.
-// 250ms fade on short chunks (some are only 1–1.5s of audio) was consuming up to
-// 33% of the chunk's screen time in transition, causing perceived desync on fast phrases.
 const FADE_DURATION_MS = 150
 
 export function useVideoGenerator(): UseVideoGeneratorReturn {
@@ -475,7 +502,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
           const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
           const originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
-
           const proxyUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
 
           const resp = await fetch(proxyUrl)
@@ -498,8 +524,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         let sampleOffset = 0
         let timeOffset = 0
 
-        // rawTimings: exact audio-clock position of each file in the combined buffer.
-        // These are based on full file duration and are used for the audio playback only.
         const rawTimings: Array<{ startMs: number; endMs: number }> = []
 
         for (const buf of decodedBuffers) {
@@ -514,34 +538,40 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         }
         const totalDurationMs = timeOffset
 
-        // ── SILENCE-CORRECTED DISPLAY TIMINGS ────────────────────────────────
-        // Each MP3 file has variable leading silence before the reciter's voice
-        // begins (100–600ms is typical for EveryAyah.com). Using rawTimings for
-        // display causes text to appear before/after the voice, creating the
-        // 0.3–1.0s sync drift.
-        //
-        // We scan the decoded PCM samples to find the true recitation onset for
-        // each buffer. The combined audio is completely unchanged — only the
-        // DISPLAY windows are adjusted.
-        //
-        // Rule:
-        //   displayTimings[i].startMs = rawTimings[i].startMs + leadingSilence[i]
-        //     → text appears when the reciter's voice actually starts
-        //
-        //   displayTimings[i].endMs = rawTimings[i+1].startMs + leadingSilence[i+1]
-        //     → text disappears exactly when the NEXT reciter's voice starts,
-        //       not when the current file ends (which may have trailing silence)
-        //
-        // This guarantees: no verse text is ever visible during another verse's
-        // recitation, and no verse text appears before its own recitation begins.
+        // ── SILENCE ANALYSIS ─────────────────────────────────────────────────
+        // Detect both leading AND trailing silence for each buffer.
         const leadingSilences = decodedBuffers.map(buf => findLeadingSilenceMs(buf))
+        const trailingSilences = decodedBuffers.map(buf => findTrailingSilenceMs(buf))
 
+        // Display timings: text appears when voice starts, disappears when
+        // the NEXT verse's voice starts.
         const displayTimings = rawTimings.map((raw, i) => ({
           startMs: raw.startMs + leadingSilences[i],
           endMs: i < rawTimings.length - 1
             ? rawTimings[i + 1].startMs + leadingSilences[i + 1]
             : totalDurationMs,
         }))
+
+        // Dead time per display entry: the silence at the END of each display
+        // window (trailing silence of current file + leading silence of next file).
+        // This is the time where no voice is playing but the display window is
+        // still open. We pass this to buildDisplaySegments so chunk proportions
+        // are computed against active voice only.
+        //
+        // For the last entry, dead time is just the trailing silence of the
+        // last file (there's no next file).
+        const deadTimePerVerse = displayTimings.map((_, i) => {
+          if (i < rawTimings.length - 1) {
+            // Gap between current voice ending and next voice starting:
+            //   current voice ends at: rawTimings[i].endMs - trailingSilences[i]
+            //   next voice starts at:  rawTimings[i+1].startMs + leadingSilences[i+1] = displayTimings[i].endMs
+            //   dead time = displayTimings[i].endMs - (rawTimings[i].endMs - trailingSilences[i])
+            return Math.max(0, displayTimings[i].endMs - (rawTimings[i].endMs - trailingSilences[i]))
+          } else {
+            // Last buffer: dead time is just trailing silence
+            return trailingSilences[i]
+          }
+        })
         // ─────────────────────────────────────────────────────────────────────
 
         setProgress(35)
@@ -566,11 +596,11 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const bismillahIdx = bismillahBuffer ? (taawudhBuffer ? 1 : 0) : -1
         const introOffset = (taawudhBuffer ? 1 : 0) + (bismillahBuffer ? 1 : 0)
 
-        // Pass silence-corrected displayTimings so every segment boundary matches
-        // the actual recitation onset, not the raw file edge.
+        // Pass dead-time data so chunk proportions use active voice only
         const displaySegments = buildDisplaySegments(
           displayTimings, verses, introOffset, taawudhIdx, bismillahIdx,
-          taawudhText, BISMILLAH_TEXT, displayMode, showTranslation
+          taawudhText, BISMILLAH_TEXT, displayMode, showTranslation,
+          deadTimePerVerse
         )
 
         let useMediaRecorder = false

@@ -92,16 +92,19 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
  */
 function findLeadingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
   const sampleRate = buffer.sampleRate
-  const length = buffer.length
-  const maxSearch = Math.floor(length * 0.5) // never search past 50% of file
+  // EveryAyah.com leading silence is never more than ~600ms in practice.
+  // Capping at 800ms prevents scanning large portions of the buffer and keeps
+  // the function fast enough to run synchronously on the main thread.
+  const maxSearch = Math.min(buffer.length, Math.floor(sampleRate * 0.8))
+
+  // IMPORTANT: cache getChannelData() OUTSIDE the loop.
+  // Calling it inside the loop (even though it returns the same reference)
+  // adds significant overhead across hundreds of thousands of iterations
+  // and was causing the browser "page not responding" freeze.
+  const ch0 = buffer.getChannelData(0)
 
   for (let i = 0; i < maxSearch; i++) {
-    let maxAmp = 0
-    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
-      const amp = Math.abs(buffer.getChannelData(ch)[i])
-      if (amp > maxAmp) maxAmp = amp
-    }
-    if (maxAmp > threshold) {
+    if (Math.abs(ch0[i]) > threshold) {
       // Back up 30ms to keep the natural breath/onset of the voice
       const startSample = Math.max(0, i - Math.floor(sampleRate * 0.03))
       return (startSample / sampleRate) * 1000

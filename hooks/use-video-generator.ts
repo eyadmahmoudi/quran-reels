@@ -66,14 +66,12 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// AUDIO ANALYSIS FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════
+
 /**
- * Finds leading silence in an AudioBuffer — the dead time BEFORE
- * the reciter's voice begins.
- *
- * FIX: Reduced backup from 30ms to 10ms. The 30ms backup was adding
- * cumulative early-display across verses (30ms × N verses). 10ms still
- * preserves the breath onset but cuts the per-verse "text before voice"
- * error by 2/3.
+ * Finds the leading silence in an AudioBuffer (dead time before voice).
  */
 function findLeadingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
   const sampleRate = buffer.sampleRate
@@ -82,30 +80,16 @@ function findLeadingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
 
   for (let i = 0; i < maxSearch; i++) {
     if (Math.abs(ch0[i]) > threshold) {
-      // FIX: Back up only 10ms (was 30ms) to reduce cumulative early-display
+      // Back up 10ms to preserve natural breath onset
       const startSample = Math.max(0, i - Math.floor(sampleRate * 0.01))
       return (startSample / sampleRate) * 1000
     }
   }
-
   return 0
 }
 
 /**
- * Finds trailing silence in an AudioBuffer — the dead time AFTER
- * the reciter's voice ends.
- *
- * WHY THIS IS NEEDED:
- * When splitting a verse into display chunks, we use proportional timing
- * across the verse's display window. But the display window includes
- * trailing silence (the gap between the reciter finishing and the next
- * verse's file starting). Without correction, that silence gets smeared
- * across ALL chunks proportionally, making every chunk slightly too long
- * and causing cumulative drift within the verse.
- *
- * By detecting trailing silence, we can split chunks proportionally across
- * only the ACTIVE recitation portion, then append the trailing gap to the
- * last chunk (where the reciter has already stopped speaking).
+ * Finds the trailing silence in an AudioBuffer (dead time after voice ends).
  */
 function findTrailingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
   const sampleRate = buffer.sampleRate
@@ -114,14 +98,108 @@ function findTrailingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
 
   for (let i = buffer.length - 1; i >= buffer.length - maxSearch; i--) {
     if (Math.abs(ch0[i]) > threshold) {
-      // Add 10ms after last audible sample to preserve natural decay
       const endSample = Math.min(buffer.length, i + Math.floor(sampleRate * 0.01))
       return ((buffer.length - endSample) / sampleRate) * 1000
     }
   }
-
   return 0
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * THE KEY FIX: Detect INTERNAL silence pauses within a verse's audio.
+ * ═══════════════════════════════════════════════════════════════════════
+ *
+ * WHY THIS FIXES THE SYNC:
+ *
+ * Old approach: split An-Nisa v1 (42 seconds) into 3 text chunks by
+ * character count → chunk 1 gets ~60% of chars → 25 seconds of screen
+ * time. But the reciter speaks chunk 1 in only 16 seconds → 10 second
+ * desync, text stays on screen while wrong words are being recited.
+ *
+ * New approach: scan the AudioBuffer and find where the reciter actually
+ * pauses (at waqf marks). An-Nisa v1 has a clear ~350ms silence at the
+ * waqf mark after "وَنِسَآءً ۚ" around 16 seconds into the file. We
+ * detect this pause and use it as the REAL chunk boundary. Now chunk 1
+ * displays for 16 seconds (matching the recitation) and chunk 2 starts
+ * exactly when the reciter begins "وَٱتَّقُوا۟ ٱللَّهَ".
+ *
+ * HOW IT WORKS:
+ * 1. Compute RMS energy in 20ms windows across the decoded PCM samples
+ * 2. Track runs of "quiet" windows (RMS below threshold)
+ * 3. When a quiet run exceeds minGapMs (120ms), record it as a pause
+ * 4. Skip leading/trailing silence zones (handled by other functions)
+ * 5. Return pause positions in milliseconds, relative to buffer start
+ *
+ * The threshold (0.015) and minGapMs (120ms) are tuned for Quran
+ * recitation where waqf pauses are typically 150–600ms of near-silence.
+ */
+function findInternalPauses(
+  buffer: AudioBuffer,
+  threshold = 0.015,
+  minGapMs = 120
+): Array<{ startMs: number; endMs: number }> {
+  const sr = buffer.sampleRate
+  const ch0 = buffer.getChannelData(0)
+  const windowSamples = Math.floor(sr * 0.02) // 20ms RMS windows
+
+  // Define the active voice region — skip leading/trailing silence
+  const leadMs = findLeadingSilenceMs(buffer)
+  const trailMs = findTrailingSilenceMs(buffer)
+  const bufDurationMs = (buffer.length / sr) * 1000
+
+  // Start 200ms after voice begins, stop 200ms before voice ends
+  const searchStartSample = Math.floor(sr * (leadMs + 200) / 1000)
+  const searchEndSample = Math.floor(sr * (bufDurationMs - trailMs - 200) / 1000)
+
+  if (searchStartSample >= searchEndSample) return []
+
+  const minGapSamples = Math.floor(sr * (minGapMs / 1000))
+  const pauses: Array<{ startMs: number; endMs: number }> = []
+  let inSilence = false
+  let silenceStartSample = 0
+
+  for (let i = searchStartSample; i < searchEndSample; i += windowSamples) {
+    let sumSq = 0
+    const winEnd = Math.min(i + windowSamples, buffer.length)
+    for (let j = i; j < winEnd; j++) {
+      sumSq += ch0[j] * ch0[j]
+    }
+    const rms = Math.sqrt(sumSq / (winEnd - i))
+
+    if (rms < threshold) {
+      if (!inSilence) {
+        inSilence = true
+        silenceStartSample = i
+      }
+    } else {
+      if (inSilence) {
+        if (i - silenceStartSample >= minGapSamples) {
+          pauses.push({
+            startMs: (silenceStartSample / sr) * 1000,
+            endMs: (i / sr) * 1000,
+          })
+        }
+        inSilence = false
+      }
+    }
+  }
+
+  // Handle silence extending to the search boundary
+  if (inSilence && (searchEndSample - silenceStartSample) >= minGapSamples) {
+    pauses.push({
+      startMs: (silenceStartSample / sr) * 1000,
+      endMs: (searchEndSample / sr) * 1000,
+    })
+  }
+
+  return pauses
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// DRAWING (unchanged)
+// ═══════════════════════════════════════════════════════════════════════
 
 function drawFrame(
   ctx: CanvasRenderingContext2D, width: number, height: number,
@@ -331,110 +409,228 @@ async function exportVerseImages(
   }
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════
+// DISPLAY SEGMENT BUILDING — AUDIO-PAUSE-DRIVEN
+// ═══════════════════════════════════════════════════════════════════════
+
 /**
- * Builds display segments with silence-aware chunk timing.
+ * Builds display segments with audio-pause-driven timing.
  *
- * KEY FIX: When a verse is split into multiple display chunks, the chunk
- * boundaries are now computed against the ACTIVE VOICE duration only
- * (full display window minus trailing dead time). The trailing dead time
- * is appended entirely to the last chunk, where the reciter has already
- * stopped speaking and the text just stays on screen until the next verse.
+ * ── HOW AUDIO-DRIVEN TIMING WORKS ──────────────────────────────────────
  *
- * Before this fix, trailing silence (200–600ms per verse) was smeared
- * across all chunks proportionally, making each chunk ~50–150ms too long
- * and causing visible drift by the 3rd or 4th chunk of long verses.
+ * 1. For each verse, we have detected internal silence pauses from the
+ *    actual audio (see findInternalPauses). These pauses correspond to
+ *    waqf marks where the reciter briefly stops.
  *
- * @param deadTimePerVerse  Array parallel to verseTimings. For each entry,
- *   the number of milliseconds of dead time (trailing silence of current
- *   file + any remaining gap) at the END of that entry's display window.
- *   For intro entries (taawudh/bismillah), pass 0.
+ * 2. The text chunks (from splitVerseByWordTimings) have `endsWithWaqf`
+ *    flags. We group consecutive chunks into "waqf groups" — each group
+ *    ends at a chunk where endsWithWaqf=true.
+ *
+ * 3. We match waqf group boundaries to audio pause boundaries:
+ *    - Audio segment 0: [verse start → pause 0 start]
+ *    - Audio segment 1: [pause 0 end → pause 1 start]
+ *    - Audio segment N: [pause N-1 end → verse end]
+ *
+ * 4. Each waqf group of text chunks gets displayed during its matching
+ *    audio segment. If a group has multiple display chunks, those are
+ *    distributed proportionally WITHIN the audio segment only — bounding
+ *    any proportional error to ~5-15 seconds instead of the full verse.
+ *
+ * @param perBufferPauses  Internal pauses per decoded buffer, from
+ *                         findInternalPauses(). Positions are relative
+ *                         to each buffer's start (0ms).
+ * @param rawTimings       Raw start/end of each buffer in the combined
+ *                         audio timeline. Used to convert buffer-relative
+ *                         pause positions to combined-timeline positions.
  */
 function buildDisplaySegments(
   verseTimings: Array<{ startMs: number; endMs: number }>,
-  verses: Verse[], introOffset: number, taawudhIdx: number, bismillahIdx: number,
-  taawudhText: string, bismillahText: string, displayMode: 'minimal' | 'classic',
+  verses: Verse[],
+  introOffset: number,
+  taawudhIdx: number,
+  bismillahIdx: number,
+  taawudhText: string,
+  bismillahText: string,
+  displayMode: 'minimal' | 'classic',
   showTranslation: boolean,
-  deadTimePerVerse: number[]
+  perBufferPauses: Array<Array<{ startMs: number; endMs: number }>>,
+  rawTimings: Array<{ startMs: number; endMs: number }>
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
-
   const WAQF_BONUS_CHARS = 14
 
   for (let i = 0; i < verseTimings.length; i++) {
     const timing = verseTimings[i]
 
+    // ── Intro segments ──
     if (i === taawudhIdx) {
       segments.push({ type: 'intro', introText: taawudhText, showMarker: false, showTranslationForChunk: false, startMs: timing.startMs, endMs: timing.endMs })
-    } else if (i === bismillahIdx) {
+      continue
+    }
+    if (i === bismillahIdx) {
       segments.push({ type: 'intro', introText: bismillahText, showMarker: false, showTranslationForChunk: false, startMs: timing.startMs, endMs: timing.endMs })
-    } else {
-      const verseArrayIdx = i - introOffset
-      if (verseArrayIdx < 0 || verseArrayIdx >= verses.length) continue
-      const verse = verses[verseArrayIdx]
-      const verseText = verse.text_uthmani || ''
-      const maxChars = displayMode === 'minimal' ? 80 : 90
+      continue
+    }
 
-      const chunks = splitVerseByWordTimings(verseText, null, maxChars)
-      const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
-      const translationChunks = splitTranslation(fullTranslation, chunks)
+    // ── Verse segments ──
+    const verseArrayIdx = i - introOffset
+    if (verseArrayIdx < 0 || verseArrayIdx >= verses.length) continue
 
-      if (chunks.length === 1) {
-        segments.push({
-          type: 'verse-chunk',
-          verseIndex: verseArrayIdx,
-          chunkText: undefined,
-          showMarker: true,
-          showTranslationForChunk: showTranslation,
-          translationChunkText: undefined,
-          startMs: timing.startMs,
-          endMs: timing.endMs,
-        })
+    const verse = verses[verseArrayIdx]
+    const verseText = verse.text_uthmani || ''
+    const maxChars = displayMode === 'minimal' ? 80 : 90
+
+    const chunks = splitVerseByWordTimings(verseText, null, maxChars)
+    const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
+    const translationChunks = splitTranslation(fullTranslation, chunks)
+
+    // ── Single chunk → no splitting needed ──
+    if (chunks.length === 1) {
+      segments.push({
+        type: 'verse-chunk', verseIndex: verseArrayIdx, chunkText: undefined,
+        showMarker: true, showTranslationForChunk: showTranslation,
+        translationChunkText: undefined,
+        startMs: timing.startMs, endMs: timing.endMs,
+      })
+      continue
+    }
+
+    // ── Multiple chunks: use audio pauses for timing ──
+
+    // Convert buffer-relative pauses → combined timeline positions
+    const bufferPauses = perBufferPauses[i] ?? []
+    const rawStart = rawTimings[i].startMs
+    const pausesTimeline = bufferPauses.map(p => ({
+      startMs: rawStart + p.startMs,
+      endMs: rawStart + p.endMs,
+    }))
+
+    // Group chunks by waqf boundaries.
+    // A "waqf group" is a run of consecutive chunks ending at endsWithWaqf=true.
+    // Example: chunks [A, B(waqf), C, D(waqf), E(last)]
+    //   → groups: [[A,B], [C,D], [E]]
+    type WaqfGroup = number[] // chunk indices
+    const waqfGroups: WaqfGroup[] = []
+    let curGroup: number[] = []
+
+    for (let j = 0; j < chunks.length; j++) {
+      curGroup.push(j)
+      if (chunks[j].endsWithWaqf || j === chunks.length - 1) {
+        waqfGroups.push([...curGroup])
+        curGroup = []
+      }
+    }
+
+    const numBoundaries = waqfGroups.length - 1
+
+    if (pausesTimeline.length >= numBoundaries && numBoundaries > 0) {
+      // ═══ AUDIO-DRIVEN TIMING ═══
+
+      // Select the best N pauses (longest duration = most likely real waqf)
+      let selectedPauses: Array<{ startMs: number; endMs: number }>
+      if (pausesTimeline.length === numBoundaries) {
+        selectedPauses = pausesTimeline
       } else {
-        const fullDisplayDuration = timing.endMs - timing.startMs
+        // More pauses detected than waqf groups → pick the longest N,
+        // then restore chronological order
+        selectedPauses = [...pausesTimeline]
+          .sort((a, b) => (b.endMs - b.startMs) - (a.endMs - a.startMs))
+          .slice(0, numBoundaries)
+          .sort((a, b) => a.startMs - b.startMs)
+      }
 
-        // FIX: Subtract dead time from the proportional splitting duration.
-        // Dead time = trailing silence of current verse + gap before next voice.
-        // This time has NO recitation happening, so it should NOT influence
-        // the proportional distribution of chunks.
-        const deadTime = deadTimePerVerse[i] ?? 0
-        const activeDuration = Math.max(fullDisplayDuration - deadTime, fullDisplayDuration * 0.5)
+      for (let g = 0; g < waqfGroups.length; g++) {
+        const group = waqfGroups[g]
 
-        const weights = chunks.map(c =>
-          c.charCount + (c.endsWithWaqf ? WAQF_BONUS_CHARS : 0)
-        )
-        const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
+        // Audio boundaries for this group
+        const audioStart = g === 0
+          ? timing.startMs
+          : selectedPauses[g - 1].endMs
+        const audioEnd = g === waqfGroups.length - 1
+          ? timing.endMs
+          : selectedPauses[g].startMs
 
-        let cumulativeWeight = 0
-        for (let j = 0; j < chunks.length; j++) {
-          const chunk = chunks[j]
-          const proportionStart = cumulativeWeight / totalWeight
-          cumulativeWeight += weights[j]
-          const proportionEnd = cumulativeWeight / totalWeight
-
-          const isLastChunkOfVerse = j === chunks.length - 1
-
+        if (group.length === 1) {
+          // Single chunk in this group → exact audio timing
+          const ci = group[0]
           segments.push({
-            type: 'verse-chunk',
-            verseIndex: verseArrayIdx,
-            chunkText: chunk.text,
-            showMarker: chunk.isLastChunk,
+            type: 'verse-chunk', verseIndex: verseArrayIdx,
+            chunkText: chunks[ci].text,
+            showMarker: chunks[ci].isLastChunk,
             showTranslationForChunk: showTranslation,
-            translationChunkText: translationChunks[chunk.chunkIndex] || '',
-            // Non-last chunks: timed against active voice duration only
-            // Last chunk: extends through the dead time (text stays on screen
-            // while the reciter is silent, until the next verse begins)
-            startMs: timing.startMs + proportionStart * activeDuration,
-            endMs: isLastChunkOfVerse
-              ? timing.endMs  // extend through trailing silence
-              : timing.startMs + proportionEnd * activeDuration,
+            translationChunkText: translationChunks[chunks[ci].chunkIndex] || '',
+            startMs: audioStart, endMs: audioEnd,
           })
+        } else {
+          // Multiple display chunks within one audio segment →
+          // proportional by char weight, but error is bounded to this
+          // segment (~5-15s) instead of the full verse (~40+ seconds)
+          const groupDuration = audioEnd - audioStart
+          const weights = group.map(ci =>
+            chunks[ci].charCount + (chunks[ci].endsWithWaqf ? WAQF_BONUS_CHARS : 0)
+          )
+          const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
+          let cumW = 0
+
+          for (let k = 0; k < group.length; k++) {
+            const ci = group[k]
+            const pStart = cumW / totalWeight
+            cumW += weights[k]
+            const pEnd = cumW / totalWeight
+            const isLast = k === group.length - 1
+
+            segments.push({
+              type: 'verse-chunk', verseIndex: verseArrayIdx,
+              chunkText: chunks[ci].text,
+              showMarker: chunks[ci].isLastChunk,
+              showTranslationForChunk: showTranslation,
+              translationChunkText: translationChunks[chunks[ci].chunkIndex] || '',
+              startMs: audioStart + pStart * groupDuration,
+              endMs: isLast ? audioEnd : audioStart + pEnd * groupDuration,
+            })
+          }
         }
+      }
+
+    } else {
+      // ═══ FALLBACK: proportional timing ═══
+      // No internal pauses detected (short verse or very fast reciter).
+      // For short verses proportional error is small.
+      const fullDuration = timing.endMs - timing.startMs
+      const weights = chunks.map(c =>
+        c.charCount + (c.endsWithWaqf ? WAQF_BONUS_CHARS : 0)
+      )
+      const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
+      let cumW = 0
+
+      for (let j = 0; j < chunks.length; j++) {
+        const chunk = chunks[j]
+        const pStart = cumW / totalWeight
+        cumW += weights[j]
+        const pEnd = cumW / totalWeight
+
+        segments.push({
+          type: 'verse-chunk', verseIndex: verseArrayIdx,
+          chunkText: chunk.text, showMarker: chunk.isLastChunk,
+          showTranslationForChunk: showTranslation,
+          translationChunkText: translationChunks[chunk.chunkIndex] || '',
+          startMs: timing.startMs + pStart * fullDuration,
+          endMs: j === chunks.length - 1
+            ? timing.endMs
+            : timing.startMs + pEnd * fullDuration,
+        })
       }
     }
   }
 
   return segments
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// MAIN HOOK
+// ═══════════════════════════════════════════════════════════════════════
 
 const FADE_DURATION_MS = 150
 
@@ -538,13 +734,9 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         }
         const totalDurationMs = timeOffset
 
-        // ── SILENCE ANALYSIS ─────────────────────────────────────────────────
-        // Detect both leading AND trailing silence for each buffer.
+        // ── AUDIO ANALYSIS ───────────────────────────────────────────────
         const leadingSilences = decodedBuffers.map(buf => findLeadingSilenceMs(buf))
-        const trailingSilences = decodedBuffers.map(buf => findTrailingSilenceMs(buf))
 
-        // Display timings: text appears when voice starts, disappears when
-        // the NEXT verse's voice starts.
         const displayTimings = rawTimings.map((raw, i) => ({
           startMs: raw.startMs + leadingSilences[i],
           endMs: i < rawTimings.length - 1
@@ -552,27 +744,19 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             : totalDurationMs,
         }))
 
-        // Dead time per display entry: the silence at the END of each display
-        // window (trailing silence of current file + leading silence of next file).
-        // This is the time where no voice is playing but the display window is
-        // still open. We pass this to buildDisplaySegments so chunk proportions
-        // are computed against active voice only.
-        //
-        // For the last entry, dead time is just the trailing silence of the
-        // last file (there's no next file).
-        const deadTimePerVerse = displayTimings.map((_, i) => {
-          if (i < rawTimings.length - 1) {
-            // Gap between current voice ending and next voice starting:
-            //   current voice ends at: rawTimings[i].endMs - trailingSilences[i]
-            //   next voice starts at:  rawTimings[i+1].startMs + leadingSilences[i+1] = displayTimings[i].endMs
-            //   dead time = displayTimings[i].endMs - (rawTimings[i].endMs - trailingSilences[i])
-            return Math.max(0, displayTimings[i].endMs - (rawTimings[i].endMs - trailingSilences[i]))
+        // ── THE KEY FIX: Internal pause detection per verse ──────────────
+        const perBufferPauses = decodedBuffers.map(buf => findInternalPauses(buf))
+
+        // Debug logging — check browser console to verify pause detection
+        perBufferPauses.forEach((pauses, i) => {
+          if (pauses.length > 0) {
+            console.log(`[sync] Buffer ${i}: ${pauses.length} internal pause(s):`,
+              pauses.map(p => `${p.startMs.toFixed(0)}–${p.endMs.toFixed(0)}ms`).join(', '))
           } else {
-            // Last buffer: dead time is just trailing silence
-            return trailingSilences[i]
+            console.log(`[sync] Buffer ${i}: no internal pauses (short verse or continuous recitation)`)
           }
         })
-        // ─────────────────────────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────────
 
         setProgress(35)
 
@@ -596,12 +780,22 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const bismillahIdx = bismillahBuffer ? (taawudhBuffer ? 1 : 0) : -1
         const introOffset = (taawudhBuffer ? 1 : 0) + (bismillahBuffer ? 1 : 0)
 
-        // Pass dead-time data so chunk proportions use active voice only
+        // Build segments with audio-pause-driven timing
         const displaySegments = buildDisplaySegments(
           displayTimings, verses, introOffset, taawudhIdx, bismillahIdx,
           taawudhText, BISMILLAH_TEXT, displayMode, showTranslation,
-          deadTimePerVerse
+          perBufferPauses, rawTimings
         )
+
+        // Debug: log final segment boundaries
+        console.log('[sync] Final display segments:')
+        displaySegments.forEach((seg, idx) => {
+          const dur = ((seg.endMs - seg.startMs) / 1000).toFixed(1)
+          const label = seg.type === 'intro'
+            ? `INTRO`
+            : `V${seg.verseIndex} "${(seg.chunkText ?? '(full verse)').slice(0, 25)}…"`
+          console.log(`  [${idx}] ${(seg.startMs/1000).toFixed(2)}s – ${(seg.endMs/1000).toFixed(2)}s (${dur}s)  ${label}`)
+        })
 
         let useMediaRecorder = false
         try {

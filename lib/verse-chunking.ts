@@ -147,8 +147,6 @@ export function splitVerseByWordTimings(
   const words = verseText.split(' ').filter(w => w.trim().length > 0)
   const stripArabicMarks = (value: string) =>
     value.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7-\u06E8\u06EA-\u06ED\u08D3-\u08E1\u08E3-\u08FF]/g, '')
-  const normalizeArabicForMatch = (value: string) =>
-    stripArabicMarks(value).replace(/[أإآ]/g, 'ا')
 
   if (words.length <= 2) {
     return [{
@@ -175,18 +173,9 @@ export function splitVerseByWordTimings(
     currentChars += countBaseChars(word)
 
     const cleanWord = stripArabicMarks(word)
-    const normalizedWord = normalizeArabicForMatch(word)
-    const nextNormalizedWord = i < words.length - 1 ? normalizeArabicForMatch(words[i + 1]) : ''
-    const nextNextNormalizedWord = i < words.length - 2 ? normalizeArabicForMatch(words[i + 2]) : ''
     const hasWaqf = WAQF_MARKS.some(mark => word.includes(mark))
     const isForbiddenEnd = dontSplitAfter.includes(cleanWord)
     const isTooLong = currentChars >= maxChars
-    // Keep An-Nisa 4:2 transition aligned with recitation:
-    // "...الخبيث بالطيب | ولا تأكلوا..."
-    const isBalTayyibBoundary =
-      normalizedWord.endsWith('بالطيب') &&
-      nextNormalizedWord === 'ولا' &&
-      nextNextNormalizedWord === 'تاكلوا'
 
     if (i === words.length - 1) {
       baseChunks.push(currentChunkWords.join(' '))
@@ -195,8 +184,8 @@ export function splitVerseByWordTimings(
 
     // Split if we hit a Stop Mark, or if it's getting too long,
     // BUT NEVER if it's a forbidden connector word like "ولا"
-    if ((hasWaqf || isTooLong || isBalTayyibBoundary) && !isForbiddenEnd) {
-      if (currentChars >= 25 || hasWaqf || isBalTayyibBoundary) {
+    if ((hasWaqf || isTooLong) && !isForbiddenEnd) {
+      if (currentChars >= 25 || hasWaqf) {
         baseChunks.push(currentChunkWords.join(' '))
         currentChunkWords = []
         currentChars = 0

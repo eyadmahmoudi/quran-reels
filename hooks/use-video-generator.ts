@@ -167,14 +167,39 @@ function findInternalPauses(
     })
   }
 
-  // No merge step needed. The v3 merge combined close pauses (< 1.5s apart)
-  // into one, but this shifted the midpoint and caused wrong boundary
-  // assignments. With midpoint transitions (v4), gaps between segments
-  // are eliminated anyway, so merging serves no purpose.
-  // The position-matching algorithm naturally handles extra pauses by
-  // assigning each to its closest boundary and ignoring the rest.
+  // ── FILTER BREATHING PAUSES ──
+  // When a reciter approaches a waqf mark, they often do a quick breath
+  // (~200-350ms silence) followed by the actual waqf pause (~400-600ms).
+  // Both get detected as raw pauses. The breathing pause is a false
+  // positive that steals the boundary assignment from the real waqf pause.
+  //
+  // Fix: if two pauses are within 2 seconds of each other, drop the
+  // shorter one. The longer one is the real waqf pause.
+  //
+  // Example (An-Nisa verse 2):
+  //   Pause at buf ~8.0s (340ms) ← breathing before waqf
+  //   Pause at buf ~9.2s (440ms) ← actual waqf stop
+  //   Distance: 0.9s → within 2s → drop the 340ms one ✓
+  const filtered: Array<{ startMs: number; endMs: number }> = [...rawPauses]
 
-  return rawPauses
+  for (let i = filtered.length - 1; i > 0; i--) {
+    const prev = filtered[i - 1]
+    const curr = filtered[i]
+    const gap = curr.startMs - prev.endMs
+
+    if (gap < 2000) {
+      // Close pauses → drop the shorter one (breathing)
+      const prevDur = prev.endMs - prev.startMs
+      const currDur = curr.endMs - curr.startMs
+      if (prevDur <= currDur) {
+        filtered.splice(i - 1, 1) // remove the shorter earlier pause
+      } else {
+        filtered.splice(i, 1) // remove the shorter later pause
+      }
+    }
+  }
+
+  return filtered
 }
 
 

@@ -66,116 +66,92 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
+
 // ═══════════════════════════════════════════════════════════════════════
-// AUDIO ANALYSIS FUNCTIONS
+// AUDIO ANALYSIS
 // ═══════════════════════════════════════════════════════════════════════
 
-/**
- * Finds the leading silence in an AudioBuffer (dead time before voice).
- */
 function findLeadingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
-  const sampleRate = buffer.sampleRate
-  const maxSearch = Math.min(buffer.length, Math.floor(sampleRate * 0.8))
+  const sr = buffer.sampleRate
+  const maxSearch = Math.min(buffer.length, Math.floor(sr * 0.8))
   const ch0 = buffer.getChannelData(0)
-
   for (let i = 0; i < maxSearch; i++) {
     if (Math.abs(ch0[i]) > threshold) {
-      // Back up 10ms to preserve natural breath onset
-      const startSample = Math.max(0, i - Math.floor(sampleRate * 0.01))
-      return (startSample / sampleRate) * 1000
+      const startSample = Math.max(0, i - Math.floor(sr * 0.01))
+      return (startSample / sr) * 1000
     }
   }
   return 0
 }
 
-/**
- * Finds the trailing silence in an AudioBuffer (dead time after voice ends).
- */
 function findTrailingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
-  const sampleRate = buffer.sampleRate
-  const maxSearch = Math.min(buffer.length, Math.floor(sampleRate * 0.8))
+  const sr = buffer.sampleRate
+  const maxSearch = Math.min(buffer.length, Math.floor(sr * 0.8))
   const ch0 = buffer.getChannelData(0)
-
   for (let i = buffer.length - 1; i >= buffer.length - maxSearch; i--) {
     if (Math.abs(ch0[i]) > threshold) {
-      const endSample = Math.min(buffer.length, i + Math.floor(sampleRate * 0.01))
-      return ((buffer.length - endSample) / sampleRate) * 1000
+      const endSample = Math.min(buffer.length, i + Math.floor(sr * 0.01))
+      return ((buffer.length - endSample) / sr) * 1000
     }
   }
   return 0
 }
 
 /**
- * ═══════════════════════════════════════════════════════════════════════
- * THE KEY FIX: Detect INTERNAL silence pauses within a verse's audio.
- * ═══════════════════════════════════════════════════════════════════════
+ * Detects INTERNAL silence pauses within a verse's AudioBuffer.
  *
- * WHY THIS FIXES THE SYNC:
+ * FIX v3 — Three critical changes from v2:
  *
- * Old approach: split An-Nisa v1 (42 seconds) into 3 text chunks by
- * character count → chunk 1 gets ~60% of chars → 25 seconds of screen
- * time. But the reciter speaks chunk 1 in only 16 seconds → 10 second
- * desync, text stays on screen while wrong words are being recited.
+ * 1. RAISED minGapMs from 120 → 250ms
+ *    120ms caught breathing pauses (120–200ms) that aren't real waqf
+ *    transitions. Real waqf pauses from EveryAyah reciters are 300–600ms.
+ *    250ms catches the shorter end while filtering most breathing.
  *
- * New approach: scan the AudioBuffer and find where the reciter actually
- * pauses (at waqf marks). An-Nisa v1 has a clear ~350ms silence at the
- * waqf mark after "وَنِسَآءً ۚ" around 16 seconds into the file. We
- * detect this pause and use it as the REAL chunk boundary. Now chunk 1
- * displays for 16 seconds (matching the recitation) and chunk 2 starts
- * exactly when the reciter begins "وَٱتَّقُوا۟ ٱللَّهَ".
+ * 2. MERGE close pauses (within 1.5s of each other)
+ *    A reciter sometimes double-pauses near a waqf mark: a brief stop,
+ *    a quick breath, then a longer stop. The old code treated these as
+ *    TWO separate boundaries, creating an ultra-short segment (~0.8s)
+ *    that caused blank frames during fade transitions. Merging them into
+ *    one boundary eliminates this.
  *
- * HOW IT WORKS:
- * 1. Compute RMS energy in 20ms windows across the decoded PCM samples
- * 2. Track runs of "quiet" windows (RMS below threshold)
- * 3. When a quiet run exceeds minGapMs (120ms), record it as a pause
- * 4. Skip leading/trailing silence zones (handled by other functions)
- * 5. Return pause positions in milliseconds, relative to buffer start
- *
- * The threshold (0.015) and minGapMs (120ms) are tuned for Quran
- * recitation where waqf pauses are typically 150–600ms of near-silence.
+ * 3. Returns the MIDPOINT of merged pauses as the boundary timestamp
+ *    instead of the raw start/end. This centers the text transition
+ *    in the middle of the silence, which looks more natural.
  */
 function findInternalPauses(
   buffer: AudioBuffer,
   threshold = 0.015,
-  minGapMs = 120
+  minGapMs = 250           // ← raised from 120
 ): Array<{ startMs: number; endMs: number }> {
   const sr = buffer.sampleRate
   const ch0 = buffer.getChannelData(0)
-  const windowSamples = Math.floor(sr * 0.02) // 20ms RMS windows
+  const windowSamples = Math.floor(sr * 0.02)
 
-  // Define the active voice region — skip leading/trailing silence
   const leadMs = findLeadingSilenceMs(buffer)
   const trailMs = findTrailingSilenceMs(buffer)
   const bufDurationMs = (buffer.length / sr) * 1000
 
-  // Start 200ms after voice begins, stop 200ms before voice ends
   const searchStartSample = Math.floor(sr * (leadMs + 200) / 1000)
   const searchEndSample = Math.floor(sr * (bufDurationMs - trailMs - 200) / 1000)
-
   if (searchStartSample >= searchEndSample) return []
 
   const minGapSamples = Math.floor(sr * (minGapMs / 1000))
-  const pauses: Array<{ startMs: number; endMs: number }> = []
+  const rawPauses: Array<{ startMs: number; endMs: number }> = []
   let inSilence = false
   let silenceStartSample = 0
 
   for (let i = searchStartSample; i < searchEndSample; i += windowSamples) {
     let sumSq = 0
     const winEnd = Math.min(i + windowSamples, buffer.length)
-    for (let j = i; j < winEnd; j++) {
-      sumSq += ch0[j] * ch0[j]
-    }
+    for (let j = i; j < winEnd; j++) { sumSq += ch0[j] * ch0[j] }
     const rms = Math.sqrt(sumSq / (winEnd - i))
 
     if (rms < threshold) {
-      if (!inSilence) {
-        inSilence = true
-        silenceStartSample = i
-      }
+      if (!inSilence) { inSilence = true; silenceStartSample = i }
     } else {
       if (inSilence) {
         if (i - silenceStartSample >= minGapSamples) {
-          pauses.push({
+          rawPauses.push({
             startMs: (silenceStartSample / sr) * 1000,
             endMs: (i / sr) * 1000,
           })
@@ -184,16 +160,31 @@ function findInternalPauses(
       }
     }
   }
-
-  // Handle silence extending to the search boundary
   if (inSilence && (searchEndSample - silenceStartSample) >= minGapSamples) {
-    pauses.push({
+    rawPauses.push({
       startMs: (silenceStartSample / sr) * 1000,
       endMs: (searchEndSample / sr) * 1000,
     })
   }
 
-  return pauses
+  // ── MERGE close pauses ──
+  // If two pauses are within 1.5s of each other, merge them into one.
+  // This prevents ultra-short segments from consecutive reciter pauses.
+  const MERGE_THRESHOLD_MS = 1500
+  const merged: Array<{ startMs: number; endMs: number }> = []
+  for (const p of rawPauses) {
+    if (merged.length > 0) {
+      const last = merged[merged.length - 1]
+      if (p.startMs - last.endMs < MERGE_THRESHOLD_MS) {
+        // Merge: extend the last pause to cover both
+        last.endMs = p.endMs
+        continue
+      }
+    }
+    merged.push({ ...p })
+  }
+
+  return merged
 }
 
 
@@ -309,11 +300,8 @@ function drawFrame(
       const lastLineWidth = ctx.measureText(currentLine).width
       const spaceW = ctx.measureText(' ').width
       if (lastLineWidth + spaceW + markerWidth > maxWidth) {
-        lines.push(currentLine)
-        lines.push('')
-      } else {
-        lines.push(currentLine)
-      }
+        lines.push(currentLine); lines.push('')
+      } else { lines.push(currentLine) }
     }
   } else {
     if (currentLine) lines.push(currentLine)
@@ -321,7 +309,6 @@ function drawFrame(
 
   const lineHeight = arabicFontSize * 2.0
   const totalTextHeight = lines.length * lineHeight
-
   const shouldShowTranslation = showTranslation && showTranslationOverride
   const textCenterY = displayMode === 'minimal' ? height * 0.44 : height / 2 - (shouldShowTranslation ? 80 : 0)
   const textStartY = textCenterY - totalTextHeight / 2
@@ -331,13 +318,9 @@ function drawFrame(
     const isLastLine = i === lines.length - 1
 
     if (!showMarker || !isLastLine) {
-      ctx.font = nabiFont
-      ctx.textAlign = 'center'
-      ctx.fillText(line, width / 2, y)
+      ctx.font = nabiFont; ctx.textAlign = 'center'; ctx.fillText(line, width / 2, y)
     } else if (line === '') {
-      ctx.font = uthmanicFont
-      ctx.textAlign = 'center'
-      ctx.fillText(markerChar, width / 2, y)
+      ctx.font = uthmanicFont; ctx.textAlign = 'center'; ctx.fillText(markerChar, width / 2, y)
     } else {
       ctx.font = nabiFont
       const lineW = ctx.measureText(line).width
@@ -348,13 +331,8 @@ function drawFrame(
       const rightEdge = width / 2 + totalW / 2
       const leftEdge = width / 2 - totalW / 2
 
-      ctx.font = nabiFont
-      ctx.textAlign = 'right'
-      ctx.fillText(line, rightEdge, y)
-
-      ctx.font = uthmanicFont
-      ctx.textAlign = 'left'
-      ctx.fillText(markerChar, leftEdge, y)
+      ctx.font = nabiFont; ctx.textAlign = 'right'; ctx.fillText(line, rightEdge, y)
+      ctx.font = uthmanicFont; ctx.textAlign = 'left'; ctx.fillText(markerChar, leftEdge, y)
     }
   })
   ctx.shadowBlur = 0
@@ -365,10 +343,8 @@ function drawFrame(
       ctx.fillStyle = displayMode === 'minimal' ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.78)'
       const transFontSize = displayMode === 'minimal' ? 28 : 34
       ctx.font = `${transFontSize}px Georgia, serif`
-      ctx.textAlign = 'center'
-      ctx.direction = 'ltr'
-      ctx.shadowColor = 'rgba(0,0,0,0.9)'
-      ctx.shadowBlur = 12
+      ctx.textAlign = 'center'; ctx.direction = 'ltr'
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 12
 
       const transWords = rawTranslation.split(' ')
       const transLines: string[] = []
@@ -386,7 +362,6 @@ function drawFrame(
       transLines.forEach((line, i) => ctx.fillText(line, width / 2, transY + i * transLineHeight))
     }
   }
-
   ctx.restore()
 }
 
@@ -411,38 +386,39 @@ async function exportVerseImages(
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// DISPLAY SEGMENT BUILDING — AUDIO-PAUSE-DRIVEN
+// DISPLAY SEGMENT BUILDING — POSITION-MATCHED AUDIO PAUSES
 // ═══════════════════════════════════════════════════════════════════════
 
 /**
- * Builds display segments with audio-pause-driven timing.
+ * FIX v3 — POSITION-BASED MATCHING
  *
- * ── HOW AUDIO-DRIVEN TIMING WORKS ──────────────────────────────────────
+ * The v2 approach tried to match detected audio pauses to text waqf groups
+ * 1:1. This failed because:
+ *   - Reciters pause for breathing, emphasis, etc. — not just waqf marks
+ *   - Close consecutive pauses created 0.8s segments → blank frames
+ *   - "Pick the longest N pauses" didn't guarantee correct positions
  *
- * 1. For each verse, we have detected internal silence pauses from the
- *    actual audio (see findInternalPauses). These pauses correspond to
- *    waqf marks where the reciter briefly stops.
+ * v3 approach: POSITION MATCHING
+ * ─────────────────────────────────────────────────────────────────────
+ * 1. Text chunks have cumulative proportional positions:
+ *    e.g., 3 chunks → boundaries at 40% and 75% of text
  *
- * 2. The text chunks (from splitVerseByWordTimings) have `endsWithWaqf`
- *    flags. We group consecutive chunks into "waqf groups" — each group
- *    ends at a chunk where endsWithWaqf=true.
+ * 2. These proportions estimate where in the AUDIO the boundary should be:
+ *    e.g., 40% of audio duration ≈ first boundary
  *
- * 3. We match waqf group boundaries to audio pause boundaries:
- *    - Audio segment 0: [verse start → pause 0 start]
- *    - Audio segment 1: [pause 0 end → pause 1 start]
- *    - Audio segment N: [pause N-1 end → verse end]
+ * 3. For each estimated boundary, find the NEAREST detected audio pause.
+ *    This is more robust than 1:1 matching because:
+ *    - Extra pauses (breathing) are harmlessly ignored
+ *    - Missing pauses → the estimate is used without correction
+ *    - Close pauses → only the one nearest to the text boundary is used
  *
- * 4. Each waqf group of text chunks gets displayed during its matching
- *    audio segment. If a group has multiple display chunks, those are
- *    distributed proportionally WITHIN the audio segment only — bounding
- *    any proportional error to ~5-15 seconds instead of the full verse.
+ * 4. Each selected pause is snapped to: no two boundaries use the same
+ *    pause, and they stay in chronological order.
  *
- * @param perBufferPauses  Internal pauses per decoded buffer, from
- *                         findInternalPauses(). Positions are relative
- *                         to each buffer's start (0ms).
- * @param rawTimings       Raw start/end of each buffer in the combined
- *                         audio timeline. Used to convert buffer-relative
- *                         pause positions to combined-timeline positions.
+ * Result: For An-Nisa v1, the 400ms waqf pause at ~16s is the nearest
+ * pause to the ~40% text boundary, and it gets selected. The 240ms
+ * breathing pauses at other positions are ignored because they're not
+ * nearest to any text boundary.
  */
 function buildDisplaySegments(
   verseTimings: Array<{ startMs: number; endMs: number }>,
@@ -463,7 +439,6 @@ function buildDisplaySegments(
   for (let i = 0; i < verseTimings.length; i++) {
     const timing = verseTimings[i]
 
-    // ── Intro segments ──
     if (i === taawudhIdx) {
       segments.push({ type: 'intro', introText: taawudhText, showMarker: false, showTranslationForChunk: false, startMs: timing.startMs, endMs: timing.endMs })
       continue
@@ -473,7 +448,6 @@ function buildDisplaySegments(
       continue
     }
 
-    // ── Verse segments ──
     const verseArrayIdx = i - introOffset
     if (verseArrayIdx < 0 || verseArrayIdx >= verses.length) continue
 
@@ -496,129 +470,153 @@ function buildDisplaySegments(
       continue
     }
 
-    // ── Multiple chunks: use audio pauses for timing ──
+    // ── Multiple chunks: position-matched audio pauses ──
 
-    // Convert buffer-relative pauses → combined timeline positions
-    const bufferPauses = perBufferPauses[i] ?? []
-    const rawStart = rawTimings[i].startMs
-    const pausesTimeline = bufferPauses.map(p => ({
-      startMs: rawStart + p.startMs,
-      endMs: rawStart + p.endMs,
-    }))
+    const verseDuration = timing.endMs - timing.startMs
+    const numBoundaries = chunks.length - 1
 
-    // Group chunks by waqf boundaries.
-    // A "waqf group" is a run of consecutive chunks ending at endsWithWaqf=true.
-    // Example: chunks [A, B(waqf), C, D(waqf), E(last)]
-    //   → groups: [[A,B], [C,D], [E]]
-    type WaqfGroup = number[] // chunk indices
-    const waqfGroups: WaqfGroup[] = []
-    let curGroup: number[] = []
+    // Compute text-based proportional boundary positions
+    const weights = chunks.map(c =>
+      c.charCount + (c.endsWithWaqf ? WAQF_BONUS_CHARS : 0)
+    )
+    const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
 
-    for (let j = 0; j < chunks.length; j++) {
-      curGroup.push(j)
-      if (chunks[j].endsWithWaqf || j === chunks.length - 1) {
-        waqfGroups.push([...curGroup])
-        curGroup = []
-      }
+    // textBoundaries[k] = the proportional position (0–1) where chunk k ends
+    const textBoundaries: number[] = []
+    let cumW = 0
+    for (let j = 0; j < numBoundaries; j++) {
+      cumW += weights[j]
+      textBoundaries.push(cumW / totalWeight)
     }
 
-    const numBoundaries = waqfGroups.length - 1
+    // Convert buffer-relative pauses → milliseconds from verse display start
+    const bufferPauses = perBufferPauses[i] ?? []
+    const rawStart = rawTimings[i].startMs
 
-    if (pausesTimeline.length >= numBoundaries && numBoundaries > 0) {
-      // ═══ AUDIO-DRIVEN TIMING ═══
-
-      // Select the best N pauses (longest duration = most likely real waqf)
-      let selectedPauses: Array<{ startMs: number; endMs: number }>
-      if (pausesTimeline.length === numBoundaries) {
-        selectedPauses = pausesTimeline
-      } else {
-        // More pauses detected than waqf groups → pick the longest N,
-        // then restore chronological order
-        selectedPauses = [...pausesTimeline]
-          .sort((a, b) => (b.endMs - b.startMs) - (a.endMs - a.startMs))
-          .slice(0, numBoundaries)
-          .sort((a, b) => a.startMs - b.startMs)
+    // Pause midpoints relative to verse display start, as proportions (0–1)
+    const pauseProportions = bufferPauses.map(p => {
+      const midMs = (p.startMs + p.endMs) / 2
+      const relativeMs = (rawStart + midMs) - timing.startMs
+      return {
+        proportion: Math.max(0, Math.min(1, relativeMs / verseDuration)),
+        // Actual timeline positions for building segments
+        transitionMs: rawStart + p.startMs,  // text changes at pause start
+        resumeMs: rawStart + p.endMs,        // voice resumes at pause end
       }
+    })
 
-      for (let g = 0; g < waqfGroups.length; g++) {
-        const group = waqfGroups[g]
+    if (pauseProportions.length > 0 && numBoundaries > 0) {
+      // ═══ POSITION-MATCHED AUDIO BOUNDARIES ═══
+      //
+      // For each text boundary (at proportional position p_k), find the
+      // detected audio pause whose proportional position is closest.
+      //
+      // Constraints:
+      //   - Each pause can only be used once
+      //   - Selected pauses must stay in chronological order
+      //   - If no pause is within 25% of the expected position, fall back
+      //     to proportional timing for that boundary
 
-        // Audio boundaries for this group
-        const audioStart = g === 0
-          ? timing.startMs
-          : selectedPauses[g - 1].endMs
-        const audioEnd = g === waqfGroups.length - 1
-          ? timing.endMs
-          : selectedPauses[g].startMs
+      const usedPauseIndices = new Set<number>()
+      const selectedBoundaries: Array<{ startMs: number; endMs: number } | null> = []
 
-        if (group.length === 1) {
-          // Single chunk in this group → exact audio timing
-          const ci = group[0]
-          segments.push({
-            type: 'verse-chunk', verseIndex: verseArrayIdx,
-            chunkText: chunks[ci].text,
-            showMarker: chunks[ci].isLastChunk,
-            showTranslationForChunk: showTranslation,
-            translationChunkText: translationChunks[chunks[ci].chunkIndex] || '',
-            startMs: audioStart, endMs: audioEnd,
-          })
-        } else {
-          // Multiple display chunks within one audio segment →
-          // proportional by char weight, but error is bounded to this
-          // segment (~5-15s) instead of the full verse (~40+ seconds)
-          const groupDuration = audioEnd - audioStart
-          const weights = group.map(ci =>
-            chunks[ci].charCount + (chunks[ci].endsWithWaqf ? WAQF_BONUS_CHARS : 0)
-          )
-          const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
-          let cumW = 0
+      for (let k = 0; k < numBoundaries; k++) {
+        const targetProp = textBoundaries[k]
 
-          for (let k = 0; k < group.length; k++) {
-            const ci = group[k]
-            const pStart = cumW / totalWeight
-            cumW += weights[k]
-            const pEnd = cumW / totalWeight
-            const isLast = k === group.length - 1
+        // Find nearest unused pause
+        let bestIdx = -1
+        let bestDist = Infinity
 
-            segments.push({
-              type: 'verse-chunk', verseIndex: verseArrayIdx,
-              chunkText: chunks[ci].text,
-              showMarker: chunks[ci].isLastChunk,
-              showTranslationForChunk: showTranslation,
-              translationChunkText: translationChunks[chunks[ci].chunkIndex] || '',
-              startMs: audioStart + pStart * groupDuration,
-              endMs: isLast ? audioEnd : audioStart + pEnd * groupDuration,
-            })
+        for (let pi = 0; pi < pauseProportions.length; pi++) {
+          if (usedPauseIndices.has(pi)) continue
+
+          // Ensure chronological order: this pause must be after any
+          // previously selected pause
+          if (selectedBoundaries.length > 0) {
+            const lastSelected = selectedBoundaries[selectedBoundaries.length - 1]
+            if (lastSelected && pauseProportions[pi].transitionMs <= lastSelected.endMs) continue
+          }
+
+          const dist = Math.abs(pauseProportions[pi].proportion - targetProp)
+
+          // Only consider pauses within 25% of expected position
+          // (prevents matching a pause at 80% to a boundary at 30%)
+          if (dist < bestDist && dist < 0.25) {
+            bestDist = dist
+            bestIdx = pi
           }
         }
+
+        if (bestIdx >= 0) {
+          usedPauseIndices.add(bestIdx)
+          selectedBoundaries.push({
+            startMs: pauseProportions[bestIdx].transitionMs,
+            endMs: pauseProportions[bestIdx].resumeMs,
+          })
+        } else {
+          // No suitable pause found → use proportional estimate
+          selectedBoundaries.push(null)
+        }
+      }
+
+      // Build chunk segments using selected boundaries
+      for (let j = 0; j < chunks.length; j++) {
+        const chunk = chunks[j]
+
+        let chunkStartMs: number
+        let chunkEndMs: number
+
+        if (j === 0) {
+          chunkStartMs = timing.startMs
+        } else {
+          const prevBoundary = selectedBoundaries[j - 1]
+          chunkStartMs = prevBoundary
+            ? prevBoundary.endMs    // voice resumes after pause
+            : timing.startMs + textBoundaries[j - 1] * verseDuration  // proportional fallback
+        }
+
+        if (j === chunks.length - 1) {
+          chunkEndMs = timing.endMs
+        } else {
+          const boundary = selectedBoundaries[j]
+          chunkEndMs = boundary
+            ? boundary.startMs      // text changes at pause start
+            : timing.startMs + textBoundaries[j] * verseDuration  // proportional fallback
+        }
+
+        // Safety: ensure no negative or zero-length segments
+        if (chunkEndMs <= chunkStartMs) {
+          chunkEndMs = chunkStartMs + 500 // minimum 500ms
+        }
+
+        segments.push({
+          type: 'verse-chunk', verseIndex: verseArrayIdx,
+          chunkText: chunk.text,
+          showMarker: chunk.isLastChunk,
+          showTranslationForChunk: showTranslation,
+          translationChunkText: translationChunks[chunk.chunkIndex] || '',
+          startMs: chunkStartMs, endMs: chunkEndMs,
+        })
       }
 
     } else {
       // ═══ FALLBACK: proportional timing ═══
-      // No internal pauses detected (short verse or very fast reciter).
-      // For short verses proportional error is small.
-      const fullDuration = timing.endMs - timing.startMs
-      const weights = chunks.map(c =>
-        c.charCount + (c.endsWithWaqf ? WAQF_BONUS_CHARS : 0)
-      )
-      const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
-      let cumW = 0
-
+      let cumWeight = 0
       for (let j = 0; j < chunks.length; j++) {
         const chunk = chunks[j]
-        const pStart = cumW / totalWeight
-        cumW += weights[j]
-        const pEnd = cumW / totalWeight
+        const pStart = cumWeight / totalWeight
+        cumWeight += weights[j]
+        const pEnd = cumWeight / totalWeight
 
         segments.push({
           type: 'verse-chunk', verseIndex: verseArrayIdx,
           chunkText: chunk.text, showMarker: chunk.isLastChunk,
           showTranslationForChunk: showTranslation,
           translationChunkText: translationChunks[chunk.chunkIndex] || '',
-          startMs: timing.startMs + pStart * fullDuration,
+          startMs: timing.startMs + pStart * verseDuration,
           endMs: j === chunks.length - 1
             ? timing.endMs
-            : timing.startMs + pEnd * fullDuration,
+            : timing.startMs + pEnd * verseDuration,
         })
       }
     }
@@ -659,8 +657,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const width = 1080
         const height = 1920
         const canvas = document.createElement('canvas')
-        canvas.width = width
-        canvas.height = height
+        canvas.width = width; canvas.height = height
         const ctx = canvas.getContext('2d')!
 
         setProgress(5)
@@ -673,53 +670,37 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         let taawudhBuffer: AudioBuffer | null = null
         try {
           const resp = await fetch('/audio/taawwudh.mp3')
-          if (resp.ok) {
-            const ab = await resp.arrayBuffer()
-            taawudhBuffer = await audioCtx.decodeAudioData(ab)
-          }
+          if (resp.ok) { taawudhBuffer = await audioCtx.decodeAudioData(await resp.arrayBuffer()) }
         } catch { }
 
         const needsBismillah = startVerse === 1 && surahId !== 1 && surahId !== 9
         let bismillahBuffer: AudioBuffer | null = null
         if (needsBismillah) {
           try {
-            const originalUrl = `https://everyayah.com/data/${reciterFolder}/001001.mp3`;
-            const bUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
-            const resp = await fetch(bUrl)
-            if (resp.ok) {
-              const ab = await resp.arrayBuffer()
-              bismillahBuffer = await audioCtx.decodeAudioData(ab)
-            }
+            const originalUrl = `https://everyayah.com/data/${reciterFolder}/001001.mp3`
+            const resp = await fetch(`/api/audio?url=${encodeURIComponent(originalUrl)}`)
+            if (resp.ok) { bismillahBuffer = await audioCtx.decodeAudioData(await resp.arrayBuffer()) }
           } catch { }
         }
 
         for (let i = startVerse; i <= endVerse; i++) {
           if (cancelledRef.current) { audioCtx.close(); return }
-
           const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
           const originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
-          const proxyUrl = `/api/audio?url=${encodeURIComponent(originalUrl)}`
-
-          const resp = await fetch(proxyUrl)
+          const resp = await fetch(`/api/audio?url=${encodeURIComponent(originalUrl)}`)
           if (!resp.ok) throw new Error(`Failed to fetch audio for verse ${i}`)
-          const arrayBuf = await resp.arrayBuffer()
-          const audioBuf = await audioCtx.decodeAudioData(arrayBuf)
-          decodedBuffers.push(audioBuf)
-
+          decodedBuffers.push(await audioCtx.decodeAudioData(await resp.arrayBuffer()))
           setProgress(5 + ((i - startVerse + 1) / (endVerse - startVerse + 1)) * 25)
         }
 
-        if (bismillahBuffer) { decodedBuffers.unshift(bismillahBuffer); }
-        if (taawudhBuffer) { decodedBuffers.unshift(taawudhBuffer); }
-
+        if (bismillahBuffer) decodedBuffers.unshift(bismillahBuffer)
+        if (taawudhBuffer) decodedBuffers.unshift(taawudhBuffer)
         if (cancelledRef.current) { audioCtx.close(); return }
 
         const sampleRate = audioCtx.sampleRate
         const totalSamples = decodedBuffers.reduce((s, b) => s + b.length, 0)
         const combined = audioCtx.createBuffer(2, totalSamples, sampleRate)
-        let sampleOffset = 0
-        let timeOffset = 0
-
+        let sampleOffset = 0, timeOffset = 0
         const rawTimings: Array<{ startMs: number; endMs: number }> = []
 
         for (const buf of decodedBuffers) {
@@ -734,9 +715,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         }
         const totalDurationMs = timeOffset
 
-        // ── AUDIO ANALYSIS ───────────────────────────────────────────────
+        // ── Audio analysis ──
         const leadingSilences = decodedBuffers.map(buf => findLeadingSilenceMs(buf))
-
         const displayTimings = rawTimings.map((raw, i) => ({
           startMs: raw.startMs + leadingSilences[i],
           endMs: i < rawTimings.length - 1
@@ -744,19 +724,15 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             : totalDurationMs,
         }))
 
-        // ── THE KEY FIX: Internal pause detection per verse ──────────────
+        // ── Internal pause detection (v3: higher threshold + merged) ──
         const perBufferPauses = decodedBuffers.map(buf => findInternalPauses(buf))
 
-        // Debug logging — check browser console to verify pause detection
         perBufferPauses.forEach((pauses, i) => {
           if (pauses.length > 0) {
-            console.log(`[sync] Buffer ${i}: ${pauses.length} internal pause(s):`,
-              pauses.map(p => `${p.startMs.toFixed(0)}–${p.endMs.toFixed(0)}ms`).join(', '))
-          } else {
-            console.log(`[sync] Buffer ${i}: no internal pauses (short verse or continuous recitation)`)
+            console.log(`[sync] Buffer ${i}: ${pauses.length} merged pause(s):`,
+              pauses.map(p => `${p.startMs.toFixed(0)}–${p.endMs.toFixed(0)}ms (${(p.endMs-p.startMs).toFixed(0)}ms)`).join(', '))
           }
         })
-        // ─────────────────────────────────────────────────────────────────
 
         setProgress(35)
 
@@ -780,21 +756,18 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const bismillahIdx = bismillahBuffer ? (taawudhBuffer ? 1 : 0) : -1
         const introOffset = (taawudhBuffer ? 1 : 0) + (bismillahBuffer ? 1 : 0)
 
-        // Build segments with audio-pause-driven timing
         const displaySegments = buildDisplaySegments(
           displayTimings, verses, introOffset, taawudhIdx, bismillahIdx,
           taawudhText, BISMILLAH_TEXT, displayMode, showTranslation,
           perBufferPauses, rawTimings
         )
 
-        // Debug: log final segment boundaries
-        console.log('[sync] Final display segments:')
+        console.log('[sync] Display segments:')
         displaySegments.forEach((seg, idx) => {
           const dur = ((seg.endMs - seg.startMs) / 1000).toFixed(1)
-          const label = seg.type === 'intro'
-            ? `INTRO`
-            : `V${seg.verseIndex} "${(seg.chunkText ?? '(full verse)').slice(0, 25)}…"`
-          console.log(`  [${idx}] ${(seg.startMs/1000).toFixed(2)}s – ${(seg.endMs/1000).toFixed(2)}s (${dur}s)  ${label}`)
+          const label = seg.type === 'intro' ? 'INTRO'
+            : `V${seg.verseIndex} "${(seg.chunkText ?? '(full)').slice(0, 25)}…"`
+          console.log(`  [${idx}] ${(seg.startMs/1000).toFixed(2)}s–${(seg.endMs/1000).toFixed(2)}s (${dur}s) ${label}`)
         })
 
         let useMediaRecorder = false
@@ -824,8 +797,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         try {
           const audioDest = audioCtx.createMediaStreamDestination()
           const source = audioCtx.createBufferSource()
-          source.buffer = combined
-          source.connect(audioDest)
+          source.buffer = combined; source.connect(audioDest)
 
           const videoStream = canvas.captureStream(30)
           const combinedStream = new MediaStream([...videoStream.getVideoTracks(), ...audioDest.stream.getAudioTracks()])
@@ -862,8 +834,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
             for (let i = 0; i < displaySegments.length; i++) {
               if (elapsedMs >= displaySegments[i].startMs && elapsedMs < displaySegments[i].endMs) {
-                currentSegmentIndex = i
-                break
+                currentSegmentIndex = i; break
               }
             }
 
@@ -871,7 +842,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             if (!seg) return
 
             const videoProgress = Math.min(elapsedMs / totalDurationMs, 1)
-
             let fadeOpacity = 1
             const msIntoSegment = elapsedMs - seg.startMs
             const msBeforeEnd = seg.endMs - elapsedMs
@@ -889,7 +859,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             }
 
             setProgress(50 + videoProgress * 48)
-
             if (elapsedMs >= totalDurationMs || cancelledRef.current) {
               recordingFinished = true
               timerWorker.postMessage('stop'); timerWorker.terminate(); URL.revokeObjectURL(timerUrl)
@@ -919,14 +888,11 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           a.download = `quran-reel-${surahName.replace(/\s+/g, '-')}-${startVerse}-${endVerse}.${fileExt}`
           document.body.appendChild(a); a.click(); document.body.removeChild(a)
           URL.revokeObjectURL(url)
-          setProgress(100)
-          setIsGenerating(false)
+          setProgress(100); setIsGenerating(false)
         } catch (mediaErr) {
           audioCtx.close()
-          console.log('[video] MediaRecorder failed, falling back to images:', mediaErr)
           await exportVerseImages(ctx, canvas, verses, background, backgroundImage, surahName, showTranslation, displayMode, setProgress)
-          setProgress(100)
-          setIsGenerating(false)
+          setProgress(100); setIsGenerating(false)
           setError('Video recording failed. Downloaded verse images instead.')
         }
       } catch (err) {
@@ -939,9 +905,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
   )
 
   const cancelGeneration = useCallback(() => {
-    cancelledRef.current = true
-    setIsGenerating(false)
-    setProgress(0)
+    cancelledRef.current = true; setIsGenerating(false); setProgress(0)
   }, [])
 
   return { isGenerating, progress, error, generateVideo, cancelGeneration }

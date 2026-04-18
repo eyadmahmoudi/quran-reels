@@ -580,46 +580,105 @@ function buildDisplaySegments(
         }
       }
 
-      // Build chunk segments using selected boundaries
-      // FIX: Use pause MIDPOINT as the transition point, not start/end.
-      // Using start/end created gaps (pause.startMs → pause.endMs) where
-      // no segment existed, causing blank frames. Midpoint = seamless.
-      for (let j = 0; j < chunks.length; j++) {
-        const chunk = chunks[j]
+      // ── AUDIO-AWARE CHUNK MERGING (v5) ──────────────────────────────
+      // Instead of displaying every text chunk separately (even when the
+      // reciter reads through a waqf without stopping), MERGE chunks
+      // whose boundary has no matching audio pause.
+      //
+      // Example (An-Nisa verse 2, 4 text chunks, 3 boundaries):
+      //   Boundary 0 → null (reciter doesn't stop at first ۖ)
+      //   Boundary 1 → audio pause (reciter stops at second ۖ)
+      //   Boundary 2 → audio pause (reciter stops at ۚ)
+      //
+      //   Merge: [chunk0 + chunk1] [chunk2] [chunk3]
+      //   Display: 3 groups with 2 audio-driven transitions
+      //
+      // This adapts text display to each reciter's reading style:
+      //   - Slow reciter who stops at every waqf → all splits kept
+      //   - Fast reciter who reads through some → those splits merged
+      // ────────────────────────────────────────────────────────────────
 
-        let chunkStartMs: number
-        let chunkEndMs: number
+      // Group consecutive chunks: split only at boundaries with audio pauses
+      type DisplayGroup = {
+        chunkIndices: number[]
+        text: string
+        isLast: boolean
+        translationText: string
+      }
 
-        if (j === 0) {
-          chunkStartMs = timing.startMs
+      const displayGroups: DisplayGroup[] = []
+      const activePauses: Array<{ startMs: number; endMs: number }> = []
+      let currentGroupIndices: number[] = [0]
+
+      for (let b = 0; b < numBoundaries; b++) {
+        if (selectedBoundaries[b] !== null) {
+          // Reciter paused here → finalize current group, start new one
+          const groupChunks = currentGroupIndices.map(ci => chunks[ci])
+          const groupText = groupChunks.map(c => c.text).join(' ')
+          const groupTranslation = currentGroupIndices.map(ci =>
+            translationChunks[chunks[ci].chunkIndex] || ''
+          ).join(' ').trim()
+
+          displayGroups.push({
+            chunkIndices: [...currentGroupIndices],
+            text: groupText,
+            isLast: false,
+            translationText: groupTranslation,
+          })
+          activePauses.push(selectedBoundaries[b]!)
+          currentGroupIndices = [b + 1]
         } else {
-          const prevBoundary = selectedBoundaries[j - 1]
-          chunkStartMs = prevBoundary
-            ? (prevBoundary.startMs + prevBoundary.endMs) / 2  // pause midpoint
-            : timing.startMs + textBoundaries[j - 1] * verseDuration
+          // Reciter read through this waqf → merge next chunk into group
+          currentGroupIndices.push(b + 1)
         }
+      }
 
-        if (j === chunks.length - 1) {
-          chunkEndMs = timing.endMs
-        } else {
-          const boundary = selectedBoundaries[j]
-          chunkEndMs = boundary
-            ? (boundary.startMs + boundary.endMs) / 2  // pause midpoint
-            : timing.startMs + textBoundaries[j] * verseDuration
-        }
+      // Final group (always includes remaining chunks)
+      {
+        const groupChunks = currentGroupIndices.map(ci => chunks[ci])
+        const groupText = groupChunks.map(c => c.text).join(' ')
+        const groupTranslation = currentGroupIndices.map(ci =>
+          translationChunks[chunks[ci].chunkIndex] || ''
+        ).join(' ').trim()
 
-        // Safety: ensure no negative or zero-length segments
-        if (chunkEndMs <= chunkStartMs) {
-          chunkEndMs = chunkStartMs + 500 // minimum 500ms
-        }
+        displayGroups.push({
+          chunkIndices: [...currentGroupIndices],
+          text: groupText,
+          isLast: true,
+          translationText: groupTranslation,
+        })
+      }
+
+      // Debug
+      console.log(`[sync] V${verseArrayIdx} audio-aware merge: ${chunks.length} text chunks → ${displayGroups.length} display groups`)
+      displayGroups.forEach((g, gi) => {
+        console.log(`  Group ${gi}: chunks [${g.chunkIndices.join(',')}] "${g.text.slice(0, 30)}…"`)
+      })
+
+      // Build segments: each group boundary = one audio pause midpoint
+      for (let g = 0; g < displayGroups.length; g++) {
+        const group = displayGroups[g]
+
+        const startMs = g === 0
+          ? timing.startMs
+          : (activePauses[g - 1].startMs + activePauses[g - 1].endMs) / 2
+
+        const endMs = g === displayGroups.length - 1
+          ? timing.endMs
+          : (activePauses[g].startMs + activePauses[g].endMs) / 2
+
+        // If the group contains ALL chunks, don't set chunkText (shows full verse)
+        const isFullVerse = group.chunkIndices.length === chunks.length
 
         segments.push({
-          type: 'verse-chunk', verseIndex: verseArrayIdx,
-          chunkText: chunk.text,
-          showMarker: chunk.isLastChunk,
+          type: 'verse-chunk',
+          verseIndex: verseArrayIdx,
+          chunkText: isFullVerse ? undefined : group.text,
+          showMarker: group.isLast,
           showTranslationForChunk: showTranslation,
-          translationChunkText: translationChunks[chunk.chunkIndex] || '',
-          startMs: chunkStartMs, endMs: chunkEndMs,
+          translationChunkText: isFullVerse ? undefined : group.translationText,
+          startMs: Math.max(startMs, timing.startMs),
+          endMs: Math.min(endMs, timing.endMs),
         })
       }
 

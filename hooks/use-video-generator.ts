@@ -167,24 +167,14 @@ function findInternalPauses(
     })
   }
 
-  // ── MERGE close pauses ──
-  // If two pauses are within 1.5s of each other, merge them into one.
-  // This prevents ultra-short segments from consecutive reciter pauses.
-  const MERGE_THRESHOLD_MS = 1500
-  const merged: Array<{ startMs: number; endMs: number }> = []
-  for (const p of rawPauses) {
-    if (merged.length > 0) {
-      const last = merged[merged.length - 1]
-      if (p.startMs - last.endMs < MERGE_THRESHOLD_MS) {
-        // Merge: extend the last pause to cover both
-        last.endMs = p.endMs
-        continue
-      }
-    }
-    merged.push({ ...p })
-  }
+  // No merge step needed. The v3 merge combined close pauses (< 1.5s apart)
+  // into one, but this shifted the midpoint and caused wrong boundary
+  // assignments. With midpoint transitions (v4), gaps between segments
+  // are eliminated anyway, so merging serves no purpose.
+  // The position-matching algorithm naturally handles extra pauses by
+  // assigning each to its closest boundary and ignoring the rest.
 
-  return merged
+  return rawPauses
 }
 
 
@@ -763,7 +753,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
         perBufferPauses.forEach((pauses, i) => {
           if (pauses.length > 0) {
-            console.log(`[sync] Buffer ${i}: ${pauses.length} merged pause(s):`,
+            console.log(`[sync] Buffer ${i}: ${pauses.length} pause(s):`,
               pauses.map(p => `${p.startMs.toFixed(0)}–${p.endMs.toFixed(0)}ms (${(p.endMs-p.startMs).toFixed(0)}ms)`).join(', '))
           }
         })

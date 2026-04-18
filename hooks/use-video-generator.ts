@@ -506,56 +506,87 @@ function buildDisplaySegments(
     })
 
     if (pauseProportions.length > 0 && numBoundaries > 0) {
-      // ═══ POSITION-MATCHED AUDIO BOUNDARIES ═══
+      // ═══ OPTIMAL PAUSE-FIRST MATCHING ═══
       //
-      // For each text boundary (at proportional position p_k), find the
-      // detected audio pause whose proportional position is closest.
+      // FIX v4: The v3 algorithm was GREEDY in the wrong direction —
+      // it iterated boundaries in order and each boundary grabbed the
+      // nearest available pause. This caused boundary 0 to steal a
+      // pause that was actually closer to boundary 1.
       //
-      // Constraints:
-      //   - Each pause can only be used once
-      //   - Selected pauses must stay in chronological order
-      //   - If no pause is within 25% of the expected position, fall back
-      //     to proportional timing for that boundary
+      // Example (An-Nisa verse 2):
+      //   Boundary 0 at 25.6%, Boundary 1 at 54.1%
+      //   Single pause at 40.9%
+      //   Greedy: Boundary 0 grabs it (dist 15.3%) → Boundary 1 gets nothing
+      //   Optimal: Pause goes to Boundary 1 (dist 13.2%) → correct!
+      //
+      // New algorithm: PAUSE-FIRST assignment
+      //   1. For each pause, find the boundary it's closest to
+      //   2. If two pauses claim the same boundary, keep the closer one
+      //   3. Enforce chronological order in a cleanup pass
+      //   4. Boundaries without a pause use proportional fallback
 
-      const usedPauseIndices = new Set<number>()
-      const selectedBoundaries: Array<{ startMs: number; endMs: number } | null> = []
+      // Step 1+2: Each pause claims its closest boundary
+      // pauseToBoundary[pi] = boundary index, or -1 if no boundary is close
+      const boundaryAssignment: Array<{ pauseIdx: number; dist: number } | null> =
+        new Array(numBoundaries).fill(null)
 
-      for (let k = 0; k < numBoundaries; k++) {
-        const targetProp = textBoundaries[k]
+      for (let pi = 0; pi < pauseProportions.length; pi++) {
+        let closestBoundary = -1
+        let closestDist = 0.25 // max tolerance: 25% of verse
 
-        // Find nearest unused pause
-        let bestIdx = -1
-        let bestDist = Infinity
-
-        for (let pi = 0; pi < pauseProportions.length; pi++) {
-          if (usedPauseIndices.has(pi)) continue
-
-          // Ensure chronological order: this pause must be after any
-          // previously selected pause
-          if (selectedBoundaries.length > 0) {
-            const lastSelected = selectedBoundaries[selectedBoundaries.length - 1]
-            if (lastSelected && pauseProportions[pi].transitionMs <= lastSelected.endMs) continue
-          }
-
-          const dist = Math.abs(pauseProportions[pi].proportion - targetProp)
-
-          // Only consider pauses within 25% of expected position
-          // (prevents matching a pause at 80% to a boundary at 30%)
-          if (dist < bestDist && dist < 0.25) {
-            bestDist = dist
-            bestIdx = pi
+        for (let k = 0; k < numBoundaries; k++) {
+          const dist = Math.abs(pauseProportions[pi].proportion - textBoundaries[k])
+          if (dist < closestDist) {
+            closestDist = dist
+            closestBoundary = k
           }
         }
 
-        if (bestIdx >= 0) {
-          usedPauseIndices.add(bestIdx)
-          selectedBoundaries.push({
-            startMs: pauseProportions[bestIdx].transitionMs,
-            endMs: pauseProportions[bestIdx].resumeMs,
-          })
+        if (closestBoundary >= 0) {
+          const existing = boundaryAssignment[closestBoundary]
+          if (!existing || closestDist < existing.dist) {
+            // This pause is closer → replace
+            boundaryAssignment[closestBoundary] = { pauseIdx: pi, dist: closestDist }
+          }
+        }
+      }
+
+      // Step 3: Enforce chronological order — if boundary K's pause is
+      // earlier than boundary K-1's pause, drop the out-of-order one
+      for (let k = 1; k < numBoundaries; k++) {
+        const prev = boundaryAssignment[k - 1]
+        const curr = boundaryAssignment[k]
+        if (prev && curr) {
+          if (pauseProportions[curr.pauseIdx].transitionMs <=
+              pauseProportions[prev.pauseIdx].resumeMs) {
+            // Out of order — drop the one with worse fit
+            if (prev.dist > curr.dist) {
+              boundaryAssignment[k - 1] = null
+            } else {
+              boundaryAssignment[k] = null
+            }
+          }
+        }
+      }
+
+      // Convert to selectedBoundaries format
+      const selectedBoundaries: Array<{ startMs: number; endMs: number } | null> =
+        boundaryAssignment.map(a => {
+          if (!a) return null
+          return {
+            startMs: pauseProportions[a.pauseIdx].transitionMs,
+            endMs: pauseProportions[a.pauseIdx].resumeMs,
+          }
+        })
+
+      // Debug: show how pauses were assigned
+      console.log(`[sync] V${verseArrayIdx} pause assignment (${pauseProportions.length} pauses, ${numBoundaries} boundaries):`)
+      for (let k = 0; k < numBoundaries; k++) {
+        const a = boundaryAssignment[k]
+        if (a) {
+          console.log(`  Boundary ${k} (text@${(textBoundaries[k]*100).toFixed(1)}%) ← Pause@${(pauseProportions[a.pauseIdx].proportion*100).toFixed(1)}% (dist ${(a.dist*100).toFixed(1)}%)`)
         } else {
-          // No suitable pause found → use proportional estimate
-          selectedBoundaries.push(null)
+          console.log(`  Boundary ${k} (text@${(textBoundaries[k]*100).toFixed(1)}%) ← PROPORTIONAL (no close pause)`)
         }
       }
 

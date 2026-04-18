@@ -607,83 +607,93 @@ function buildDisplaySegments(
         }
       }
 
-      // ── HYBRID BOUNDARY TIMING (generalized) ─────────────────────────
-      // Keep ALL semantic text splits. If a boundary has a matched audio
-      // pause, use that pause midpoint. Otherwise, fall back to proportional
-      // timing from text weights. This avoids late merges like:
-      //   "...بالطيب | ولا تأكلوا..." becoming "...أموالهم | ..."
-      // while still snapping to real pauses when present.
-      const boundaryTimes: number[] = []
-      const minGapMs = 260 // protect readability and avoid zero/negative spans
+      // Split only when BOTH conditions are true:
+      // 1) boundary is semantic waqf boundary, and
+      // 2) reciter made a real detected pause near that boundary.
+      const effectiveBoundaries = selectedBoundaries.map((b, idx) =>
+        b && chunks[idx].endsWithWaqf ? b : null
+      )
 
-      for (let b = 0; b < numBoundaries; b++) {
-        const matched = selectedBoundaries[b]
-        let boundaryTime: number
-        if (matched) {
-          boundaryTime = (matched.startMs + matched.endMs) / 2
-        } else {
-          // Prefer QDC word-level timing for unmatched boundaries.
-          // Fallback to proportional position when segments are unavailable.
-          const boundaryWordPos = chunks
-            .slice(0, b + 1)
-            .reduce((sum, chunk) => sum + chunk.wordCount, 0)
-          const seg =
-            qdcSegments?.find((s) => Number(s?.[0]) >= boundaryWordPos) ??
-            (qdcSegments && qdcSegments.length > 0 ? qdcSegments[qdcSegments.length - 1] : null)
-          const qdcEndMs = seg ? Number(seg[2]) : NaN
-          boundaryTime = Number.isFinite(qdcEndMs)
-            ? timing.startMs + qdcEndMs
-            : timing.startMs + textBoundaries[b] * verseDuration
-        }
-
-        const minAllowed = b === 0 ? timing.startMs + minGapMs : boundaryTimes[b - 1] + minGapMs
-        const maxAllowed = timing.endMs - ((numBoundaries - b) * minGapMs)
-        boundaryTime = Math.max(minAllowed, Math.min(boundaryTime, maxAllowed))
-        boundaryTimes.push(boundaryTime)
+      type DisplayGroup = {
+        chunkIndices: number[]
+        text: string
+        isLast: boolean
+        translationText: string
       }
 
-      console.log(`[sync] V${verseArrayIdx} hybrid boundaries for ${chunks.length} chunks:`)
-      boundaryTimes.forEach((t, iBoundary) => {
-        const source = selectedBoundaries[iBoundary] ? 'audio' : 'proportional'
-        console.log(`  Boundary ${iBoundary}: ${(t / 1000).toFixed(2)}s (${source})`)
+      const displayGroups: DisplayGroup[] = []
+      const activePauses: Array<{ startMs: number; endMs: number }> = []
+      let currentGroupIndices: number[] = [0]
+
+      for (let b = 0; b < numBoundaries; b++) {
+        if (effectiveBoundaries[b] !== null) {
+          const groupText = currentGroupIndices.map(ci => chunks[ci].text).join(' ')
+          const groupTranslation = currentGroupIndices
+            .map(ci => translationChunks[chunks[ci].chunkIndex] || '')
+            .join(' ')
+            .trim()
+
+          displayGroups.push({
+            chunkIndices: [...currentGroupIndices],
+            text: groupText,
+            isLast: false,
+            translationText: groupTranslation,
+          })
+          activePauses.push(effectiveBoundaries[b]!)
+          currentGroupIndices = [b + 1]
+        } else {
+          currentGroupIndices.push(b + 1)
+        }
+      }
+
+      const finalGroupText = currentGroupIndices.map(ci => chunks[ci].text).join(' ')
+      const finalGroupTranslation = currentGroupIndices
+        .map(ci => translationChunks[chunks[ci].chunkIndex] || '')
+        .join(' ')
+        .trim()
+      displayGroups.push({
+        chunkIndices: [...currentGroupIndices],
+        text: finalGroupText,
+        isLast: true,
+        translationText: finalGroupTranslation,
       })
 
-      for (let j = 0; j < chunks.length; j++) {
-        const startMs = j === 0 ? timing.startMs : boundaryTimes[j - 1]
-        const endMs = j === chunks.length - 1 ? timing.endMs : boundaryTimes[j]
+      console.log(`[sync] V${verseArrayIdx} waqf+pause merge: ${chunks.length} text chunks -> ${displayGroups.length} display groups`)
+
+      for (let g = 0; g < displayGroups.length; g++) {
+        const group = displayGroups[g]
+        const startMs = g === 0
+          ? timing.startMs
+          : (activePauses[g - 1].startMs + activePauses[g - 1].endMs) / 2
+        const endMs = g === displayGroups.length - 1
+          ? timing.endMs
+          : (activePauses[g].startMs + activePauses[g].endMs) / 2
+        const isFullVerse = group.chunkIndices.length === chunks.length
 
         segments.push({
           type: 'verse-chunk',
           verseIndex: verseArrayIdx,
-          chunkText: chunks[j].text,
-          showMarker: chunks[j].isLastChunk,
+          chunkText: isFullVerse ? undefined : group.text,
+          showMarker: group.isLast,
           showTranslationForChunk: showTranslation,
-          translationChunkText: translationChunks[chunks[j].chunkIndex] || '',
+          translationChunkText: isFullVerse ? undefined : group.translationText,
           startMs: Math.max(startMs, timing.startMs),
           endMs: Math.min(endMs, timing.endMs),
         })
       }
 
     } else {
-      // ═══ FALLBACK: proportional timing ═══
-      let cumWeight = 0
-      for (let j = 0; j < chunks.length; j++) {
-        const chunk = chunks[j]
-        const pStart = cumWeight / totalWeight
-        cumWeight += weights[j]
-        const pEnd = cumWeight / totalWeight
-
-        segments.push({
-          type: 'verse-chunk', verseIndex: verseArrayIdx,
-          chunkText: chunk.text, showMarker: chunk.isLastChunk,
-          showTranslationForChunk: showTranslation,
-          translationChunkText: translationChunks[chunk.chunkIndex] || '',
-          startMs: timing.startMs + pStart * verseDuration,
-          endMs: j === chunks.length - 1
-            ? timing.endMs
-            : timing.startMs + pEnd * verseDuration,
-        })
-      }
+      // No internal stop detected -> keep full verse on screen.
+      segments.push({
+        type: 'verse-chunk',
+        verseIndex: verseArrayIdx,
+        chunkText: undefined,
+        showMarker: true,
+        showTranslationForChunk: showTranslation,
+        translationChunkText: undefined,
+        startMs: timing.startMs,
+        endMs: timing.endMs,
+      })
     }
   }
 

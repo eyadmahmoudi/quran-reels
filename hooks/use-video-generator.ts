@@ -446,7 +446,8 @@ function buildDisplaySegments(
   displayMode: 'minimal' | 'classic',
   showTranslation: boolean,
   perBufferPauses: Array<Array<{ startMs: number; endMs: number }>>,
-  rawTimings: Array<{ startMs: number; endMs: number }>
+  rawTimings: Array<{ startMs: number; endMs: number }>,
+  qdcSegmentsByDisplayIndex: Array<number[][] | null>
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
   const WAQF_BONUS_CHARS = 14
@@ -507,6 +508,7 @@ function buildDisplaySegments(
     // Convert buffer-relative pauses → milliseconds from verse display start
     const bufferPauses = perBufferPauses[i] ?? []
     const rawStart = rawTimings[i].startMs
+    const qdcSegments = qdcSegmentsByDisplayIndex[i] ?? null
 
     // Pause midpoints relative to verse display start, as proportions (0–1)
     const pauseProportions = bufferPauses.map(p => {
@@ -616,9 +618,23 @@ function buildDisplaySegments(
 
       for (let b = 0; b < numBoundaries; b++) {
         const matched = selectedBoundaries[b]
-        let boundaryTime = matched
-          ? (matched.startMs + matched.endMs) / 2
-          : timing.startMs + textBoundaries[b] * verseDuration
+        let boundaryTime: number
+        if (matched) {
+          boundaryTime = (matched.startMs + matched.endMs) / 2
+        } else {
+          // Prefer QDC word-level timing for unmatched boundaries.
+          // Fallback to proportional position when segments are unavailable.
+          const boundaryWordPos = chunks
+            .slice(0, b + 1)
+            .reduce((sum, chunk) => sum + chunk.wordCount, 0)
+          const seg =
+            qdcSegments?.find((s) => Number(s?.[0]) >= boundaryWordPos) ??
+            (qdcSegments && qdcSegments.length > 0 ? qdcSegments[qdcSegments.length - 1] : null)
+          const qdcEndMs = seg ? Number(seg[2]) : NaN
+          boundaryTime = Number.isFinite(qdcEndMs)
+            ? timing.startMs + qdcEndMs
+            : timing.startMs + textBoundaries[b] * verseDuration
+        }
 
         const minAllowed = b === 0 ? timing.startMs + minGapMs : boundaryTimes[b - 1] + minGapMs
         const maxAllowed = timing.endMs - ((numBoundaries - b) * minGapMs)
@@ -690,7 +706,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
   const generateVideo = useCallback(
     async (options: VideoGeneratorOptions) => {
       const {
-        verses, background, showTranslation, surahName,
+        verses, background, showTranslation, surahName, qdcRecitationId,
         reciterFolder, surahId, startVerse, endVerse,
         displayMode = 'minimal'
       } = options
@@ -715,6 +731,9 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
         const taawudhText = 'أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ'
         const BISMILLAH_TEXT = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ'
+        const qdcVerseTimings = qdcRecitationId
+          ? await fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => [])
+          : []
 
         let taawudhBuffer: AudioBuffer | null = null
         try {
@@ -804,11 +823,18 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const taawudhIdx = taawudhBuffer ? 0 : -1
         const bismillahIdx = bismillahBuffer ? (taawudhBuffer ? 1 : 0) : -1
         const introOffset = (taawudhBuffer ? 1 : 0) + (bismillahBuffer ? 1 : 0)
+        const qdcByVerseKey = new Map(qdcVerseTimings.map((v) => [v.verse_key, v.segments || []] as const))
+        const qdcSegmentsByDisplayIndex = displayTimings.map((_, i) => {
+          const verseArrayIdx = i - introOffset
+          if (verseArrayIdx < 0 || verseArrayIdx >= verses.length) return null
+          const verseKey = verses[verseArrayIdx]?.verse_key
+          return qdcByVerseKey.get(verseKey) || null
+        })
 
         const displaySegments = buildDisplaySegments(
           displayTimings, verses, introOffset, taawudhIdx, bismillahIdx,
           taawudhText, BISMILLAH_TEXT, displayMode, showTranslation,
-          perBufferPauses, rawTimings
+          perBufferPauses, rawTimings, qdcSegmentsByDisplayIndex
         )
 
         console.log('[sync] Display segments:')

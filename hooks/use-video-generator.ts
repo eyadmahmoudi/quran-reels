@@ -100,28 +100,33 @@ function findTrailingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
 /**
  * Detects INTERNAL silence pauses within a verse's AudioBuffer.
  *
- * FIX v3 — Three critical changes from v2:
+ * FIX v4 — Two targeted changes from v3:
  *
- * 1. RAISED minGapMs from 120 → 250ms
- *    120ms caught breathing pauses (120–200ms) that aren't real waqf
- *    transitions. Real waqf pauses from EveryAyah reciters are 300–600ms.
- *    250ms catches the shorter end while filtering most breathing.
+ * 1. RAISED minGapMs from 250 → 350ms
+ *    Root cause of An-Nisa v2 wrong split:
+ *      - Verse 2 has two ۖ waqf marks. The reciter pauses ~250ms at the
+ *        FIRST ۖ (brief, "passing" stop) and ~400ms at the SECOND ۖ (real stop).
+ *      - With minGapMs=250, BOTH pauses were detected.
+ *      - The 250ms pause matched to boundary 0 → chunk 0 shown alone → split at اموالهم.
+ *      - The 400ms pause matched to boundary 1 → chunks [1+2] merged → picture 2.
+ *    With minGapMs=350, only pauses ≥ 350ms are detected. The brief first ۖ
+ *    pause (~250ms) is invisible. Only the real second ۖ pause (~400ms) is
+ *    detected and correctly assigned to boundary 1, merging chunks [0+1] for
+ *    screen 1 and [2+3] for screen 2. Exactly what the user wants.
  *
- * 2. MERGE close pauses (within 1.5s of each other)
- *    A reciter sometimes double-pauses near a waqf mark: a brief stop,
- *    a quick breath, then a longer stop. The old code treated these as
- *    TWO separate boundaries, creating an ultra-short segment (~0.8s)
- *    that caused blank frames during fade transitions. Merging them into
- *    one boundary eliminates this.
- *
- * 3. Returns the MIDPOINT of merged pauses as the boundary timestamp
- *    instead of the raw start/end. This centers the text transition
- *    in the middle of the silence, which looks more natural.
+ * 2. FIXED breathing pause filter (was: "drop shorter of two close pauses")
+ *    The old rule dropped the shorter of any two pauses within 2000ms.
+ *    This was dangerous because two REAL waqf pauses can be close together
+ *    (e.g. 1.5-2s apart in a fast reciter) — the shorter real pause would
+ *    be incorrectly discarded.
+ *    New rule: only remove a pause if it is clearly a breath (< 400ms) AND
+ *    is within 3000ms of a clearly longer pause (≥ 400ms).
+ *    Two long pauses close together → both kept (both are real waqf stops).
  */
 function findInternalPauses(
   buffer: AudioBuffer,
   threshold = 0.015,
-  minGapMs = 250           // ← raised from 120
+  minGapMs = 350           // ← raised from 250ms; ignores brief "passing" waqf stops
 ): Array<{ startMs: number; endMs: number }> {
   const sr = buffer.sampleRate
   const ch0 = buffer.getChannelData(0)
@@ -168,34 +173,37 @@ function findInternalPauses(
   }
 
   // ── FILTER BREATHING PAUSES ──
-  // When a reciter approaches a waqf mark, they often do a quick breath
-  // (~200-350ms silence) followed by the actual waqf pause (~400-600ms).
-  // Both get detected as raw pauses. The breathing pause is a false
-  // positive that steals the boundary assignment from the real waqf pause.
+  // Remove a pause ONLY if it is clearly a breath (< 400ms) AND within
+  // 3000ms of a clearly longer pause (≥ 400ms). The longer one is the
+  // real waqf stop; the shorter one is a quick breath just before or
+  // after it.
   //
-  // Fix: if two pauses are within 2 seconds of each other, drop the
-  // shorter one. The longer one is the real waqf pause.
+  // OLD rule: "drop shorter of two pauses within 2000ms" — too aggressive.
+  // It incorrectly removed real waqf pauses when two waqf stops happened
+  // to be 1.5-2s apart and had similar (but not identical) durations.
   //
-  // Example (An-Nisa verse 2):
-  //   Pause at buf ~8.0s (340ms) ← breathing before waqf
-  //   Pause at buf ~9.2s (440ms) ← actual waqf stop
-  //   Distance: 0.9s → within 2s → drop the 340ms one ✓
+  // NEW rule: duration-aware. Two long pauses close together → BOTH kept.
+  const BREATHING_MAX_MS = 400
+  const BREATHING_PROXIMITY_MS = 3000
+
   const filtered: Array<{ startMs: number; endMs: number }> = [...rawPauses]
 
   for (let i = filtered.length - 1; i > 0; i--) {
     const prev = filtered[i - 1]
     const curr = filtered[i]
     const gap = curr.startMs - prev.endMs
+    const prevDur = prev.endMs - prev.startMs
+    const currDur = curr.endMs - curr.startMs
 
-    if (gap < 2000) {
-      // Close pauses → drop the shorter one (breathing)
-      const prevDur = prev.endMs - prev.startMs
-      const currDur = curr.endMs - curr.startMs
-      if (prevDur <= currDur) {
-        filtered.splice(i - 1, 1) // remove the shorter earlier pause
-      } else {
-        filtered.splice(i, 1) // remove the shorter later pause
+    if (gap < BREATHING_PROXIMITY_MS) {
+      if (prevDur < BREATHING_MAX_MS && currDur >= BREATHING_MAX_MS) {
+        // prev is a short breath before a real waqf → remove it
+        filtered.splice(i - 1, 1)
+      } else if (currDur < BREATHING_MAX_MS && prevDur >= BREATHING_MAX_MS) {
+        // curr is a short breath after a real waqf → remove it
+        filtered.splice(i, 1)
       }
+      // Both >= 400ms → both are real waqf pauses → keep both
     }
   }
 
@@ -404,37 +412,6 @@ async function exportVerseImages(
 // DISPLAY SEGMENT BUILDING — POSITION-MATCHED AUDIO PAUSES
 // ═══════════════════════════════════════════════════════════════════════
 
-/**
- * FIX v3 — POSITION-BASED MATCHING
- *
- * The v2 approach tried to match detected audio pauses to text waqf groups
- * 1:1. This failed because:
- *   - Reciters pause for breathing, emphasis, etc. — not just waqf marks
- *   - Close consecutive pauses created 0.8s segments → blank frames
- *   - "Pick the longest N pauses" didn't guarantee correct positions
- *
- * v3 approach: POSITION MATCHING
- * ─────────────────────────────────────────────────────────────────────
- * 1. Text chunks have cumulative proportional positions:
- *    e.g., 3 chunks → boundaries at 40% and 75% of text
- *
- * 2. These proportions estimate where in the AUDIO the boundary should be:
- *    e.g., 40% of audio duration ≈ first boundary
- *
- * 3. For each estimated boundary, find the NEAREST detected audio pause.
- *    This is more robust than 1:1 matching because:
- *    - Extra pauses (breathing) are harmlessly ignored
- *    - Missing pauses → the estimate is used without correction
- *    - Close pauses → only the one nearest to the text boundary is used
- *
- * 4. Each selected pause is snapped to: no two boundaries use the same
- *    pause, and they stay in chronological order.
- *
- * Result: For An-Nisa v1, the 400ms waqf pause at ~16s is the nearest
- * pause to the ~40% text boundary, and it gets selected. The 240ms
- * breathing pauses at other positions are ignored because they're not
- * nearest to any text boundary.
- */
 function buildDisplaySegments(
   verseTimings: Array<{ startMs: number; endMs: number }>,
   verses: Verse[],
@@ -490,13 +467,11 @@ function buildDisplaySegments(
     const verseDuration = timing.endMs - timing.startMs
     const numBoundaries = chunks.length - 1
 
-    // Compute text-based proportional boundary positions
     const weights = chunks.map(c =>
       c.charCount + (c.endsWithWaqf ? WAQF_BONUS_CHARS : 0)
     )
     const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
 
-    // textBoundaries[k] = the proportional position (0–1) where chunk k ends
     const textBoundaries: number[] = []
     let cumW = 0
     for (let j = 0; j < numBoundaries; j++) {
@@ -504,50 +479,27 @@ function buildDisplaySegments(
       textBoundaries.push(cumW / totalWeight)
     }
 
-    // Convert buffer-relative pauses → milliseconds from verse display start
     const bufferPauses = perBufferPauses[i] ?? []
     const rawStart = rawTimings[i].startMs
 
-    // Pause midpoints relative to verse display start, as proportions (0–1)
     const pauseProportions = bufferPauses.map(p => {
       const midMs = (p.startMs + p.endMs) / 2
       const relativeMs = (rawStart + midMs) - timing.startMs
       return {
         proportion: Math.max(0, Math.min(1, relativeMs / verseDuration)),
-        // Actual timeline positions for building segments
-        transitionMs: rawStart + p.startMs,  // text changes at pause start
-        resumeMs: rawStart + p.endMs,        // voice resumes at pause end
+        transitionMs: rawStart + p.startMs,
+        resumeMs: rawStart + p.endMs,
       }
     })
 
     if (pauseProportions.length > 0 && numBoundaries > 0) {
       // ═══ OPTIMAL PAUSE-FIRST MATCHING ═══
-      //
-      // FIX v4: The v3 algorithm was GREEDY in the wrong direction —
-      // it iterated boundaries in order and each boundary grabbed the
-      // nearest available pause. This caused boundary 0 to steal a
-      // pause that was actually closer to boundary 1.
-      //
-      // Example (An-Nisa verse 2):
-      //   Boundary 0 at 25.6%, Boundary 1 at 54.1%
-      //   Single pause at 40.9%
-      //   Greedy: Boundary 0 grabs it (dist 15.3%) → Boundary 1 gets nothing
-      //   Optimal: Pause goes to Boundary 1 (dist 13.2%) → correct!
-      //
-      // New algorithm: PAUSE-FIRST assignment
-      //   1. For each pause, find the boundary it's closest to
-      //   2. If two pauses claim the same boundary, keep the closer one
-      //   3. Enforce chronological order in a cleanup pass
-      //   4. Boundaries without a pause use proportional fallback
-
-      // Step 1+2: Each pause claims its closest boundary
-      // pauseToBoundary[pi] = boundary index, or -1 if no boundary is close
       const boundaryAssignment: Array<{ pauseIdx: number; dist: number } | null> =
         new Array(numBoundaries).fill(null)
 
       for (let pi = 0; pi < pauseProportions.length; pi++) {
         let closestBoundary = -1
-        let closestDist = 0.25 // max tolerance: 25% of verse
+        let closestDist = 0.25
 
         for (let k = 0; k < numBoundaries; k++) {
           const dist = Math.abs(pauseProportions[pi].proportion - textBoundaries[k])
@@ -560,21 +512,18 @@ function buildDisplaySegments(
         if (closestBoundary >= 0) {
           const existing = boundaryAssignment[closestBoundary]
           if (!existing || closestDist < existing.dist) {
-            // This pause is closer → replace
             boundaryAssignment[closestBoundary] = { pauseIdx: pi, dist: closestDist }
           }
         }
       }
 
-      // Step 3: Enforce chronological order — if boundary K's pause is
-      // earlier than boundary K-1's pause, drop the out-of-order one
+      // Enforce chronological order
       for (let k = 1; k < numBoundaries; k++) {
         const prev = boundaryAssignment[k - 1]
         const curr = boundaryAssignment[k]
         if (prev && curr) {
           if (pauseProportions[curr.pauseIdx].transitionMs <=
               pauseProportions[prev.pauseIdx].resumeMs) {
-            // Out of order — drop the one with worse fit
             if (prev.dist > curr.dist) {
               boundaryAssignment[k - 1] = null
             } else {
@@ -584,7 +533,6 @@ function buildDisplaySegments(
         }
       }
 
-      // Convert to selectedBoundaries format
       const selectedBoundaries: Array<{ startMs: number; endMs: number } | null> =
         boundaryAssignment.map(a => {
           if (!a) return null
@@ -594,7 +542,6 @@ function buildDisplaySegments(
           }
         })
 
-      // Debug: show how pauses were assigned
       console.log(`[sync] V${verseArrayIdx} pause assignment (${pauseProportions.length} pauses, ${numBoundaries} boundaries):`)
       for (let k = 0; k < numBoundaries; k++) {
         const a = boundaryAssignment[k]
@@ -605,25 +552,7 @@ function buildDisplaySegments(
         }
       }
 
-      // ── AUDIO-AWARE CHUNK MERGING (v5) ──────────────────────────────
-      // Instead of displaying every text chunk separately (even when the
-      // reciter reads through a waqf without stopping), MERGE chunks
-      // whose boundary has no matching audio pause.
-      //
-      // Example (An-Nisa verse 2, 4 text chunks, 3 boundaries):
-      //   Boundary 0 → null (reciter doesn't stop at first ۖ)
-      //   Boundary 1 → audio pause (reciter stops at second ۖ)
-      //   Boundary 2 → audio pause (reciter stops at ۚ)
-      //
-      //   Merge: [chunk0 + chunk1] [chunk2] [chunk3]
-      //   Display: 3 groups with 2 audio-driven transitions
-      //
-      // This adapts text display to each reciter's reading style:
-      //   - Slow reciter who stops at every waqf → all splits kept
-      //   - Fast reciter who reads through some → those splits merged
-      // ────────────────────────────────────────────────────────────────
-
-      // Group consecutive chunks: split only at boundaries with audio pauses
+      // ── AUDIO-AWARE CHUNK MERGING ──
       type DisplayGroup = {
         chunkIndices: number[]
         text: string
@@ -637,7 +566,6 @@ function buildDisplaySegments(
 
       for (let b = 0; b < numBoundaries; b++) {
         if (selectedBoundaries[b] !== null) {
-          // Reciter paused here → finalize current group, start new one
           const groupChunks = currentGroupIndices.map(ci => chunks[ci])
           const groupText = groupChunks.map(c => c.text).join(' ')
           const groupTranslation = currentGroupIndices.map(ci =>
@@ -653,12 +581,10 @@ function buildDisplaySegments(
           activePauses.push(selectedBoundaries[b]!)
           currentGroupIndices = [b + 1]
         } else {
-          // Reciter read through this waqf → merge next chunk into group
           currentGroupIndices.push(b + 1)
         }
       }
 
-      // Final group (always includes remaining chunks)
       {
         const groupChunks = currentGroupIndices.map(ci => chunks[ci])
         const groupText = groupChunks.map(c => c.text).join(' ')
@@ -674,13 +600,11 @@ function buildDisplaySegments(
         })
       }
 
-      // Debug
       console.log(`[sync] V${verseArrayIdx} audio-aware merge: ${chunks.length} text chunks → ${displayGroups.length} display groups`)
       displayGroups.forEach((g, gi) => {
         console.log(`  Group ${gi}: chunks [${g.chunkIndices.join(',')}] "${g.text.slice(0, 30)}…"`)
       })
 
-      // Build segments: each group boundary = one audio pause midpoint
       for (let g = 0; g < displayGroups.length; g++) {
         const group = displayGroups[g]
 
@@ -692,7 +616,6 @@ function buildDisplaySegments(
           ? timing.endMs
           : (activePauses[g].startMs + activePauses[g].endMs) / 2
 
-        // If the group contains ALL chunks, don't set chunkText (shows full verse)
         const isFullVerse = group.chunkIndices.length === chunks.length
 
         segments.push({
@@ -823,7 +746,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         }
         const totalDurationMs = timeOffset
 
-        // ── Audio analysis ──
         const leadingSilences = decodedBuffers.map(buf => findLeadingSilenceMs(buf))
         const displayTimings = rawTimings.map((raw, i) => ({
           startMs: raw.startMs + leadingSilences[i],
@@ -832,7 +754,6 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             : totalDurationMs,
         }))
 
-        // ── Internal pause detection (v3: higher threshold + merged) ──
         const perBufferPauses = decodedBuffers.map(buf => findInternalPauses(buf))
 
         perBufferPauses.forEach((pauses, i) => {

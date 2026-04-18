@@ -450,7 +450,10 @@ function buildDisplaySegments(
   qdcSegmentsByDisplayIndex: Array<number[][] | null>
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
-  const WAQF_BONUS_CHARS = 14
+  // Slight nudge so waqf-bearing chunks weigh more in proportional boundaries,
+  // without shifting early boundaries too far right (which invited pause “stealing”
+  // in verses like An-Nisa 4:2). Was 14; 11 keeps boundaries closer to raw character share.
+  const WAQF_BONUS_CHARS = 11
 
   for (let i = 0; i < verseTimings.length; i++) {
     const timing = verseTimings[i]
@@ -547,23 +550,26 @@ function buildDisplaySegments(
       const boundaryAssignment: Array<{ pauseIdx: number; dist: number } | null> =
         new Array(numBoundaries).fill(null)
 
+      // Max ratio distance between pause position and a text boundary (0–1 scale of verse duration).
+      // 25% was too loose: a pause near the second waqf could still lie within range of the first boundary.
+      const MAX_PAUSE_TO_BOUNDARY_DIST = 0.13 // ~13% — stricter; use 0.15 if too many misses in practice
+
       for (let pi = 0; pi < pauseProportions.length; pi++) {
-        let closestBoundary = -1
-        let closestDist = 0.25 // max tolerance: 25% of verse
+        let bestBoundary = -1
+        let bestDist = Number.POSITIVE_INFINITY
 
         for (let k = 0; k < numBoundaries; k++) {
           const dist = Math.abs(pauseProportions[pi].proportion - textBoundaries[k])
-          if (dist < closestDist) {
-            closestDist = dist
-            closestBoundary = k
+          if (dist < bestDist) {
+            bestDist = dist
+            bestBoundary = k
           }
         }
 
-        if (closestBoundary >= 0) {
-          const existing = boundaryAssignment[closestBoundary]
-          if (!existing || closestDist < existing.dist) {
-            // This pause is closer → replace
-            boundaryAssignment[closestBoundary] = { pauseIdx: pi, dist: closestDist }
+        if (bestBoundary >= 0 && bestDist < MAX_PAUSE_TO_BOUNDARY_DIST) {
+          const existing = boundaryAssignment[bestBoundary]
+          if (!existing || bestDist < existing.dist) {
+            boundaryAssignment[bestBoundary] = { pauseIdx: pi, dist: bestDist }
           }
         }
       }

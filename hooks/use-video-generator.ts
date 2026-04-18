@@ -591,6 +591,9 @@ function buildDisplaySegments(
       }
 
       // Build chunk segments using selected boundaries
+      // FIX: Use pause MIDPOINT as the transition point, not start/end.
+      // Using start/end created gaps (pause.startMs → pause.endMs) where
+      // no segment existed, causing blank frames. Midpoint = seamless.
       for (let j = 0; j < chunks.length; j++) {
         const chunk = chunks[j]
 
@@ -602,8 +605,8 @@ function buildDisplaySegments(
         } else {
           const prevBoundary = selectedBoundaries[j - 1]
           chunkStartMs = prevBoundary
-            ? prevBoundary.endMs    // voice resumes after pause
-            : timing.startMs + textBoundaries[j - 1] * verseDuration  // proportional fallback
+            ? (prevBoundary.startMs + prevBoundary.endMs) / 2  // pause midpoint
+            : timing.startMs + textBoundaries[j - 1] * verseDuration
         }
 
         if (j === chunks.length - 1) {
@@ -611,8 +614,8 @@ function buildDisplaySegments(
         } else {
           const boundary = selectedBoundaries[j]
           chunkEndMs = boundary
-            ? boundary.startMs      // text changes at pause start
-            : timing.startMs + textBoundaries[j] * verseDuration  // proportional fallback
+            ? (boundary.startMs + boundary.endMs) / 2  // pause midpoint
+            : timing.startMs + textBoundaries[j] * verseDuration
         }
 
         // Safety: ensure no negative or zero-length segments

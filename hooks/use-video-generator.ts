@@ -53,6 +53,36 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
+/** Loads a video for canvas use: muted (required for autoplay), loops for short clips vs long audio, inline for mobile. */
+function loadVideo(src: string): Promise<HTMLVideoElement> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video')
+    video.muted = true
+    video.loop = true
+    video.playsInline = true
+    video.setAttribute('playsinline', '')
+    video.setAttribute('webkit-playsinline', '')
+    video.preload = 'auto'
+    if (!src.startsWith('blob:') && !src.startsWith('data:')) {
+      video.crossOrigin = 'anonymous'
+    }
+    const onReady = () => {
+      video.removeEventListener('loadeddata', onReady)
+      video.removeEventListener('error', onErr)
+      resolve(video)
+    }
+    const onErr = () => {
+      video.removeEventListener('loadeddata', onReady)
+      video.removeEventListener('error', onErr)
+      reject(new Error('Failed to load background video'))
+    }
+    video.addEventListener('loadeddata', onReady)
+    video.addEventListener('error', onErr)
+    video.src = src
+    video.load()
+  })
+}
+
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath()
   ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y)
@@ -207,9 +237,26 @@ function findInternalPauses(
 // DRAWING (unchanged)
 // ═══════════════════════════════════════════════════════════════════════
 
+function drawRasterBackground(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  el: HTMLImageElement | HTMLVideoElement,
+) {
+  const w = el instanceof HTMLVideoElement ? el.videoWidth : el.width
+  const h = el instanceof HTMLVideoElement ? el.videoHeight : el.height
+  if (!w || !h) return
+  const scale = Math.max(width / w, height / h)
+  const x = (width - w * scale) / 2
+  const y = (height - h * scale) / 2
+  ctx.drawImage(el, x, y, w * scale, h * scale)
+}
+
 function drawFrame(
   ctx: CanvasRenderingContext2D, width: number, height: number,
-  backgroundImage: HTMLImageElement | null, background: { type: string; value: string },
+  backgroundImage: HTMLImageElement | null,
+  backgroundVideo: HTMLVideoElement | null,
+  background: BackgroundOption,
   surahName: string, verse: Verse | undefined, showTranslation: boolean,
   displayMode: 'minimal' | 'classic', taawudhText?: string, animTimeMs?: number,
   chunkText?: string, showMarker: boolean = true, showTranslationOverride: boolean = true,
@@ -220,11 +267,10 @@ function drawFrame(
 
   if (background.type === 'animated') {
     drawAnimatedBackground(ctx, width, height, animTimeMs ?? 0, background.value)
+  } else if (background.type === 'video' && backgroundVideo) {
+    drawRasterBackground(ctx, width, height, backgroundVideo)
   } else if (backgroundImage) {
-    const scale = Math.max(width / backgroundImage.width, height / backgroundImage.height)
-    const x = (width - backgroundImage.width * scale) / 2
-    const y = (height - backgroundImage.height * scale) / 2
-    ctx.drawImage(backgroundImage, x, y, backgroundImage.width * scale, backgroundImage.height * scale)
+    drawRasterBackground(ctx, width, height, backgroundImage)
   } else {
     const gradient = ctx.createLinearGradient(0, 0, 0, height)
     if (background.value.includes('emerald')) {
@@ -242,7 +288,10 @@ function drawFrame(
     ctx.fillRect(0, 0, width, height)
   }
 
-  const hasRichBg = background.type === 'animated' || !!backgroundImage
+  const hasRichBg =
+    background.type === 'animated' ||
+    (background.type === 'video' && !!backgroundVideo) ||
+    !!backgroundImage
   if (displayMode === 'minimal') {
     ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.20)'
   } else {
@@ -382,12 +431,13 @@ function drawFrame(
 
 async function exportVerseImages(
   ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, verses: Verse[],
-  background: { type: string; value: string }, backgroundImage: HTMLImageElement | null,
+  background: BackgroundOption, backgroundImage: HTMLImageElement | null,
+  backgroundVideo: HTMLVideoElement | null,
   surahName: string, showTranslation: boolean, displayMode: 'minimal' | 'classic',
   setProgress: (n: number) => void
 ) {
   for (let i = 0; i < verses.length; i++) {
-    drawFrame(ctx, canvas.width, canvas.height, backgroundImage, background, surahName, verses[i], showTranslation, displayMode, undefined, i * 3000)
+    drawFrame(ctx, canvas.width, canvas.height, backgroundImage, backgroundVideo, background, surahName, verses[i], showTranslation, displayMode, undefined, i * 3000)
     const blob = await new Promise<Blob>((resolve) => { canvas.toBlob((b) => resolve(b!), 'image/png', 1.0) })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -910,8 +960,12 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         setProgress(35)
 
         let backgroundImage: HTMLImageElement | null = null
+        let backgroundVideo: HTMLVideoElement | null = null
         if (background.type === 'custom' || background.type === 'preset') {
           try { backgroundImage = await loadImage(background.value) } catch { }
+        }
+        if (background.type === 'video') {
+          try { backgroundVideo = await loadVideo(background.value) } catch { }
         }
 
         try { await document.fonts.load('52px "Nabi"') } catch { }
@@ -968,7 +1022,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
         if (!useMediaRecorder) {
           audioCtx.close()
-          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, surahName, showTranslation, displayMode, setProgress)
+          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideo, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording is not supported in this browser. Downloaded verse images instead.')
           return
@@ -996,6 +1050,15 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             mediaRecorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }))
             mediaRecorder.onerror = (e) => reject(new Error('MediaRecorder: ' + (e as ErrorEvent).message))
           })
+
+          if (backgroundVideo) {
+            backgroundVideo.currentTime = 0
+            try {
+              await backgroundVideo.play()
+            } catch (e) {
+              console.warn('[video] background play():', e)
+            }
+          }
 
           mediaRecorder.start()
           const audioStartTime = audioCtx.currentTime
@@ -1032,17 +1095,22 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             }
 
             if (seg.type === 'intro') {
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs)
+              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs)
             } else {
               const verse = seg.verseIndex !== undefined ? verses[seg.verseIndex] : undefined
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText)
+              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText)
             }
 
             setProgress(50 + videoProgress * 48)
             if (elapsedMs >= totalDurationMs || cancelledRef.current) {
               recordingFinished = true
               timerWorker.postMessage('stop'); timerWorker.terminate(); URL.revokeObjectURL(timerUrl)
-              setTimeout(() => { source.stop(); mediaRecorder.stop(); audioCtx.close() }, 300)
+              setTimeout(() => {
+                if (backgroundVideo) {
+                  try { backgroundVideo.pause() } catch { /* noop */ }
+                }
+                source.stop(); mediaRecorder.stop(); audioCtx.close()
+              }, 300)
             }
           }
 
@@ -1071,7 +1139,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           setProgress(100); setIsGenerating(false)
         } catch (mediaErr) {
           audioCtx.close()
-          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, surahName, showTranslation, displayMode, setProgress)
+          if (backgroundVideo) {
+            try { backgroundVideo.pause() } catch { /* noop */ }
+          }
+          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideo, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording failed. Downloaded verse images instead.')
         }

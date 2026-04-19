@@ -10,7 +10,6 @@ import { BackgroundSelector } from '@/components/quran/background-selector'
 import { TranslationSettings } from '@/components/quran/translation-settings'
 import { DisplayModeSelector } from '@/components/quran/display-mode-selector'
 import { DownloadButton } from '@/components/video/download-button'
-import { VideoPreview } from '@/components/video/video-preview'
 
 const GOLD = '#c9a84c'
 const GOLD_DARK = '#a07830'
@@ -73,7 +72,7 @@ export default function QuranReelsGenerator() {
         />
 
         <header className="sticky top-0 z-50 border-b border-stone-200/90 bg-white/90 backdrop-blur-md dark:border-slate-800/90 dark:bg-slate-950/85">
-          <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3">
+          <div className="mx-auto w-full max-w-3xl xl:max-w-4xl px-4 sm:px-6 py-3">
             <div className="flex items-center gap-3">
               <ThemeToggleButton />
               <div className="flex-1 min-w-0">
@@ -94,10 +93,9 @@ export default function QuranReelsGenerator() {
           </div>
         </header>
 
-        <main className="relative mx-auto max-w-[1400px] px-4 sm:px-6 py-8 lg:py-10">
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:gap-12 xl:gap-16 lg:items-start">
-            {/* Settings: scrollable on desktop; below preview on small screens (order) */}
-            <div className="order-2 min-w-0 lg:order-1 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overflow-x-hidden lg:pr-2 lg:[scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 [&::-webkit-scrollbar-track]:bg-transparent dark:[&::-webkit-scrollbar-thumb]:bg-slate-700">
+        <main className="relative mx-auto w-full max-w-3xl xl:max-w-4xl px-4 sm:px-6 py-8 lg:py-10">
+          <div className="mx-auto min-w-0">
+            <div className="max-h-[calc(100vh-5.5rem)] overflow-y-auto overflow-x-hidden pr-1 sm:pr-2 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 [&::-webkit-scrollbar-track]:bg-transparent dark:[&::-webkit-scrollbar-thumb]:bg-slate-700">
               <div className="space-y-0">
                 <section className="pb-8">
                   <SectionTitle>Source</SectionTitle>
@@ -170,24 +168,6 @@ export default function QuranReelsGenerator() {
                 </p>
               </div>
             </div>
-
-            {/* Single preview: sticky phone frame on lg+; first on mobile */}
-            <aside className="order-1 flex flex-col items-center lg:order-2 lg:sticky lg:top-28 lg:self-start">
-              <p className="mb-4 w-full text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500 dark:text-slate-500">
-                Preview
-              </p>
-              <div className="relative flex w-full max-w-[300px] justify-center lg:max-w-none">
-                <div className="relative rounded-[2.75rem] border-[10px] border-stone-300 bg-stone-100 p-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] ring-1 ring-stone-400/35 dark:border-slate-800 dark:bg-slate-900 dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.06)] dark:ring-slate-700/60">
-                  <div className="mx-auto aspect-[9/16] w-full max-w-[280px] overflow-hidden rounded-[2.1rem] bg-black">
-                    <VideoPreview />
-                  </div>
-                  <div
-                    className="absolute top-3 left-1/2 h-5 w-20 -translate-x-1/2 rounded-full bg-stone-200/95 dark:bg-slate-950/90"
-                    aria-hidden
-                  />
-                </div>
-              </div>
-            </aside>
           </div>
         </main>
 

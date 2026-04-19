@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, Upload, X, ChevronDown, ImageIcon } from 'lucide-react'
+import { Check, Upload, X, ChevronDown, ImageIcon, Video } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
@@ -51,7 +51,18 @@ function BgThumbnail({ bg }: { bg: BackgroundOption }) {
   if (bg.type === 'gradient') {
     return <div className="w-full h-full" style={{ background: bg.value }} />
   }
-  // preset (nature photo)
+  if (bg.type === 'video') {
+    return (
+      <video
+        src={bg.thumbnail || bg.value}
+        muted
+        playsInline
+        loop
+        className="h-full w-full object-cover"
+      />
+    )
+  }
+  // preset (nature photo) or custom image
   return (
     <img
       src={bg.thumbnail || bg.value}
@@ -78,26 +89,45 @@ function ActiveBadge() {
   )
 }
 
+const CUSTOM_IMAGE_ID = 'custom-upload'
+const CUSTOM_VIDEO_ID = 'custom-video-upload'
+
 export function BackgroundSelector() {
   const { config, setConfig } = useReel()
-  const [customBackground, setCustomBackground] = useState<BackgroundOption | null>(null)
+  const [customImageBg, setCustomImageBg] = useState<BackgroundOption | null>(null)
+  const [customVideoBg, setCustomVideoBg] = useState<BackgroundOption | null>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
   const [activeCategory, setActiveCategory] = useState<Category>('animated')
   const [expanded, setExpanded] = useState(false)
-  const [isDraggingFile, setIsDraggingFile] = useState(false)
+  const [isDraggingImage, setIsDraggingImage] = useState(false)
+  const [isDraggingVideo, setIsDraggingVideo] = useState(false)
 
-  const isCustomActive = config.background?.id === 'custom-upload'
+  const isCustomImageActive = config.background?.id === CUSTOM_IMAGE_ID
+  const isCustomVideoActive = config.background?.id === CUSTOM_VIDEO_ID
+  const isCustomActive = isCustomImageActive || isCustomVideoActive
 
   const handleSelect = (bg: BackgroundOption) => setConfig({ background: bg })
 
   const applyImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) { alert('Please select an image file'); return }
-    if (customBackground?.value) URL.revokeObjectURL(customBackground.value)
+    if (customImageBg?.value) URL.revokeObjectURL(customImageBg.value)
     const url = URL.createObjectURL(file)
     const custom: BackgroundOption = {
-      id: 'custom-upload', name: file.name, type: 'custom', value: url, thumbnail: url,
+      id: CUSTOM_IMAGE_ID, name: file.name, type: 'custom', value: url, thumbnail: url,
     }
-    setCustomBackground(custom)
+    setCustomImageBg(custom)
+    setConfig({ background: custom })
+  }
+
+  const applyVideoFile = (file: File) => {
+    if (!file.type.startsWith('video/')) { alert('Please select a video file'); return }
+    if (customVideoBg?.value) URL.revokeObjectURL(customVideoBg.value)
+    const url = URL.createObjectURL(file)
+    const custom: BackgroundOption = {
+      id: CUSTOM_VIDEO_ID, name: file.name, type: 'video', value: url, thumbnail: url,
+    }
+    setCustomVideoBg(custom)
     setConfig({ background: custom })
   }
 
@@ -107,11 +137,24 @@ export function BackgroundSelector() {
     applyImageFile(file)
   }
 
+  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    applyVideoFile(file)
+  }
+
   const clearCustomImage = () => {
-    if (customBackground?.value) URL.revokeObjectURL(customBackground.value)
-    setCustomBackground(null)
-    setConfig({ background: PRESET_BACKGROUNDS[0] })
+    if (customImageBg?.value) URL.revokeObjectURL(customImageBg.value)
+    setCustomImageBg(null)
+    if (isCustomImageActive) setConfig({ background: PRESET_BACKGROUNDS[0] })
     if (imageInputRef.current) imageInputRef.current.value = ''
+  }
+
+  const clearCustomVideo = () => {
+    if (customVideoBg?.value) URL.revokeObjectURL(customVideoBg.value)
+    setCustomVideoBg(null)
+    if (isCustomVideoActive) setConfig({ background: PRESET_BACKGROUNDS[0] })
+    if (videoInputRef.current) videoInputRef.current.value = ''
   }
 
   // Get items for current category
@@ -129,24 +172,44 @@ export function BackgroundSelector() {
     setExpanded(false)
   }
 
-  const onDragOverUpload = (e: React.DragEvent) => {
+  const onDragOverImage = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (e.dataTransfer.types?.includes('Files')) setIsDraggingFile(true)
+    if (e.dataTransfer.types?.includes('Files')) setIsDraggingImage(true)
   }
 
-  const onDragLeaveUpload = (e: React.DragEvent) => {
+  const onDragLeaveImage = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setIsDraggingFile(false)
+    setIsDraggingImage(false)
   }
 
-  const onDropUpload = (e: React.DragEvent) => {
+  const onDropImage = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    setIsDraggingFile(false)
+    setIsDraggingImage(false)
     const file = e.dataTransfer.files?.[0]
     if (file) applyImageFile(file)
+  }
+
+  const onDragOverVideo = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer.types?.includes('Files')) setIsDraggingVideo(true)
+  }
+
+  const onDragLeaveVideo = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingVideo(false)
+  }
+
+  const onDropVideo = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingVideo(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) applyVideoFile(file)
   }
 
   return (
@@ -165,13 +228,22 @@ export function BackgroundSelector() {
           borderColor: isCustomActive ? 'rgba(34,197,94,0.25)' : undefined,
         }}
       >
-        <ImageIcon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }} />
+        {isCustomVideoActive ? (
+          <Video className="h-3.5 w-3.5 flex-shrink-0" style={{ color: '#22c55e' }} />
+        ) : (
+          <ImageIcon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }} />
+        )}
         <span style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }}>
-          Using: <strong>{isCustomActive ? `Uploaded — ${config.background?.name}` : config.background?.name || 'None'}</strong>
+          Using:{' '}
+          <strong>
+            {isCustomImageActive && `Image — ${config.background?.name}`}
+            {isCustomVideoActive && `Video — ${config.background?.name}`}
+            {!isCustomActive && (config.background?.name || 'None')}
+          </strong>
         </span>
       </div>
 
-      {/* ── Custom Image Upload (drag-and-drop zone) ── */}
+      {/* ── Custom image & video uploads ── */}
       <div
         className="border-b border-t border-stone-200/90 pt-2 pb-3 dark:border-slate-800/90"
         style={{
@@ -179,65 +251,148 @@ export function BackgroundSelector() {
         }}
       >
         <p className="mb-3 text-xs text-stone-600 dark:text-slate-500">
-          Custom Image {isCustomActive && <span className="font-semibold text-emerald-600 dark:text-emerald-400"> • In use</span>}
+          Custom media {isCustomActive && <span className="font-semibold text-emerald-600 dark:text-emerald-400"> • In use</span>}
         </p>
-        {customBackground ? (
-          <div className="flex items-center gap-3">
-            <div className="relative">
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* Image */}
+          <div className="min-w-0">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">
+              Image
+            </p>
+            {customImageBg ? (
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(customImageBg)}
+                    className={cn(
+                      'relative w-16 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all block',
+                      isCustomImageActive
+                        ? 'border-green-500 ring-2 ring-green-500/20'
+                        : 'border-transparent hover:border-primary/50'
+                    )}
+                  >
+                    <img src={customImageBg.value} alt="" className="w-full h-full object-cover" />
+                    {isCustomImageActive && <ActiveBadge />}
+                    {isCustomImageActive && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <Check className="h-4 w-4 text-white" />
+                      </div>
+                    )}
+                  </button>
+                  <Button
+                    variant="ghost" size="icon"
+                    className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground"
+                    onClick={clearCustomImage}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+                {!isCustomImageActive && (
+                  <p className="text-[11px] text-stone-600 dark:text-slate-500">Tap thumbnail to select</p>
+                )}
+              </div>
+            ) : (
               <button
-                onClick={() => handleSelect(customBackground)}
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                onDragOver={onDragOverImage}
+                onDragLeave={onDragLeaveImage}
+                onDrop={onDropImage}
                 className={cn(
-                  'relative w-16 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all block',
-                  isCustomActive
-                    ? 'border-green-500 ring-2 ring-green-500/20'
-                    : 'border-transparent hover:border-primary/50'
+                  'relative flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-3 py-7 text-center transition-colors',
+                  'bg-stone-50/90 hover:bg-amber-50/60 dark:bg-slate-900/30 dark:hover:bg-slate-800/40',
+                  isDraggingImage
+                    ? 'border-amber-500/80 bg-amber-100/80 ring-2 ring-amber-400/25 dark:bg-amber-500/10 dark:ring-amber-500/20'
+                    : 'border-stone-400/90 hover:border-amber-400/70 dark:border-slate-600/90 dark:hover:border-slate-500'
                 )}
               >
-                <img src={customBackground.value} alt="Custom" className="w-full h-full object-cover" />
-                {isCustomActive && <ActiveBadge />}
-                {isCustomActive && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                    <Check className="h-4 w-4 text-white" />
-                  </div>
-                )}
+                <div className="rounded-full bg-white p-2 ring-1 ring-stone-300 dark:bg-slate-800/90 dark:ring-slate-600/80">
+                  <ImageIcon className="h-4 w-4 text-stone-600 dark:text-slate-300" />
+                </div>
+                <span className="text-xs font-medium text-stone-800 dark:text-slate-200">Image upload</span>
+                <span className="text-[10px] text-stone-600 dark:text-slate-500">Drag &amp; drop or click</span>
               </button>
-              <Button
-                variant="ghost" size="icon"
-                className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground"
-                onClick={clearCustomImage}
-              >
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-            {!isCustomActive && (
-              <p className="text-xs text-stone-600 dark:text-slate-500">
-                Click the thumbnail to use this image
-              </p>
             )}
+            <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => imageInputRef.current?.click()}
-            onDragOver={onDragOverUpload}
-            onDragLeave={onDragLeaveUpload}
-            onDrop={onDropUpload}
-            className={cn(
-              'relative flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-10 text-center transition-colors',
-              'bg-stone-50/90 hover:bg-amber-50/60 dark:bg-slate-900/30 dark:hover:bg-slate-800/40',
-              isDraggingFile
-                ? 'border-amber-500/80 bg-amber-100/80 ring-2 ring-amber-400/25 dark:bg-amber-500/10 dark:ring-amber-500/20'
-                : 'border-stone-400/90 hover:border-amber-400/70 dark:border-slate-600/90 dark:hover:border-slate-500'
+
+          {/* Video */}
+          <div className="min-w-0">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">
+              Video
+            </p>
+            {customVideoBg ? (
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => handleSelect(customVideoBg)}
+                    className={cn(
+                      'relative w-16 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all block bg-black',
+                      isCustomVideoActive
+                        ? 'border-green-500 ring-2 ring-green-500/20'
+                        : 'border-transparent hover:border-primary/50'
+                    )}
+                  >
+                    <video
+                      src={customVideoBg.value}
+                      muted
+                      playsInline
+                      loop
+                      className="h-full w-full object-cover"
+                    />
+                    {isCustomVideoActive && <ActiveBadge />}
+                    {isCustomVideoActive && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <Check className="h-4 w-4 text-white" />
+                      </div>
+                    )}
+                  </button>
+                  <Button
+                    variant="ghost" size="icon"
+                    className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground"
+                    onClick={clearCustomVideo}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+                {!isCustomVideoActive && (
+                  <p className="text-[11px] text-stone-600 dark:text-slate-500">Tap thumbnail to select</p>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                onDragOver={onDragOverVideo}
+                onDragLeave={onDragLeaveVideo}
+                onDrop={onDropVideo}
+                className={cn(
+                  'relative flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-3 py-7 text-center transition-colors',
+                  'bg-stone-50/90 hover:bg-amber-50/60 dark:bg-slate-900/30 dark:hover:bg-slate-800/40',
+                  isDraggingVideo
+                    ? 'border-amber-500/80 bg-amber-100/80 ring-2 ring-amber-400/25 dark:bg-amber-500/10 dark:ring-amber-500/20'
+                    : 'border-stone-400/90 hover:border-amber-400/70 dark:border-slate-600/90 dark:hover:border-slate-500'
+                )}
+              >
+                <div className="rounded-full bg-white p-2 ring-1 ring-stone-300 dark:bg-slate-800/90 dark:ring-slate-600/80">
+                  <Video className="h-4 w-4 text-stone-600 dark:text-slate-300" />
+                </div>
+                <span className="text-xs font-medium text-stone-800 dark:text-slate-200">Video upload</span>
+                <span className="text-[10px] text-stone-600 dark:text-slate-500">Drag &amp; drop or click</span>
+              </button>
             )}
-          >
-            <div className="rounded-full bg-white p-2.5 ring-1 ring-stone-300 dark:bg-slate-800/90 dark:ring-slate-600/80">
-              <Upload className="h-5 w-5 text-stone-600 dark:text-slate-300" />
-            </div>
-            <span className="text-sm font-medium text-stone-800 dark:text-slate-200">Upload image</span>
-            <span className="text-xs text-stone-600 dark:text-slate-500">Drag &amp; drop here, or click to browse</span>
-          </button>
-        )}
-        <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept="video/mp4, video/webm, video/quicktime"
+              onChange={handleVideoUpload}
+              className="hidden"
+            />
+          </div>
+        </div>
       </div>
 
       {/* ── Category segmented control ── */}
@@ -276,7 +431,7 @@ export function BackgroundSelector() {
               title={bg.name}
               className={cn(
                 'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all',
-                bg.type === 'animated' || bg.type === 'preset' ? 'bg-black' : 'bg-muted',
+                bg.type === 'animated' || bg.type === 'preset' || bg.type === 'video' ? 'bg-black' : 'bg-muted',
                 isSelected
                   ? 'border-primary ring-2 ring-primary/20'
                   : 'border-transparent hover:border-primary/50'

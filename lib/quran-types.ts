@@ -138,8 +138,9 @@ export interface ReelConfig {
 export interface BackgroundOption {
   id: string
   name: string
-  type: 'preset' | 'custom' | 'gradient' | 'animated'
-  value: string // URL for preset/custom, CSS gradient for gradient, animation name for animated
+  type: 'preset' | 'custom' | 'gradient' | 'animated' | 'video'
+  /** URL: preset/custom image, object URL for custom video, CSS gradient string, or animation key */
+  value: string
   thumbnail?: string
 }
 

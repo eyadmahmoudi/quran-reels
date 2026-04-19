@@ -53,31 +53,23 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
-/** Loads a video for canvas use: muted (required for autoplay), loops for short clips vs long audio, inline for mobile. */
+/** Loads an off-DOM video for canvas: blob-safe, forces fetch via load(), resolves on canplay. */
 function loadVideo(src: string): Promise<HTMLVideoElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video')
     video.muted = true
     video.loop = true
     video.playsInline = true
-    video.setAttribute('playsinline', '')
-    video.setAttribute('webkit-playsinline', '')
+    video.autoplay = true
     video.preload = 'auto'
+
     if (!src.startsWith('blob:') && !src.startsWith('data:')) {
       video.crossOrigin = 'anonymous'
     }
-    const onReady = () => {
-      video.removeEventListener('loadeddata', onReady)
-      video.removeEventListener('error', onErr)
-      resolve(video)
-    }
-    const onErr = () => {
-      video.removeEventListener('loadeddata', onReady)
-      video.removeEventListener('error', onErr)
-      reject(new Error('Failed to load background video'))
-    }
-    video.addEventListener('loadeddata', onReady)
-    video.addEventListener('error', onErr)
+
+    video.oncanplay = () => resolve(video)
+    video.onerror = () => reject(new Error('Failed to load background video'))
+
     video.src = src
     video.load()
   })
@@ -965,7 +957,11 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           try { backgroundImage = await loadImage(background.value) } catch { }
         }
         if (background.type === 'video') {
-          try { backgroundVideo = await loadVideo(background.value) } catch { }
+          try {
+            backgroundVideo = await loadVideo(background.value)
+          } catch (e) {
+            console.error('[video-bg] Error loading video:', e)
+          }
         }
 
         try { await document.fonts.load('52px "Nabi"') } catch { }

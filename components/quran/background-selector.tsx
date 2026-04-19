@@ -131,22 +131,24 @@ export function BackgroundSelector() {
     if (videoFiles.length === 0) { alert('Please select a video file'); return }
 
     const MAX_VIDEOS = 4
-    if (videoFiles.length > MAX_VIDEOS) {
-      alert(`Please select up to ${MAX_VIDEOS} videos.`)
+    const existing =
+      customVideoBg?.type === 'video'
+        ? (Array.isArray(customVideoBg.value) ? customVideoBg.value : [customVideoBg.value])
+        : []
+
+    const remainingSlots = Math.max(0, MAX_VIDEOS - existing.length)
+    if (remainingSlots === 0) { alert(`You already have ${MAX_VIDEOS} videos in your playlist.`); return }
+
+    if (videoFiles.length > remainingSlots) {
+      alert(`You can add up to ${remainingSlots} more video${remainingSlots === 1 ? '' : 's'} (max ${MAX_VIDEOS} total).`)
     }
 
-    const kept = videoFiles.slice(0, MAX_VIDEOS)
-
-    if (customVideoBg?.value) {
-      const prev = customVideoBg.value
-      if (Array.isArray(prev)) prev.forEach((u) => URL.revokeObjectURL(u))
-      else URL.revokeObjectURL(prev)
-    }
-
-    const urls = kept.map((f) => URL.createObjectURL(f))
+    const kept = videoFiles.slice(0, remainingSlots)
+    const newUrls = kept.map((f) => URL.createObjectURL(f))
+    const urls = [...existing, ...newUrls].slice(0, MAX_VIDEOS)
     const custom: BackgroundOption = {
       id: CUSTOM_VIDEO_ID,
-      name: kept.length === 1 ? kept[0].name : `Playlist (${kept.length} videos)`,
+      name: urls.length === 1 ? (kept[0]?.name ?? 'Video') : `Playlist (${urls.length} videos)`,
       type: 'video',
       value: urls,
       thumbnail: urls[0],
@@ -236,8 +238,29 @@ export function BackgroundSelector() {
     e.preventDefault()
     e.stopPropagation()
     setIsDraggingVideo(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) applyVideoFile(file)
+    const files = Array.from(e.dataTransfer.files ?? [])
+    if (files.length > 0) applyVideoFiles(files)
+  }
+
+  const removeVideoFromPlaylist = (urlToRemove: string) => {
+    if (!customVideoBg || customVideoBg.type !== 'video') return
+    const existing = Array.isArray(customVideoBg.value) ? customVideoBg.value : [customVideoBg.value]
+    const next = existing.filter((u) => u !== urlToRemove)
+    try { URL.revokeObjectURL(urlToRemove) } catch { /* noop */ }
+
+    if (next.length === 0) {
+      clearCustomVideo()
+      return
+    }
+
+    const updated: BackgroundOption = {
+      ...customVideoBg,
+      name: next.length === 1 ? 'Video' : `Playlist (${next.length} videos)`,
+      value: next,
+      thumbnail: next[0],
+    }
+    setCustomVideoBg(updated)
+    setConfig({ background: updated })
   }
 
   return (
@@ -352,42 +375,74 @@ export function BackgroundSelector() {
               Video
             </p>
             {customVideoBg ? (
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => handleSelect(customVideoBg)}
-                    className={cn(
-                      'relative w-16 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all block bg-black',
-                      isCustomVideoActive
-                        ? 'border-green-500 ring-2 ring-green-500/20'
-                        : 'border-transparent hover:border-primary/50'
-                    )}
-                  >
-                    <video
-                      src={typeof customVideoBg.value === 'string' ? customVideoBg.value : (customVideoBg.value[0] ?? '')}
-                      muted
-                      playsInline
-                      loop
-                      className="h-full w-full object-cover"
-                    />
-                    {isCustomVideoActive && <ActiveBadge />}
-                    {isCustomVideoActive && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                        <Check className="h-4 w-4 text-white" />
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {(Array.isArray(customVideoBg.value) ? customVideoBg.value : [customVideoBg.value]).map((url) => (
+                    <div key={url} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => handleSelect(customVideoBg)}
+                        className={cn(
+                          'relative w-16 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all block bg-black',
+                          isCustomVideoActive
+                            ? 'border-green-500 ring-2 ring-green-500/20'
+                            : 'border-transparent hover:border-primary/50'
+                        )}
+                        title="Use this playlist"
+                      >
+                        <video
+                          src={url}
+                          muted
+                          playsInline
+                          loop
+                          className="h-full w-full object-cover"
+                        />
+                        {isCustomVideoActive && <ActiveBadge />}
+                        {isCustomVideoActive && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                            <Check className="h-4 w-4 text-white" />
+                          </div>
+                        )}
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground"
+                        onClick={() => removeVideoFromPlaylist(url)}
+                        title="Remove video"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  {(Array.isArray(customVideoBg.value) ? customVideoBg.value.length : 1) < 4 && (
+                    <button
+                      type="button"
+                      onClick={() => videoInputRef.current?.click()}
+                      onDragOver={onDragOverVideo}
+                      onDragLeave={onDragLeaveVideo}
+                      onDrop={onDropVideo}
+                      className={cn(
+                        'relative flex min-w-[8.5rem] flex-1 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-3 py-4 text-center transition-colors',
+                        'bg-stone-50/90 hover:bg-amber-50/60 dark:bg-slate-900/30 dark:hover:bg-slate-800/40',
+                        isDraggingVideo
+                          ? 'border-amber-500/80 bg-amber-100/80 ring-2 ring-amber-400/25 dark:bg-amber-500/10 dark:ring-amber-500/20'
+                          : 'border-stone-400/90 hover:border-amber-400/70 dark:border-slate-600/90 dark:hover:border-slate-500'
+                      )}
+                      title="Add more videos (max 4)"
+                    >
+                      <div className="rounded-full bg-white p-2 ring-1 ring-stone-300 dark:bg-slate-800/90 dark:ring-slate-600/80">
+                        <Video className="h-4 w-4 text-stone-600 dark:text-slate-300" />
                       </div>
-                    )}
-                  </button>
-                  <Button
-                    variant="ghost" size="icon"
-                    className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground"
-                    onClick={clearCustomVideo}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
+                      <span className="text-xs font-medium text-stone-800 dark:text-slate-200">Add videos</span>
+                      <span className="text-[10px] text-stone-600 dark:text-slate-500">Drag &amp; drop or click</span>
+                    </button>
+                  )}
                 </div>
+
                 {!isCustomVideoActive && (
-                  <p className="text-[11px] text-stone-600 dark:text-slate-500">Tap thumbnail to select</p>
+                  <p className="text-[11px] text-stone-600 dark:text-slate-500">Tap any thumbnail to select</p>
                 )}
               </div>
             ) : (

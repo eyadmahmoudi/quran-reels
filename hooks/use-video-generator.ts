@@ -53,11 +53,11 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
-function loadVideo(src: string, willLoop: boolean): Promise<HTMLVideoElement> {
+function loadVideo(src: string): Promise<HTMLVideoElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.muted = true;
-    video.loop = willLoop;
+    video.loop = false;
     video.playsInline = true; // Crucial for iOS
     video.autoplay = true;
     video.preload = 'auto';
@@ -1022,21 +1022,19 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         if (background.type === 'video') {
           try {
             const urls = Array.isArray(background.value) ? background.value : [background.value]
-            const willLoop = urls.length <= 1
-            backgroundVideos = (await Promise.all(urls.map((u) => loadVideo(u, willLoop)))).filter(Boolean)
+            backgroundVideos = (await Promise.all(urls.map((u) => loadVideo(u)))).filter(Boolean)
 
-            if (!willLoop && backgroundVideos.length > 1) {
-              backgroundVideos.forEach((v, idx) => {
-                v.onended = async () => {
-                  try { v.pause() } catch { /* noop */ }
-                  if (backgroundVideos.length === 0) return
-                  activeBgIndex = (idx + 1) % backgroundVideos.length
-                  const next = backgroundVideos[activeBgIndex]
-                  try { next.currentTime = 0 } catch { /* noop */ }
-                  try { await next.play() } catch { /* noop */ }
-                }
-              })
-            }
+            // Relay every video end, including single-video playlists.
+            backgroundVideos.forEach((v, idx) => {
+              v.onended = async () => {
+                try { v.pause() } catch { /* noop */ }
+                if (backgroundVideos.length === 0) return
+                activeBgIndex = (idx + 1) % backgroundVideos.length
+                const next = backgroundVideos[activeBgIndex]
+                try { next.currentTime = 0 } catch { /* noop */ }
+                try { await next.play() } catch { /* noop */ }
+              }
+            })
           } catch (e) {
             console.error('[video-bg] Error loading video:', e)
           }

@@ -95,7 +95,7 @@ export default function QuranReelsGenerator() {
 
         <main className="relative mx-auto w-full max-w-3xl xl:max-w-4xl px-4 sm:px-6 py-8 lg:py-10">
           <div className="mx-auto min-w-0">
-            <div className="max-h-[calc(100vh-5.5rem)] overflow-y-auto overflow-x-hidden pr-1 sm:pr-2 [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 [&::-webkit-scrollbar-track]:bg-transparent dark:[&::-webkit-scrollbar-thumb]:bg-slate-700">
+            <div className="max-h-[calc(100vh-5.5rem)] overflow-y-auto overflow-x-hidden pr-1 sm:pr-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <div className="space-y-0">
                 <section className="pb-8">
                   <SectionTitle>Source</SectionTitle>

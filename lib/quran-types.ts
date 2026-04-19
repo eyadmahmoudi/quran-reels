@@ -294,20 +294,19 @@ export interface ReciterOption {
 }
 
 export const POPULAR_RECITERS: ReciterOption[] = [
-  { id: 1,  name: 'Mishary Rashid Alafasy',      arabicName: 'مشاري راشد العفاسي',   folder: 'Alafasy_128kbps',                qdcRecitationId: 7 },
-  { id: 2,  name: 'Abdul Basit (Murattal)',       arabicName: 'عبد الباسط عبد الصمد', folder: 'Abdul_Basit_Murattal_192kbps',   qdcRecitationId: 2 },
-  { id: 3,  name: 'Abdul Basit (Mujawwad)',       arabicName: 'عبد الباسط مجوّد',     folder: 'Abdul_Basit_Mujawwad_128kbps',   qdcRecitationId: 1 },
-  { id: 4,  name: 'Abu Bakr Ash-Shaatree',        arabicName: 'أبو بكر الشاطري',      folder: 'Abu_Bakr_Ash-Shaatree_128kbps',  qdcRecitationId: 4 },
-  { id: 5,  name: 'Abdurrahman As-Sudais',        arabicName: 'عبدالرحمن السديس',     folder: 'Abdurrahmaan_As-Sudais_192kbps', qdcRecitationId: 3 },
-  { id: 6,  name: 'Mahmoud Khalil Al-Husary',     arabicName: 'محمود خليل الحصري',    folder: 'Husary_128kbps',                 qdcRecitationId: 6 },
-  { id: 7,  name: 'Al-Husary (Mujawwad)',         arabicName: 'الحصري مجوّد',         folder: 'Husary_Mujawwad_64kbps',         qdcRecitationId: null },
-  { id: 8,  name: 'Saad Al-Ghamdi',              arabicName: 'سعد الغامدي',          folder: 'Ghamadi_40kbps',                 qdcRecitationId: null },
-  { id: 9,  name: 'Maher Al-Muaiqly',            arabicName: 'ماهر المعيقلي',        folder: 'Maher_AlMuaiqly_64kbps',         qdcRecitationId: null },
-  { id: 10, name: 'Hani Ar-Rifai',               arabicName: 'هاني الرفاعي',         folder: 'Hani_Rifai_64kbps',              qdcRecitationId: 5 },
-  { id: 11, name: 'Nasser Al-Qatami',            arabicName: 'ناصر القطامي',         folder: 'Nasser_Alqatami_128kbps',        qdcRecitationId: null },
-  { id: 12, name: 'Muhammad Ayyoub',             arabicName: 'محمد أيوب',            folder: 'Muhammad_Ayyoub_128kbps',        qdcRecitationId: null },
-  { id: 13, name: 'Abdullah Al-Matroud',         arabicName: 'عبدالله المطرود',      folder: 'Abdullah_Matroud_128kbps',       qdcRecitationId: null },
-  { id: 14, name: 'Yasser Al-Dosari',             arabicName: 'ياسر الدوسري',         folder: 'Yasser_Ad-Dussary_128kbps',      qdcRecitationId: 97 },
+  { id: 1,  name: 'Abdul Basit (Murattal)',       arabicName: 'عبد الباسط عبد الصمد', folder: 'Abdul_Basit_Murattal_192kbps',   qdcRecitationId: 2 },
+  { id: 2,  name: 'Abdul Basit (Mujawwad)',       arabicName: 'عبد الباسط مجوّد',     folder: 'Abdul_Basit_Mujawwad_128kbps',   qdcRecitationId: 1 },
+  { id: 3,  name: 'Abu Bakr Ash-Shaatree',        arabicName: 'أبو بكر الشاطري',      folder: 'Abu_Bakr_Ash-Shaatree_128kbps',  qdcRecitationId: 4 },
+  { id: 4,  name: 'Abdurrahman As-Sudais',        arabicName: 'عبدالرحمن السديس',     folder: 'Abdurrahmaan_As-Sudais_192kbps', qdcRecitationId: 3 },
+  { id: 5,  name: 'Mahmoud Khalil Al-Husary',     arabicName: 'محمود خليل الحصري',    folder: 'Husary_128kbps',                 qdcRecitationId: 6 },
+  { id: 6,  name: 'Al-Husary (Mujawwad)',         arabicName: 'الحصري مجوّد',         folder: 'Husary_Mujawwad_64kbps',         qdcRecitationId: null },
+  { id: 7,  name: 'Saad Al-Ghamdi',              arabicName: 'سعد الغامدي',          folder: 'Ghamadi_40kbps',                 qdcRecitationId: null },
+  { id: 8,  name: 'Maher Al-Muaiqly',            arabicName: 'ماهر المعيقلي',        folder: 'Maher_AlMuaiqly_64kbps',         qdcRecitationId: null },
+  { id: 9,  name: 'Hani Ar-Rifai',               arabicName: 'هاني الرفاعي',         folder: 'Hani_Rifai_64kbps',              qdcRecitationId: 5 },
+  { id: 10, name: 'Nasser Al-Qatami',            arabicName: 'ناصر القطامي',         folder: 'Nasser_Alqatami_128kbps',        qdcRecitationId: null },
+  { id: 11, name: 'Muhammad Ayyoub',             arabicName: 'محمد أيوب',            folder: 'Muhammad_Ayyoub_128kbps',        qdcRecitationId: null },
+  { id: 12, name: 'Abdullah Al-Matroud',         arabicName: 'عبدالله المطرود',      folder: 'Abdullah_Matroud_128kbps',       qdcRecitationId: null },
+  { id: 13, name: 'Yasser Al-Dosari',             arabicName: 'ياسر الدوسري',         folder: 'Yasser_Ad-Dussary_128kbps',      qdcRecitationId: 97 },
 ]
 
 export const TRANSLATION_RESOURCES = [

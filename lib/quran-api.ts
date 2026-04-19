@@ -90,7 +90,7 @@ export function getVerseAudioUrl(
   recitationId: number,
   verseKey: string
 ): string {
-  // Format: https://verses.quran.com/Alafasy/mp3/001001.mp3
+  // Legacy CDN paths use reciter folder names under verses.quran.com; URLs come from the API.
   // But we'll use the API to get the correct URL
   return `${API_BASE}/recitations/${recitationId}/by_ayah/${verseKey}`
 }

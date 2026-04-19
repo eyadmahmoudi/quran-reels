@@ -257,6 +257,7 @@ function drawFrame(
   chunkText?: string, showMarker: boolean = true, showTranslationOverride: boolean = true,
   fadeOpacity: number = 1, translationChunkText?: string,
   videoProgress?: number,
+  transitionCount = 0,
 ) {
   let translationBottomForBar: number | undefined
   const uiScale = width / 1080
@@ -277,7 +278,7 @@ function drawFrame(
     const fadeDuration = 0.75 // seconds
     let bgFadeOpacity = 0
     if (!backgroundVideo.paused && Number.isFinite(backgroundVideo.duration) && backgroundVideo.duration > 0) {
-      if (backgroundVideo.currentTime < fadeDuration) {
+      if (backgroundVideo.currentTime < fadeDuration && transitionCount > 0) {
         bgFadeOpacity = 1 - (backgroundVideo.currentTime / fadeDuration)
       } else if (backgroundVideo.currentTime > backgroundVideo.duration - fadeDuration) {
         bgFadeOpacity = (backgroundVideo.currentTime - (backgroundVideo.duration - fadeDuration)) / fadeDuration
@@ -1014,6 +1015,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         let backgroundImage: HTMLImageElement | null = null
         let backgroundVideos: HTMLVideoElement[] = []
         let activeBgIndex = 0
+        let transitionCount = 0
         if (background.type === 'custom' || background.type === 'preset') {
           try {
             if (typeof background.value === 'string') backgroundImage = await loadImage(background.value)
@@ -1032,6 +1034,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
                 activeBgIndex = (idx + 1) % backgroundVideos.length
                 const next = backgroundVideos[activeBgIndex]
                 try { next.currentTime = 0 } catch { /* noop */ }
+                transitionCount++
                 next.play().catch((e) => console.warn('Play blocked:', e))
               }
             })
@@ -1197,10 +1200,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
             const activeVideo = backgroundVideos[activeBgIndex] ?? null
             if (seg.type === 'intro') {
-              drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress)
+              drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress, transitionCount)
             } else {
               const verse = seg.verseIndex !== undefined ? verses[seg.verseIndex] : undefined
-              drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText, videoProgress)
+              drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText, videoProgress, transitionCount)
             }
 
             setProgress(50 + videoProgress * 48)

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useReel } from '@/lib/reel-context'
 import { Field, FieldLabel, FieldGroup } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -10,33 +11,46 @@ const MAX_VERSES = 20
 export function VerseSelector() {
   const { config, setConfig } = useReel()
   const maxVerses = config.surah?.verses_count || 1
+  const [startDraft, setStartDraft] = useState<number | ''>(config.startVerse)
+  const [endDraft, setEndDraft] = useState<number | ''>(config.endVerse)
 
-  const handleStartChange = (value: number) => {
-    const start = Math.max(1, Math.min(value, maxVerses))
-    // Auto-adjust end if start exceeds it
-    const newEnd = start > config.endVerse ? start : config.endVerse
-    // Clamp range to MAX_VERSES
-    const clampedEnd = Math.min(newEnd, start + MAX_VERSES - 1, maxVerses)
-    setConfig({
-      startVerse: start,
-      endVerse: clampedEnd,
-    })
+  useEffect(() => {
+    setStartDraft(config.startVerse)
+    setEndDraft(config.endVerse)
+  }, [config.startVerse, config.endVerse, config.surah?.id])
+
+  const clampVerse = (value: number) => Math.max(1, Math.min(Math.trunc(value), maxVerses))
+
+  const normalizeAndSave = (startRaw: number | '', endRaw: number | '') => {
+    const start = clampVerse(startRaw === '' ? 1 : startRaw)
+    const fallbackEnd = Math.min(start, maxVerses)
+    const resolvedEnd = clampVerse(endRaw === '' ? fallbackEnd : endRaw)
+    const syncedEnd = Math.max(start, resolvedEnd)
+    const clampedEnd = Math.min(syncedEnd, start + MAX_VERSES - 1, maxVerses)
+
+    setConfig({ startVerse: start, endVerse: clampedEnd })
+    setStartDraft(start)
+    setEndDraft(clampedEnd)
   }
 
-  const handleEndChange = (value: number) => {
-    const end = Math.max(1, Math.min(value, maxVerses))
-    if (end < config.startVerse) {
-      // If user types an end smaller than start, don't update
-      return
-    }
-    // Clamp range to MAX_VERSES
-    const clampedEnd = Math.min(end, config.startVerse + MAX_VERSES - 1, maxVerses)
-    setConfig({ endVerse: clampedEnd })
+  const handleStartChange = (raw: string) => {
+    if (raw === '') { setStartDraft(''); return }
+    const next = Number(raw)
+    if (Number.isFinite(next)) setStartDraft(next)
+  }
+
+  const handleEndChange = (raw: string) => {
+    if (raw === '') { setEndDraft(''); return }
+    const next = Number(raw)
+    if (Number.isFinite(next)) setEndDraft(next)
   }
 
   const verseCount = config.endVerse - config.startVerse + 1
   const isAtLimit = verseCount >= MAX_VERSES
-  const startExceedsEnd = config.startVerse > config.endVerse
+  const startExceedsEnd =
+    startDraft !== '' &&
+    endDraft !== '' &&
+    clampVerse(startDraft) > clampVerse(endDraft)
 
   if (!config.surah) {
     return (
@@ -65,8 +79,9 @@ export function VerseSelector() {
             type="number"
             min={1}
             max={maxVerses}
-            value={config.startVerse}
-            onChange={(e) => handleStartChange(parseInt(e.target.value) || 1)}
+            value={startDraft}
+            onChange={(e) => handleStartChange(e.target.value)}
+            onBlur={() => normalizeAndSave(startDraft, endDraft)}
             className="h-10"
           />
         </Field>
@@ -76,8 +91,9 @@ export function VerseSelector() {
             type="number"
             min={1}
             max={maxVerses}
-            value={config.endVerse}
-            onChange={(e) => handleEndChange(parseInt(e.target.value) || 1)}
+            value={endDraft}
+            onChange={(e) => handleEndChange(e.target.value)}
+            onBlur={() => normalizeAndSave(startDraft, endDraft)}
             className="h-10"
           />
         </Field>

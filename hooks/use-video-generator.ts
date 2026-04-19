@@ -1157,14 +1157,19 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             }
           }
 
-          mediaRecorder.start()
-
           if (backgroundVideos.length > 0) {
             activeBgIndex = 0
             const first = backgroundVideos[0]
             try { first.currentTime = 0 } catch { /* noop */ }
-            first.play().catch((e) => console.warn('Play blocked:', e))
+            try {
+              await first.play()
+            } catch (e) {
+              console.warn('Play blocked:', e)
+            }
           }
+
+          mediaRecorder.start()
+
           const audioStartTime = audioCtx.currentTime
           source.start(audioStartTime)
 

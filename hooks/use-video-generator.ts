@@ -276,7 +276,7 @@ function drawFrame(
     // Fade-through-black between playlist clips (background only; text stays crisp)
     const fadeDuration = 0.75 // seconds
     let bgFadeOpacity = 0
-    if (Number.isFinite(backgroundVideo.duration) && backgroundVideo.duration > 0) {
+    if (!backgroundVideo.paused && Number.isFinite(backgroundVideo.duration) && backgroundVideo.duration > 0) {
       if (backgroundVideo.currentTime < fadeDuration) {
         bgFadeOpacity = 1 - (backgroundVideo.currentTime / fadeDuration)
       } else if (backgroundVideo.currentTime > backgroundVideo.duration - fadeDuration) {

@@ -16,7 +16,7 @@ export function DownloadButton() {
       background: config.background,
       showTranslation: config.showTranslation,
       surahName: config.surah.name_arabic,
-      reciterFolder: config.reciterFolder || 'Abdul_Basit_Murattal_192kbps',
+      reciterFolder: config.reciterFolder || 'Yasser_Ad-Dussary_128kbps',
       qdcRecitationId: config.qdcRecitationId ?? null,
       surahId: config.surah.id,
       startVerse: config.startVerse,

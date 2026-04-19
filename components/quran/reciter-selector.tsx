@@ -50,6 +50,7 @@ export function ReciterSelector() {
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelect(reciter) } }}
             className={cn(
               'group relative flex flex-col gap-1 rounded-xl px-2.5 py-2.5 sm:px-3 sm:py-3 cursor-pointer transition-all duration-200',
+              'last:col-span-full sm:last:col-span-2',
               'border-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-100 dark:focus-visible:ring-offset-slate-950',
               isSelected
                 ? 'border-amber-500/85 bg-amber-500/[0.12] shadow-[0_0_0_1px_rgba(251,191,36,0.15)]'

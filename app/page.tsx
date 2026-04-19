@@ -65,13 +65,13 @@ export default function QuranReelsGenerator() {
 
   return (
     <ReelProvider>
-      <div className="min-h-screen bg-gradient-to-b from-stone-100 via-amber-50/40 to-stone-200/80 text-stone-900 dark:from-slate-950 dark:via-[#0c1222] dark:to-[#070b14] dark:text-slate-100">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-gradient-to-b from-stone-100 via-amber-50/40 to-stone-200/80 text-stone-900 dark:from-slate-950 dark:via-[#0c1222] dark:to-[#070b14] dark:text-slate-100">
         <div
           className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(251,191,36,0.14),transparent)] dark:bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(59,130,246,0.08),transparent)]"
           aria-hidden
         />
 
-        <header className="sticky top-0 z-50 border-b border-stone-200/90 bg-white/90 backdrop-blur-md dark:border-slate-800/90 dark:bg-slate-950/85">
+        <header className="sticky top-0 z-50 shrink-0 border-b border-stone-200/90 bg-white/90 backdrop-blur-md dark:border-slate-800/90 dark:bg-slate-950/85">
           <div className="mx-auto w-full max-w-3xl xl:max-w-4xl px-4 sm:px-6 py-3">
             <div className="flex items-center gap-3">
               <ThemeToggleButton />
@@ -93,9 +93,9 @@ export default function QuranReelsGenerator() {
           </div>
         </header>
 
-        <main className="relative mx-auto w-full max-w-3xl xl:max-w-4xl px-4 sm:px-6 py-8 lg:py-10">
-          <div className="mx-auto min-w-0">
-            <div className="max-h-[calc(100vh-5.5rem)] overflow-y-auto overflow-x-hidden pr-1 sm:pr-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+        <main className="relative mx-auto flex w-full max-w-3xl flex-1 min-h-0 flex-col px-4 sm:px-6 py-8 lg:py-10 xl:max-w-4xl">
+          <div className="mx-auto flex min-h-0 w-full min-w-0 flex-1 flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1 sm:pr-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
               <div className="space-y-0">
                 <section className="pb-8">
                   <SectionTitle>Source</SectionTitle>
@@ -171,7 +171,7 @@ export default function QuranReelsGenerator() {
           </div>
         </main>
 
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-stone-400/35 to-transparent dark:via-slate-700/40" />
+        <div className="h-px w-full shrink-0 bg-gradient-to-r from-transparent via-stone-400/35 to-transparent dark:via-slate-700/40" />
       </div>
     </ReelProvider>
   )

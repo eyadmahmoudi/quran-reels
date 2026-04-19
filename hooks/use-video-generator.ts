@@ -253,7 +253,10 @@ function drawFrame(
   displayMode: 'minimal' | 'classic', taawudhText?: string, animTimeMs?: number,
   chunkText?: string, showMarker: boolean = true, showTranslationOverride: boolean = true,
   fadeOpacity: number = 1, translationChunkText?: string,
+  videoProgress?: number,
 ) {
+  let translationBottomForBar: number | undefined
+
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
@@ -302,6 +305,16 @@ function drawFrame(
     ctx.direction = 'rtl'
     ctx.fillText(taawudhText, width / 2, height * 0.44)
     ctx.restore()
+    if (displayMode === 'classic' && videoProgress !== undefined) {
+      const barH = 6
+      const barW = width - 80
+      const barX = 40
+      const trackTop = height - 30
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
+      ctx.fillRect(barX, trackTop, barW, barH)
+      ctx.fillStyle = 'rgba(212,175,55,0.9)'
+      ctx.fillRect(barX, trackTop, barW * videoProgress, barH)
+    }
     return
   }
 
@@ -416,9 +429,32 @@ function drawFrame(
       const transLineHeight = transFontSize * 1.5
       const transY = textStartY + totalTextHeight + (displayMode === 'minimal' ? 44 : 70)
       transLines.forEach((line, i) => ctx.fillText(line, width / 2, transY + i * transLineHeight))
+      if (displayMode === 'classic' && transLines.length > 0) {
+        const lastY = transY + (transLines.length - 1) * transLineHeight
+        translationBottomForBar = lastY + transFontSize * 0.55
+      }
     }
   }
   ctx.restore()
+
+  if (displayMode === 'classic' && videoProgress !== undefined) {
+    const barH = 6
+    const barW = width - 80
+    const barX = 40
+    const gapBelowTranslation = 18
+    const defaultTrackTop = height - 30
+    let trackTop = defaultTrackTop
+    if (translationBottomForBar !== undefined) {
+      const minTop = translationBottomForBar + gapBelowTranslation
+      if (minTop > defaultTrackTop) {
+        trackTop = Math.min(minTop, height - barH - 10)
+      }
+    }
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
+    ctx.fillRect(barX, trackTop, barW, barH)
+    ctx.fillStyle = 'rgba(212,175,55,0.9)'
+    ctx.fillRect(barX, trackTop, barW * videoProgress, barH)
+  }
 }
 
 async function exportVerseImages(
@@ -1091,10 +1127,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             }
 
             if (seg.type === 'intro') {
-              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs)
+              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress)
             } else {
               const verse = seg.verseIndex !== undefined ? verses[seg.verseIndex] : undefined
-              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText)
+              drawFrame(ctx, width, height, backgroundImage, backgroundVideo, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText, videoProgress)
             }
 
             setProgress(50 + videoProgress * 48)

@@ -53,26 +53,29 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
-/** Loads an off-DOM video for canvas: blob-safe, forces fetch via load(), resolves on canplay. */
 function loadVideo(src: string): Promise<HTMLVideoElement> {
   return new Promise((resolve, reject) => {
-    const video = document.createElement('video')
-    video.muted = true
-    video.loop = true
-    video.playsInline = true
-    video.autoplay = true
-    video.preload = 'auto'
-
+    const video = document.createElement('video');
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true; // Crucial for iOS
+    video.autoplay = true;
+    video.preload = 'auto';
+    
     if (!src.startsWith('blob:') && !src.startsWith('data:')) {
-      video.crossOrigin = 'anonymous'
+      video.crossOrigin = 'anonymous';
     }
-
-    video.oncanplay = () => resolve(video)
-    video.onerror = () => reject(new Error('Failed to load background video'))
-
-    video.src = src
-    video.load()
-  })
+    
+    video.onloadeddata = () => resolve(video);
+    video.onerror = () => reject(new Error('Failed to load background video'));
+    
+    // iOS Safari Hack: Appending #t=0.001 forces the mobile media engine 
+    // to seek to the first frame and actually load the blob data.
+    const mobileOptimizedSrc = src.startsWith('blob:') ? `${src}#t=0.001` : src;
+    
+    video.src = mobileOptimizedSrc;
+    video.load();
+  });
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

@@ -387,7 +387,7 @@ export function BackgroundSelector() {
             <input
               ref={videoInputRef}
               type="file"
-              accept="video/mp4, video/webm, video/quicktime"
+              accept="video/*"
               onChange={handleVideoUpload}
               className="hidden"
             />

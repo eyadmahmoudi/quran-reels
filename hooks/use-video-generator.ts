@@ -57,14 +57,14 @@ function loadVideo(src: string): Promise<HTMLVideoElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.muted = true;
+    video.defaultMuted = true;
     video.loop = false;
     video.playsInline = true; // Crucial for iOS
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
     video.autoplay = true;
     video.preload = 'auto';
-    
-    if (!src.startsWith('blob:') && !src.startsWith('data:')) {
-      video.crossOrigin = 'anonymous';
-    }
+    video.crossOrigin = 'anonymous';
     
     video.onloadeddata = () => resolve(video);
     video.onerror = () => reject(new Error('Failed to load background video'));
@@ -1032,7 +1032,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
                 activeBgIndex = (idx + 1) % backgroundVideos.length
                 const next = backgroundVideos[activeBgIndex]
                 try { next.currentTime = 0 } catch { /* noop */ }
-                try { await next.play() } catch { /* noop */ }
+                next.play().catch((e) => console.warn('Play blocked:', e))
               }
             })
           } catch (e) {
@@ -1134,7 +1134,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             } else {
               // Resume both streams so A/V sync stays aligned with the shared clock.
               try { await audioCtx.resume() } catch { /* noop */ }
-              try { await activeVideo?.play() } catch { /* noop */ }
+              activeVideo?.play().catch((e) => console.warn('Play blocked:', e))
             }
           }
           document.addEventListener('visibilitychange', onVisibilityChange)
@@ -1160,11 +1160,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             activeBgIndex = 0
             const first = backgroundVideos[0]
             try { first.currentTime = 0 } catch { /* noop */ }
-            try {
-              await first.play()
-            } catch (e) {
-              console.warn('[video] background play():', e)
-            }
+            first.play().catch((e) => console.warn('Play blocked:', e))
           }
           const audioStartTime = audioCtx.currentTime
           source.start(audioStartTime)

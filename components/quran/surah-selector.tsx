@@ -96,14 +96,14 @@ export function SurahSelector() {
                     key={surah.id}
                     value={`${surah.name_simple} ${surah.name_arabic} ${surah.id}`}
                     onSelect={() => handleSelect(surah)}
-                    className="flex items-center gap-3 py-3"
+                    className="group flex items-center gap-3 py-3"
                   >
                     <span className="flex items-center justify-center w-8 h-8 rounded-full bg-secondary text-secondary-foreground text-sm font-medium">
                       {surah.id}
                     </span>
                     <div className="flex flex-col flex-1">
                       <span className="font-arabic text-lg">{surah.name_arabic}</span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground transition-colors group-hover:text-emerald-50 group-data-[selected=true]:text-emerald-50 group-aria-selected:text-emerald-50">
                         {surah.name_simple} - {surah.verses_count} verses - {surah.revelation_place}
                       </span>
                     </div>

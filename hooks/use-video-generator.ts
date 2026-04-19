@@ -930,7 +930,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         const height = 1280
         const canvas = document.createElement('canvas')
         canvas.width = width; canvas.height = height
-        const ctx = canvas.getContext('2d')!
+        const ctx = canvas.getContext('2d', { alpha: false })!
 
         setProgress(5)
         const audioCtx = new AudioContext({ sampleRate: 48000 })
@@ -1082,7 +1082,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         try {
           const testCanvas = document.createElement('canvas')
           testCanvas.width = 100; testCanvas.height = 100
-          testCanvas.getContext('2d')!.fillRect(0, 0, 100, 100)
+          testCanvas.getContext('2d', { alpha: false })!.fillRect(0, 0, 100, 100)
           const testRecorder = new MediaRecorder(testCanvas.captureStream(1), { mimeType: 'video/webm' })
           await new Promise<void>((resolve, reject) => {
             const t = setTimeout(() => { testRecorder.stop(); resolve() }, 100)
@@ -1124,6 +1124,37 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             mediaRecorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }))
             mediaRecorder.onerror = (e) => reject(new Error('MediaRecorder: ' + (e as ErrorEvent).message))
           })
+
+          // ── Mobile stability: pause/resume on background tab ──
+          let visibilityListenerActive = true
+          const onVisibilityChange = async () => {
+            if (!visibilityListenerActive) return
+            const activeVideo = backgroundVideos[activeBgIndex]
+            if (document.hidden) {
+              try { activeVideo?.pause() } catch { /* noop */ }
+              try { await audioCtx.suspend() } catch { /* noop */ }
+            } else {
+              // Resume both streams so A/V sync stays aligned with the shared clock.
+              try { await audioCtx.resume() } catch { /* noop */ }
+              try { await activeVideo?.play() } catch { /* noop */ }
+            }
+          }
+          document.addEventListener('visibilitychange', onVisibilityChange)
+
+          const cleanupAfterGeneration = () => {
+            visibilityListenerActive = false
+            document.removeEventListener('visibilitychange', onVisibilityChange)
+
+            // Aggressive memory cleanup (mobile Safari/Chrome)
+            try { canvas.width = 0; canvas.height = 0 } catch { /* noop */ }
+            if (backgroundVideos.length > 0) {
+              backgroundVideos.forEach((video) => {
+                try { video.pause() } catch { /* noop */ }
+                try { video.removeAttribute('src') } catch { /* noop */ }
+                try { video.load() } catch { /* noop */ }
+              })
+            }
+          }
 
           mediaRecorder.start()
 
@@ -1187,6 +1218,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
                   backgroundVideos.forEach((v) => { try { v.pause() } catch { /* noop */ } })
                 }
                 source.stop(); mediaRecorder.stop(); audioCtx.close()
+                cleanupAfterGeneration()
               }, 300)
             }
           }
@@ -1195,7 +1227,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           timerWorker.postMessage('start')
 
           let videoBlob = await recordingComplete
-          if (cancelledRef.current) return
+          if (cancelledRef.current) { cleanupAfterGeneration(); return }
 
           setProgress(98)
           if (!isMp4) {
@@ -1214,11 +1246,17 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           document.body.appendChild(a); a.click(); document.body.removeChild(a)
           URL.revokeObjectURL(url)
           setProgress(100); setIsGenerating(false)
+          cleanupAfterGeneration()
         } catch (mediaErr) {
           audioCtx.close()
           if (backgroundVideos.length > 0) {
             backgroundVideos.forEach((v) => { try { v.pause() } catch { /* noop */ } })
+            backgroundVideos.forEach((video) => {
+              try { video.removeAttribute('src') } catch { /* noop */ }
+              try { video.load() } catch { /* noop */ }
+            })
           }
+          try { canvas.width = 0; canvas.height = 0 } catch { /* noop */ }
           await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideos[activeBgIndex] ?? null, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording failed. Downloaded verse images instead.')

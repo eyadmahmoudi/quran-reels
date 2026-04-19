@@ -84,14 +84,13 @@ export function BackgroundSelector() {
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [activeCategory, setActiveCategory] = useState<Category>('animated')
   const [expanded, setExpanded] = useState(false)
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
 
   const isCustomActive = config.background?.id === 'custom-upload'
 
   const handleSelect = (bg: BackgroundOption) => setConfig({ background: bg })
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const applyImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) { alert('Please select an image file'); return }
     if (customBackground?.value) URL.revokeObjectURL(customBackground.value)
     const url = URL.createObjectURL(file)
@@ -100,6 +99,12 @@ export function BackgroundSelector() {
     }
     setCustomBackground(custom)
     setConfig({ background: custom })
+  }
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    applyImageFile(file)
   }
 
   const clearCustomImage = () => {
@@ -124,20 +129,40 @@ export function BackgroundSelector() {
     setExpanded(false)
   }
 
+  const onDragOverUpload = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.dataTransfer.types?.includes('Files')) setIsDraggingFile(true)
+  }
+
+  const onDragLeaveUpload = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingFile(false)
+  }
+
+  const onDropUpload = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingFile(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file) applyImageFile(file)
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      <label className="text-sm font-medium text-muted-foreground">
+    <div className="flex flex-col gap-5">
+      <label className="text-sm font-medium text-stone-600 dark:text-slate-400">
         Background / الخلفية
       </label>
 
       {/* ── Currently active indicator ── */}
       <div
-        className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
+        className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white/90 px-3 py-2 text-xs dark:border-slate-700/80 dark:bg-slate-900/50"
         style={{
           background: isCustomActive
             ? 'rgba(34,197,94,0.08)'
-            : 'rgba(201,168,76,0.08)',
-          border: `1px solid ${isCustomActive ? 'rgba(34,197,94,0.2)' : 'rgba(201,168,76,0.2)'}`,
+            : 'rgba(201,168,76,0.06)',
+          borderColor: isCustomActive ? 'rgba(34,197,94,0.25)' : undefined,
         }}
       >
         <ImageIcon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }} />
@@ -146,15 +171,15 @@ export function BackgroundSelector() {
         </span>
       </div>
 
-      {/* ── Custom Image Upload ── */}
+      {/* ── Custom Image Upload (drag-and-drop zone) ── */}
       <div
-        className="pt-2 pb-3 border-t border-b border-border/50"
+        className="border-b border-t border-stone-200/90 pt-2 pb-3 dark:border-slate-800/90"
         style={{
           background: isCustomActive ? 'rgba(34,197,94,0.03)' : undefined,
         }}
       >
-        <p className="text-xs text-muted-foreground mb-2">
-          Custom Image {isCustomActive && <span style={{ color: '#22c55e', fontWeight: 600 }}>• In use</span>}
+        <p className="mb-3 text-xs text-stone-600 dark:text-slate-500">
+          Custom Image {isCustomActive && <span className="font-semibold text-emerald-600 dark:text-emerald-400"> • In use</span>}
         </p>
         {customBackground ? (
           <div className="flex items-center gap-3">
@@ -185,34 +210,54 @@ export function BackgroundSelector() {
               </Button>
             </div>
             {!isCustomActive && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-stone-600 dark:text-slate-500">
                 Click the thumbnail to use this image
               </p>
             )}
           </div>
         ) : (
-          <Button
-            variant="outline" className="h-10 w-full border-dashed gap-2"
+          <button
+            type="button"
             onClick={() => imageInputRef.current?.click()}
+            onDragOver={onDragOverUpload}
+            onDragLeave={onDragLeaveUpload}
+            onDrop={onDropUpload}
+            className={cn(
+              'relative flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-10 text-center transition-colors',
+              'bg-stone-50/90 hover:bg-amber-50/60 dark:bg-slate-900/30 dark:hover:bg-slate-800/40',
+              isDraggingFile
+                ? 'border-amber-500/80 bg-amber-100/80 ring-2 ring-amber-400/25 dark:bg-amber-500/10 dark:ring-amber-500/20'
+                : 'border-stone-400/90 hover:border-amber-400/70 dark:border-slate-600/90 dark:hover:border-slate-500'
+            )}
           >
-            <Upload className="h-4 w-4" />
-            <span className="text-sm">Upload Image</span>
-          </Button>
+            <div className="rounded-full bg-white p-2.5 ring-1 ring-stone-300 dark:bg-slate-800/90 dark:ring-slate-600/80">
+              <Upload className="h-5 w-5 text-stone-600 dark:text-slate-300" />
+            </div>
+            <span className="text-sm font-medium text-stone-800 dark:text-slate-200">Upload image</span>
+            <span className="text-xs text-stone-600 dark:text-slate-500">Drag &amp; drop here, or click to browse</span>
+          </button>
         )}
         <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
       </div>
 
-      {/* ── Category tabs ── */}
-      <div className="flex gap-1 p-1 rounded-lg bg-muted/50">
+      {/* ── Category segmented control ── */}
+      <div
+        className="inline-flex w-full rounded-full bg-stone-200/90 p-1 shadow-inner ring-1 ring-stone-300/80 dark:bg-slate-800/90 dark:ring-slate-700/80"
+        role="tablist"
+        aria-label="Background category"
+      >
         {CATEGORIES.map((cat) => (
           <button
             key={cat.key}
+            type="button"
+            role="tab"
+            aria-selected={activeCategory === cat.key}
             onClick={() => switchCategory(cat.key)}
             className={cn(
-              'flex-1 py-2 px-3 rounded-md text-xs font-medium transition-colors',
+              'flex-1 rounded-full py-2 px-2 text-[11px] font-semibold transition-all duration-200 sm:px-3 sm:text-xs',
               activeCategory === cat.key
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-white text-stone-900 shadow-md ring-1 ring-stone-300/60 dark:bg-slate-700 dark:text-white dark:ring-white/10'
+                : 'text-stone-600 hover:text-stone-900 dark:text-slate-400 dark:hover:text-slate-200'
             )}
           >
             {cat.label}
@@ -255,8 +300,9 @@ export function BackgroundSelector() {
       {/* ── Show more / less ── */}
       {hasMore && (
         <button
+          type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center justify-center gap-1 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="flex w-full items-center justify-center gap-1 py-2 text-xs font-medium text-stone-600 transition-colors hover:text-stone-900 dark:text-slate-500 dark:hover:text-slate-300"
         >
           <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
           {expanded ? 'Show less' : `Show more (${allItems.length - INITIAL_COUNT})`}

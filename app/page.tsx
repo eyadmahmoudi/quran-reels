@@ -1,7 +1,7 @@
 'use client'
 
 import { useTheme } from 'next-themes'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ReelProvider } from '@/lib/reel-context'
 import { SurahSelector } from '@/components/quran/surah-selector'
 import { VerseSelector } from '@/components/quran/verse-selector'
@@ -10,9 +10,9 @@ import { BackgroundSelector } from '@/components/quran/background-selector'
 import { TranslationSettings } from '@/components/quran/translation-settings'
 import { DisplayModeSelector } from '@/components/quran/display-mode-selector'
 import { DownloadButton } from '@/components/video/download-button'
+import { VideoPreview } from '@/components/video/video-preview'
 
 const GOLD = '#c9a84c'
-const GOLD_LIGHT = '#f0d080'
 const GOLD_DARK = '#a07830'
 
 function ThemeToggleButton() {
@@ -26,13 +26,7 @@ function ThemeToggleButton() {
     <button
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
       aria-label="Toggle light/dark mode"
-      className="flex w-9 h-9 rounded-full items-center justify-center border flex-shrink-0 transition-colors duration-300 cursor-pointer"
-      style={{
-        background: isDark
-          ? `radial-gradient(circle, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.05) 100%)`
-          : `radial-gradient(circle, rgba(201,168,76,0.35) 0%, rgba(201,168,76,0.12) 100%)`,
-        borderColor: `rgba(201,168,76,0.3)`,
-      }}
+      className="flex w-9 h-9 rounded-full items-center justify-center flex-shrink-0 cursor-pointer border border-stone-300 bg-white shadow-sm transition-colors duration-300 hover:bg-stone-50 dark:border-slate-600/80 dark:bg-slate-800/80 dark:shadow-none dark:hover:bg-slate-700/80"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="12" cy="12" r="9" stroke={GOLD} strokeWidth="1.8"/>
@@ -46,10 +40,18 @@ function ThemeToggleButton() {
   )
 }
 
-/** Thin gold line between sections inside the panel */
-function Divider() {
+/** Subtle divider between studio sections */
+function StudioDivider() {
   return (
-    <div className="h-px w-full" style={{ background: `linear-gradient(90deg, transparent, rgba(201,168,76,0.25), transparent)` }} />
+    <div className="h-px w-full bg-gradient-to-r from-transparent via-stone-300/70 to-transparent dark:via-slate-600/50" />
+  )
+}
+
+function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500 dark:text-slate-500">
+      {children}
+    </h2>
   )
 }
 
@@ -59,56 +61,32 @@ export default function QuranReelsGenerator() {
   useEffect(() => setMounted(true), [])
 
   const isDark = !mounted || resolvedTheme === 'dark'
-
-  const pageBg = isDark
-    ? `
-        radial-gradient(ellipse at 20% 0%, rgba(40,32,10,0.7) 0%, transparent 55%),
-        radial-gradient(ellipse at 80% 0%, rgba(20,30,50,0.6) 0%, transparent 55%),
-        radial-gradient(ellipse at 50% 100%, rgba(20,15,5,0.5) 0%, transparent 60%),
-        linear-gradient(180deg, #0a0d18 0%, #080b14 50%, #06080f 100%)
-      `
-    : `
-        radial-gradient(ellipse at 20% 0%, rgba(255,240,180,0.4) 0%, transparent 55%),
-        radial-gradient(ellipse at 80% 0%, rgba(200,220,255,0.3) 0%, transparent 55%),
-        radial-gradient(ellipse at 50% 100%, rgba(240,230,200,0.3) 0%, transparent 60%),
-        linear-gradient(180deg, #f5f0e4 0%, #f0ead8 50%, #ede6d0 100%)
-      `
-
-  const headerBg = isDark ? 'rgb(6,8,15)' : 'rgb(245,240,228)'
-  const headerBorder = isDark ? `rgba(201,168,76,0.14)` : `rgba(160,120,48,0.2)`
   const footerTextColor = isDark ? `${GOLD}50` : `${GOLD_DARK}90`
   const footerLinkColor = isDark ? 'rgba(150,150,160,0.45)' : 'rgba(100,90,70,0.6)'
 
   return (
     <ReelProvider>
-      <div className="min-h-screen geo-pattern" style={{ background: pageBg }}>
-
-        {/* ── Top accent bar ── */}
+      <div className="min-h-screen bg-gradient-to-b from-stone-100 via-amber-50/40 to-stone-200/80 text-stone-900 dark:from-slate-950 dark:via-[#0c1222] dark:to-[#070b14] dark:text-slate-100">
         <div
-          className="h-[2px] w-full"
-          style={{ background: `linear-gradient(90deg, transparent, ${GOLD_DARK}, ${GOLD_LIGHT}, ${GOLD}, ${GOLD_LIGHT}, ${GOLD_DARK}, transparent)` }}
+          className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(251,191,36,0.14),transparent)] dark:bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(59,130,246,0.08),transparent)]"
+          aria-hidden
         />
 
-        {/* ── Header ── */}
-        <header
-          className="sticky top-0 z-50 border-b"
-          style={{ background: headerBg, borderColor: headerBorder, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-        >
-          <div className="container mx-auto px-4 sm:px-6 py-2.5 sm:py-3">
+        <header className="sticky top-0 z-50 border-b border-stone-200/90 bg-white/90 backdrop-blur-md dark:border-slate-800/90 dark:bg-slate-950/85">
+          <div className="mx-auto max-w-[1400px] px-4 sm:px-6 py-3">
             <div className="flex items-center gap-3">
               <ThemeToggleButton />
-              <div className="flex-1">
-                <h1 className="text-sm sm:text-lg font-bold leading-tight gold-shimmer-text">
+              <div className="flex-1 min-w-0">
+                <h1 className="text-base sm:text-lg font-bold leading-tight gold-shimmer-text">
                   Quran Reels Generator
                 </h1>
-                <p className="text-[10px] sm:text-xs font-arabic leading-none mt-0.5" style={{ color: `${GOLD}80` }}>
+                <p className="mt-0.5 text-[10px] font-arabic leading-none text-amber-800/70 sm:text-xs dark:text-amber-200/50">
                   مولد مقاطع القرآن الكريم
                 </p>
               </div>
-              {/* Bismillah in header instead of hero */}
               <p
-                className="font-nabi text-sm sm:text-lg hidden sm:block"
-                style={{ color: `${GOLD}cc`, direction: 'rtl' }}
+                className="font-nabi hidden shrink-0 text-sm text-amber-900/85 sm:block sm:text-lg dark:text-amber-200/70"
+                style={{ direction: 'rtl' }}
               >
                 بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ
               </p>
@@ -116,109 +94,104 @@ export default function QuranReelsGenerator() {
           </div>
         </header>
 
-        {/* ── Main ── */}
-        <main className="container mx-auto px-3 sm:px-4 py-6 sm:py-8">
-          <div className="max-w-2xl mx-auto">
-
-            {/* ── Single panel: all settings ── */}
-            <div className="quran-card">
-
-              {/* Surah + Verse Range — grouped together */}
-              <div className="p-4 sm:p-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+        <main className="relative mx-auto max-w-[1400px] px-4 sm:px-6 py-8 lg:py-10">
+          <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:gap-12 xl:gap-16 lg:items-start">
+            {/* Settings: scrollable on desktop; below preview on small screens (order) */}
+            <div className="order-2 min-w-0 lg:order-1 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:overflow-x-hidden lg:pr-2 lg:[scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-stone-300 [&::-webkit-scrollbar-track]:bg-transparent dark:[&::-webkit-scrollbar-thumb]:bg-slate-700">
+              <div className="space-y-0">
+                <section className="pb-8">
+                  <SectionTitle>Source</SectionTitle>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                     <SurahSelector />
-                  </div>
-                  <div>
                     <VerseSelector />
                   </div>
-                </div>
-              </div>
+                </section>
 
-              <Divider />
+                <StudioDivider />
 
-              {/* Reciter */}
-              <div className="p-4 sm:p-5">
-                <ReciterSelector />
-              </div>
+                <section className="py-8">
+                  <SectionTitle>Reciter</SectionTitle>
+                  <ReciterSelector />
+                </section>
 
-              <Divider />
+                <StudioDivider />
 
-              {/* Background */}
-              <div className="p-4 sm:p-5">
-                <BackgroundSelector />
-              </div>
+                <section className="py-8">
+                  <SectionTitle>Background</SectionTitle>
+                  <BackgroundSelector />
+                </section>
 
-              <Divider />
+                <StudioDivider />
 
-              {/* Translation + Display — grouped together */}
-              <div className="p-4 sm:p-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
+                <section className="py-8">
+                  <SectionTitle>Translation &amp; display</SectionTitle>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                     <TranslationSettings />
-                  </div>
-                  <div>
                     <DisplayModeSelector />
                   </div>
+                </section>
+
+                <StudioDivider />
+
+                <section className="pt-8 pb-2">
+                  <SectionTitle>Export</SectionTitle>
+                  <DownloadButton />
+                </section>
+              </div>
+
+              <div className="mt-12 pb-8 text-center lg:pb-10">
+                <p
+                  className="mb-2 font-arabic text-base leading-loose text-amber-900/90 sm:text-lg dark:text-amber-200/85 dark:[text-shadow:0_0_24px_rgba(201,168,76,0.15)]"
+                  style={{ direction: 'rtl' }}
+                >
+                  لا تنسونا من صالح دعائكم
+                </p>
+                <p className="text-xs" style={{ color: footerTextColor }}>
+                  Audio ·{' '}
+                  <a
+                    href="https://everyayah.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition-colors duration-200 hover:text-amber-700 dark:hover:text-amber-400/90"
+                    style={{ color: footerLinkColor }}
+                  >
+                    EveryAyah.com
+                  </a>
+                  {' · '}
+                  <a
+                    href="https://quran.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition-colors duration-200 hover:text-amber-700 dark:hover:text-amber-400/90"
+                    style={{ color: footerLinkColor }}
+                  >
+                    Quran.com
+                  </a>
+                </p>
+              </div>
+            </div>
+
+            {/* Single preview: sticky phone frame on lg+; first on mobile */}
+            <aside className="order-1 flex flex-col items-center lg:order-2 lg:sticky lg:top-28 lg:self-start">
+              <p className="mb-4 w-full text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-500 dark:text-slate-500">
+                Preview
+              </p>
+              <div className="relative flex w-full max-w-[300px] justify-center lg:max-w-none">
+                <div className="relative rounded-[2.75rem] border-[10px] border-stone-300 bg-stone-100 p-1 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] ring-1 ring-stone-400/35 dark:border-slate-800 dark:bg-slate-900 dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7),0_0_0_1px_rgba(255,255,255,0.06)] dark:ring-slate-700/60">
+                  <div className="mx-auto aspect-[9/16] w-full max-w-[280px] overflow-hidden rounded-[2.1rem] bg-black">
+                    <VideoPreview />
+                  </div>
+                  <div
+                    className="absolute top-3 left-1/2 h-5 w-20 -translate-x-1/2 rounded-full bg-stone-200/95 dark:bg-slate-950/90"
+                    aria-hidden
+                  />
                 </div>
               </div>
-
-              <Divider />
-
-              {/* Generate button — part of the panel, not a separate card */}
-              <div className="p-4 sm:p-5">
-                <DownloadButton />
-              </div>
-
-            </div>
-
-            {/* ── Footer ── */}
-            <div className="text-center mt-8 pb-6">
-              <p
-                className="font-arabic text-base sm:text-lg mb-2 leading-loose"
-                style={{
-                  direction: 'rtl',
-                  color: isDark ? `${GOLD}cc` : `${GOLD_DARK}dd`,
-                  textShadow: isDark ? `0 0 20px rgba(201,168,76,0.25)` : 'none',
-                }}
-              >
-                لا تنسونا من صالح دعائكم
-              </p>
-              <p className="text-xs" style={{ color: footerTextColor }}>
-                Audio ·{' '}
-                <a
-                  href="https://everyayah.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="transition-colors duration-200"
-                  style={{ color: footerLinkColor }}
-                  onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
-                  onMouseLeave={e => (e.currentTarget.style.color = footerLinkColor)}
-                >
-                  EveryAyah.com
-                </a>
-                {' · '}
-                <a
-                  href="https://quran.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="transition-colors duration-200"
-                  style={{ color: footerLinkColor }}
-                  onMouseEnter={e => (e.currentTarget.style.color = GOLD)}
-                  onMouseLeave={e => (e.currentTarget.style.color = footerLinkColor)}
-                >
-                  Quran.com
-                </a>
-              </p>
-            </div>
-
+            </aside>
           </div>
         </main>
 
-        <div
-          className="h-[2px] w-full"
-          style={{ background: `linear-gradient(90deg, transparent, ${GOLD}40, transparent)` }}
-        />
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-stone-400/35 to-transparent dark:via-slate-700/40" />
       </div>
     </ReelProvider>
   )

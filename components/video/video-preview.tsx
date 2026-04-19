@@ -180,9 +180,9 @@ export function VideoPreview() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-3 w-full min-h-0">
       <div
-        className="relative w-full max-w-[280px] aspect-[9/16] rounded-3xl overflow-hidden border-4 border-border shadow-2xl"
+        className="relative w-full aspect-[9/16] rounded-2xl overflow-hidden shadow-inner"
         style={backgroundStyle}
       >
         <div className="absolute inset-0 bg-black/30" />

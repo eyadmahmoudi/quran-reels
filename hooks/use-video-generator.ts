@@ -1016,17 +1016,27 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         let backgroundVideos: HTMLVideoElement[] = []
         let activeBgIndex = 0
         let transitionCount = 0
-        if (background.type === 'custom' || background.type === 'preset') {
-          try {
-            if (typeof background.value === 'string') backgroundImage = await loadImage(background.value)
-          } catch { }
+
+        const disposeBackgroundVideos = () => {
+          if (backgroundVideos.length === 0) return
+          backgroundVideos.forEach((video) => {
+            try { video.onended = null } catch { /* noop */ }
+            try { video.pause() } catch { /* noop */ }
+            try { video.removeAttribute('src') } catch { /* noop */ }
+            try { video.load() } catch { /* noop */ }
+          })
+          backgroundVideos = []
         }
-        if (background.type === 'video') {
+
+        const rebuildBackgroundVideosFromConfig = async () => {
+          disposeBackgroundVideos()
+          if (background.type !== 'video') return
           try {
             const urls = Array.isArray(background.value) ? background.value : [background.value]
             backgroundVideos = (await Promise.all(urls.map((u) => loadVideo(u)))).filter(Boolean)
+            activeBgIndex = 0
+            transitionCount = 0
 
-            // Relay every video end, including single-video playlists.
             backgroundVideos.forEach((v, idx) => {
               v.onended = async () => {
                 try { v.pause() } catch { /* noop */ }
@@ -1041,6 +1051,12 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           } catch (e) {
             console.error('[video-bg] Error loading video:', e)
           }
+        }
+
+        if (background.type === 'custom' || background.type === 'preset' || background.type === 'image') {
+          try {
+            if (typeof background.value === 'string') backgroundImage = await loadImage(background.value)
+          } catch { }
         }
 
         try { await document.fonts.load('52px "Nabi"') } catch { }
@@ -1097,6 +1113,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
         if (!useMediaRecorder) {
           audioCtx.close()
+          await rebuildBackgroundVideosFromConfig()
           await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideos[activeBgIndex] ?? null, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording is not supported in this browser. Downloaded verse images instead.')
@@ -1104,6 +1121,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
         }
 
         try {
+          await rebuildBackgroundVideosFromConfig()
+
           const audioDest = audioCtx.createMediaStreamDestination()
           const source = audioCtx.createBufferSource()
           source.buffer = combined; source.connect(audioDest)
@@ -1161,10 +1180,39 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
             activeBgIndex = 0
             const first = backgroundVideos[0]
             try { first.currentTime = 0 } catch { /* noop */ }
-            try {
-              await first.play()
-            } catch (e) {
-              console.warn('Play blocked:', e)
+
+            await new Promise<void>((resolve) => {
+              const onPlaying = () => {
+                first.removeEventListener('playing', onPlaying)
+                resolve()
+              }
+              first.addEventListener('playing', onPlaying, { once: true })
+              first.play().catch((e) => {
+                console.warn('Play blocked:', e)
+                first.removeEventListener('playing', onPlaying)
+                resolve()
+              })
+            })
+
+            const coldSeg = displaySegments[0]
+            if (coldSeg) {
+              const elapsedMs = 0
+              const videoProgress = Math.min(elapsedMs / totalDurationMs, 1)
+              let coldFadeOpacity = 1
+              const msIntoSegment = elapsedMs - coldSeg.startMs
+              const msBeforeEnd = coldSeg.endMs - elapsedMs
+              if (msIntoSegment < FADE_DURATION_MS) {
+                coldFadeOpacity = Math.min(1, msIntoSegment / FADE_DURATION_MS)
+              } else if (msBeforeEnd < FADE_DURATION_MS && displaySegments.length > 1) {
+                coldFadeOpacity = Math.max(0, msBeforeEnd / FADE_DURATION_MS)
+              }
+              const activeVideo = backgroundVideos[activeBgIndex] ?? null
+              if (coldSeg.type === 'intro') {
+                drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, undefined, showTranslation, displayMode, coldSeg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress, transitionCount)
+              } else {
+                const verse = coldSeg.verseIndex !== undefined ? verses[coldSeg.verseIndex] : undefined
+                drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, coldSeg.chunkText, coldSeg.showMarker, coldSeg.showTranslationForChunk, coldFadeOpacity, coldSeg.translationChunkText, videoProgress, transitionCount)
+              }
             }
           }
 
@@ -1251,14 +1299,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           cleanupAfterGeneration()
         } catch (mediaErr) {
           audioCtx.close()
-          if (backgroundVideos.length > 0) {
-            backgroundVideos.forEach((v) => { try { v.pause() } catch { /* noop */ } })
-            backgroundVideos.forEach((video) => {
-              try { video.removeAttribute('src') } catch { /* noop */ }
-              try { video.load() } catch { /* noop */ }
-            })
-          }
-          try { canvas.width = 0; canvas.height = 0 } catch { /* noop */ }
+          try { canvas.width = width; canvas.height = height } catch { /* noop */ }
+          await rebuildBackgroundVideosFromConfig()
           await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideos[activeBgIndex] ?? null, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording failed. Downloaded verse images instead.')

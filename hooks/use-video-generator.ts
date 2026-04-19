@@ -259,6 +259,8 @@ function drawFrame(
   videoProgress?: number,
 ) {
   let translationBottomForBar: number | undefined
+  const uiScale = width / 1080
+  const s = (n: number) => n * uiScale
 
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
@@ -300,19 +302,19 @@ function drawFrame(
   if (taawudhText && !verse) {
     ctx.save()
     ctx.fillStyle = 'white'
-    ctx.font = '52px "Nabi", sans-serif'
+    ctx.font = `${Math.round(s(52))}px "Nabi", sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.shadowColor = 'rgba(0,0,0,0.9)'
-    ctx.shadowBlur = 18
+    ctx.shadowBlur = s(18)
     ctx.direction = 'rtl'
     ctx.fillText(taawudhText, width / 2, height * 0.44)
     ctx.restore()
     if (displayMode === 'classic' && videoProgress !== undefined) {
-      const barH = 6
-      const barW = width - 80
-      const barX = 40
-      const trackTop = height - 30
+      const barX = Math.round(s(40))
+      const barW = Math.round(width - barX * 2)
+      const barH = Math.max(2, Math.round(s(6)))
+      const trackTop = Math.round(height - s(30))
       ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
       ctx.fillRect(barX, trackTop, barW, barH)
       ctx.fillStyle = 'rgba(212,175,55,0.9)'
@@ -324,13 +326,13 @@ function drawFrame(
   if (displayMode === 'classic') {
     ctx.save()
     ctx.fillStyle = 'rgba(0,0,0,0.45)'
-    roundRect(ctx, width / 2 - 160, 90, 320, 56, 28)
+    roundRect(ctx, width / 2 - s(160), s(90), s(320), s(56), s(28))
     ctx.fill()
     ctx.fillStyle = 'rgba(212,175,55,0.9)'
-    ctx.font = '30px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif'
+    ctx.font = `${Math.round(s(30))}px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(surahName, width / 2, 118)
+    ctx.fillText(surahName, width / 2, s(118))
     ctx.restore()
   }
 
@@ -340,12 +342,12 @@ function drawFrame(
   ctx.globalAlpha = fadeOpacity
 
   ctx.fillStyle = 'white'
-  const arabicFontSize = displayMode === 'minimal' ? 58 : 68
+  const arabicFontSize = Math.round(s(displayMode === 'minimal' ? 58 : 68))
   const nabiFont = `${arabicFontSize}px "Nabi", sans-serif`
   const uthmanicFont = `${arabicFontSize}px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif`
   ctx.textBaseline = 'middle'
   ctx.shadowColor = 'rgba(0,0,0,0.9)'
-  ctx.shadowBlur = displayMode === 'minimal' ? 18 : 24
+  ctx.shadowBlur = s(displayMode === 'minimal' ? 18 : 24)
   ctx.direction = 'rtl'
 
   const verseText = chunkText || verse.text_uthmani || verse.words?.map(w => w.text_uthmani).join(' ') || ''
@@ -356,7 +358,7 @@ function drawFrame(
   const markerWidth = ctx.measureText(markerChar).width
 
   ctx.font = nabiFont
-  const maxWidth = width - 100
+  const maxWidth = width - s(100)
   const words = verseText.split(' ')
   const lines: string[] = []
   let currentLine = ''
@@ -382,7 +384,7 @@ function drawFrame(
   const lineHeight = arabicFontSize * 2.0
   const totalTextHeight = lines.length * lineHeight
   const shouldShowTranslation = showTranslation && showTranslationOverride
-  const textCenterY = displayMode === 'minimal' ? height * 0.44 : height / 2 - (shouldShowTranslation ? 80 : 0)
+  const textCenterY = displayMode === 'minimal' ? height * 0.44 : height / 2 - (shouldShowTranslation ? s(80) : 0)
   const textStartY = textCenterY - totalTextHeight / 2
 
   lines.forEach((line, i) => {
@@ -413,24 +415,24 @@ function drawFrame(
     const rawTranslation = translationChunkText || (verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? '')
     if (rawTranslation) {
       ctx.fillStyle = displayMode === 'minimal' ? 'rgba(255,255,255,0.88)' : 'rgba(255,255,255,0.78)'
-      const transFontSize = displayMode === 'minimal' ? 28 : 34
+      const transFontSize = Math.round(s(displayMode === 'minimal' ? 28 : 34))
       ctx.font = `${transFontSize}px Georgia, serif`
       ctx.textAlign = 'center'; ctx.direction = 'ltr'
-      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 12
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = s(12)
 
       const transWords = rawTranslation.split(' ')
       const transLines: string[] = []
       let transLine = ''
       for (const word of transWords) {
         const testLine = transLine ? `${transLine} ${word}` : word
-        if (ctx.measureText(testLine).width > width - 160 && transLine) {
+        if (ctx.measureText(testLine).width > width - s(160) && transLine) {
           transLines.push(transLine); transLine = word
         } else { transLine = testLine }
       }
       if (transLine) transLines.push(transLine)
 
       const transLineHeight = transFontSize * 1.5
-      const transY = textStartY + totalTextHeight + (displayMode === 'minimal' ? 44 : 70)
+      const transY = textStartY + totalTextHeight + (displayMode === 'minimal' ? s(44) : s(70))
       transLines.forEach((line, i) => ctx.fillText(line, width / 2, transY + i * transLineHeight))
       if (displayMode === 'classic' && transLines.length > 0) {
         const lastY = transY + (transLines.length - 1) * transLineHeight
@@ -441,22 +443,22 @@ function drawFrame(
   ctx.restore()
 
   if (displayMode === 'classic' && videoProgress !== undefined) {
-    const barH = 6
-    const barW = width - 80
-    const barX = 40
-    const gapBelowTranslation = 18
-    const defaultTrackTop = height - 30
+    const barX = Math.round(s(40))
+    const barW = Math.round(width - barX * 2)
+    const barH = Math.max(2, Math.round(s(6)))
+    const gapBelowTranslation = s(18)
+    const defaultTrackTop = height - s(30)
     let trackTop = defaultTrackTop
     if (translationBottomForBar !== undefined) {
       const minTop = translationBottomForBar + gapBelowTranslation
       if (minTop > defaultTrackTop) {
-        trackTop = Math.min(minTop, height - barH - 10)
+        trackTop = Math.min(minTop, height - barH - s(10))
       }
     }
     ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
-    ctx.fillRect(barX, trackTop, barW, barH)
+    ctx.fillRect(barX, Math.round(trackTop), barW, barH)
     ctx.fillStyle = 'rgba(212,175,55,0.9)'
-    ctx.fillRect(barX, trackTop, barW * videoProgress, barH)
+    ctx.fillRect(barX, Math.round(trackTop), barW * videoProgress, barH)
   }
 }
 
@@ -905,8 +907,8 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
       cancelledRef.current = false
 
       try {
-        const width = 1080
-        const height = 1920
+        const width = 720
+        const height = 1280
         const canvas = document.createElement('canvas')
         canvas.width = width; canvas.height = height
         const ctx = canvas.getContext('2d')!
@@ -1077,7 +1079,7 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
           const isMp4 = mimeType.startsWith('video/mp4')
           const fileExt = isMp4 ? 'mp4' : 'webm'
 
-          const mediaRecorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 320_000 })
+          const mediaRecorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 4_000_000, audioBitsPerSecond: 320_000 })
           const chunks: Blob[] = []
           mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
 

@@ -375,8 +375,8 @@ export function BackgroundSelector() {
               Video
             </p>
             {customVideoBg ? (
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-wrap gap-3">
                   {(Array.isArray(customVideoBg.value) ? customVideoBg.value : [customVideoBg.value]).map((url) => (
                     <div key={url} className="relative">
                       <button
@@ -415,31 +415,31 @@ export function BackgroundSelector() {
                       </Button>
                     </div>
                   ))}
-
-                  {(Array.isArray(customVideoBg.value) ? customVideoBg.value.length : 1) < 4 && (
-                    <button
-                      type="button"
-                      onClick={() => videoInputRef.current?.click()}
-                      onDragOver={onDragOverVideo}
-                      onDragLeave={onDragLeaveVideo}
-                      onDrop={onDropVideo}
-                      className={cn(
-                        'relative flex min-w-[8.5rem] flex-1 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed px-3 py-4 text-center transition-colors',
-                        'bg-stone-50/90 hover:bg-amber-50/60 dark:bg-slate-900/30 dark:hover:bg-slate-800/40',
-                        isDraggingVideo
-                          ? 'border-amber-500/80 bg-amber-100/80 ring-2 ring-amber-400/25 dark:bg-amber-500/10 dark:ring-amber-500/20'
-                          : 'border-stone-400/90 hover:border-amber-400/70 dark:border-slate-600/90 dark:hover:border-slate-500'
-                      )}
-                      title="Add more videos (max 4)"
-                    >
-                      <div className="rounded-full bg-white p-2 ring-1 ring-stone-300 dark:bg-slate-800/90 dark:ring-slate-600/80">
-                        <Video className="h-4 w-4 text-stone-600 dark:text-slate-300" />
-                      </div>
-                      <span className="text-xs font-medium text-stone-800 dark:text-slate-200">Add videos</span>
-                      <span className="text-[10px] text-stone-600 dark:text-slate-500">Drag &amp; drop or click</span>
-                    </button>
-                  )}
                 </div>
+
+                {(Array.isArray(customVideoBg.value) ? customVideoBg.value.length : 1) < 4 && (
+                  <button
+                    type="button"
+                    onClick={() => videoInputRef.current?.click()}
+                    onDragOver={onDragOverVideo}
+                    onDragLeave={onDragLeaveVideo}
+                    onDrop={onDropVideo}
+                    className={cn(
+                      'relative flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-3 py-6 text-center transition-colors',
+                      'bg-stone-50/90 hover:bg-amber-50/60 dark:bg-slate-900/30 dark:hover:bg-slate-800/40',
+                      isDraggingVideo
+                        ? 'border-amber-500/80 bg-amber-100/80 ring-2 ring-amber-400/25 dark:bg-amber-500/10 dark:ring-amber-500/20'
+                        : 'border-stone-400/90 hover:border-amber-400/70 dark:border-slate-600/90 dark:hover:border-slate-500'
+                    )}
+                    title="Add more videos (max 4)"
+                  >
+                    <div className="rounded-full bg-white p-2 ring-1 ring-stone-300 dark:bg-slate-800/90 dark:ring-slate-600/80">
+                      <Video className="h-4 w-4 text-stone-600 dark:text-slate-300" />
+                    </div>
+                    <span className="text-xs font-medium text-stone-800 dark:text-slate-200">Add videos</span>
+                    <span className="text-[10px] text-stone-600 dark:text-slate-500">Drag &amp; drop or click</span>
+                  </button>
+                )}
 
                 {!isCustomVideoActive && (
                   <p className="text-[11px] text-stone-600 dark:text-slate-500">Tap any thumbnail to select</p>

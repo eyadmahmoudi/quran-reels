@@ -1178,18 +1178,35 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
           if (backgroundVideos.length > 0) {
             activeBgIndex = 0
-            const first = backgroundVideos[0]
-            try { first.currentTime = 0 } catch { /* noop */ }
+            const firstVideo = backgroundVideos[0]
 
+            // 1. Ensure the browser has actually loaded the frame data
+            if (firstVideo.readyState < 2) { // HAVE_CURRENT_DATA
+              await new Promise<void>((resolve) => {
+                firstVideo.onloadeddata = () => resolve()
+              })
+            }
+
+            // 2. Force the playhead to 0 and strictly await the 'seeked' event
             await new Promise<void>((resolve) => {
-              const onPlaying = () => {
-                first.removeEventListener('playing', onPlaying)
+              const seekHandler = () => {
+                firstVideo.removeEventListener('seeked', seekHandler)
                 resolve()
               }
-              first.addEventListener('playing', onPlaying, { once: true })
-              first.play().catch((e) => {
+              firstVideo.addEventListener('seeked', seekHandler)
+              try { firstVideo.currentTime = 0 } catch { /* noop */ }
+
+              setTimeout(() => {
+                firstVideo.removeEventListener('seeked', seekHandler)
+                resolve()
+              }, 150)
+            })
+
+            // 3. Start playback and wait until it is active
+            await new Promise<void>((resolve) => {
+              firstVideo.onplaying = () => resolve()
+              firstVideo.play().catch((e) => {
                 console.warn('Play blocked:', e)
-                first.removeEventListener('playing', onPlaying)
                 resolve()
               })
             })

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import type { Verse, BackgroundOption } from '@/lib/quran-types'
+import type { Verse, Word, BackgroundOption } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
 import { splitVerseByWordTimings, splitTranslation } from '@/lib/verse-chunking'
 import { fetchAudioSegments } from '@/lib/quran-api'
@@ -435,6 +435,97 @@ async function exportVerseImages(
  * breathing pauses at other positions are ignored because they're not
  * nearest to any text boundary.
  */
+
+// ── Word-by-word translation (WBW) for chunked Arabic display ─────────────
+const ARABIC_MARKS_FOR_MATCH = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7-\u06E8\u06EA-\u06ED\u08D3-\u08E1\u08E3-\u08FF]/g
+
+function stripHtmlTags(text: string): string {
+  return text.replace(/<[^>]+>/g, '')
+}
+
+function normalizeArabicWordToken(token: string): string {
+  return token
+    .replace(ARABIC_MARKS_FOR_MATCH, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/\s+/g, '')
+    .trim()
+}
+
+function cleanJoinedTranslation(text: string): string {
+  let s = text.replace(/\s+/g, ' ').trim()
+  s = s.replace(/\s+,/g, ',')
+  s = s.replace(/,\s*/g, ', ')
+  s = s.replace(/\s+\./g, '.')
+  s = s.replace(/\(\s+/g, '(')
+  s = s.replace(/\s+\)/g, ')')
+  return s.trim()
+}
+
+function getContentWords(verse: Verse): Word[] {
+  return (verse.words ?? []).filter(w => w.char_type_name === 'word')
+}
+
+/**
+ * Maps a contiguous Arabic substring (as shown in a display chunk/group) to
+ * verse content words and joins their WBW English glosses.
+ */
+function translationFromArabicGroupText(
+  verse: Verse,
+  arabicGroupText: string,
+  proportionalFallback: string
+): string {
+  const contentWords = getContentWords(verse)
+  const chunkTokens = arabicGroupText.split(/\s+/).filter(Boolean)
+  if (contentWords.length === 0 || chunkTokens.length === 0) {
+    return proportionalFallback.trim()
+  }
+
+  const normChunk = chunkTokens.map(normalizeArabicWordToken).filter(t => t.length > 0)
+  if (normChunk.length === 0) return proportionalFallback.trim()
+
+  const normVerse = contentWords.map(w => normalizeArabicWordToken(w.text_uthmani))
+
+  for (let i = 0; i <= normVerse.length - normChunk.length; i++) {
+    let match = true
+    for (let j = 0; j < normChunk.length; j++) {
+      if (normVerse[i + j] !== normChunk[j]) {
+        match = false
+        break
+      }
+    }
+    if (!match) continue
+
+    const parts: string[] = []
+    for (let k = 0; k < normChunk.length; k++) {
+      const w = contentWords[i + k]
+      const raw = w.translation?.text
+      if (raw && raw.trim()) parts.push(stripHtmlTags(raw).trim())
+    }
+    if (parts.length === 0) continue
+    return cleanJoinedTranslation(parts.join(' '))
+  }
+
+  return proportionalFallback.trim()
+}
+
+function buildGroupTranslationText(
+  verse: Verse,
+  arabicGroupText: string,
+  chunkIndices: number[],
+  chunks: ReturnType<typeof splitVerseByWordTimings>,
+  translationChunks: string[]
+): string {
+  const proportionalFallback = chunkIndices
+    .map(ci => translationChunks[chunks[ci].chunkIndex] || '')
+    .join(' ')
+    .trim()
+
+  if (!verse.words?.length) return proportionalFallback
+
+  const wbw = translationFromArabicGroupText(verse, arabicGroupText, proportionalFallback)
+  return wbw || proportionalFallback
+}
+
 function buildDisplaySegments(
   verseTimings: Array<{ startMs: number; endMs: number }>,
   verses: Verse[],
@@ -634,10 +725,9 @@ function buildDisplaySegments(
       for (let b = 0; b < numBoundaries; b++) {
         if (effectiveBoundaries[b] !== null) {
           const groupText = currentGroupIndices.map(ci => chunks[ci].text).join(' ')
-          const groupTranslation = currentGroupIndices
-            .map(ci => translationChunks[chunks[ci].chunkIndex] || '')
-            .join(' ')
-            .trim()
+          const groupTranslation = buildGroupTranslationText(
+            verse, groupText, currentGroupIndices, chunks, translationChunks
+          )
 
           displayGroups.push({
             chunkIndices: [...currentGroupIndices],
@@ -653,10 +743,9 @@ function buildDisplaySegments(
       }
 
       const finalGroupText = currentGroupIndices.map(ci => chunks[ci].text).join(' ')
-      const finalGroupTranslation = currentGroupIndices
-        .map(ci => translationChunks[chunks[ci].chunkIndex] || '')
-        .join(' ')
-        .trim()
+      const finalGroupTranslation = buildGroupTranslationText(
+        verse, finalGroupText, currentGroupIndices, chunks, translationChunks
+      )
       displayGroups.push({
         chunkIndices: [...currentGroupIndices],
         text: finalGroupText,

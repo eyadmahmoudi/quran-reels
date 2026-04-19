@@ -45,16 +45,17 @@ function AnimatedPreview({ name }: { name: string }) {
 }
 
 function BgThumbnail({ bg }: { bg: BackgroundOption }) {
+  const valueStr = typeof bg.value === 'string' ? bg.value : (bg.value[0] ?? '')
   if (bg.type === 'animated') {
-    return <AnimatedPreview name={bg.value} />
+    return <AnimatedPreview name={valueStr} />
   }
   if (bg.type === 'gradient') {
-    return <div className="w-full h-full" style={{ background: bg.value }} />
+    return <div className="w-full h-full" style={{ background: valueStr }} />
   }
   if (bg.type === 'video') {
     return (
       <video
-        src={bg.thumbnail || bg.value}
+        src={bg.thumbnail || valueStr}
         muted
         playsInline
         loop
@@ -65,7 +66,7 @@ function BgThumbnail({ bg }: { bg: BackgroundOption }) {
   // preset (nature photo) or custom image
   return (
     <img
-      src={bg.thumbnail || bg.value}
+      src={bg.thumbnail || valueStr}
       alt={bg.name}
       className="w-full h-full object-cover"
       loading="lazy"
@@ -111,7 +112,7 @@ export function BackgroundSelector() {
 
   const applyImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) { alert('Please select an image file'); return }
-    if (customImageBg?.value) URL.revokeObjectURL(customImageBg.value)
+    if (customImageBg?.value && typeof customImageBg.value === 'string') URL.revokeObjectURL(customImageBg.value)
     const url = URL.createObjectURL(file)
     const custom: BackgroundOption = {
       id: CUSTOM_IMAGE_ID, name: file.name, type: 'custom', value: url, thumbnail: url,
@@ -122,10 +123,33 @@ export function BackgroundSelector() {
 
   const applyVideoFile = (file: File) => {
     if (!file.type.startsWith('video/')) { alert('Please select a video file'); return }
-    if (customVideoBg?.value) URL.revokeObjectURL(customVideoBg.value)
-    const url = URL.createObjectURL(file)
+    applyVideoFiles([file])
+  }
+
+  const applyVideoFiles = (files: File[]) => {
+    const videoFiles = files.filter((f) => f.type.startsWith('video/'))
+    if (videoFiles.length === 0) { alert('Please select a video file'); return }
+
+    const MAX_VIDEOS = 4
+    if (videoFiles.length > MAX_VIDEOS) {
+      alert(`Please select up to ${MAX_VIDEOS} videos.`)
+    }
+
+    const kept = videoFiles.slice(0, MAX_VIDEOS)
+
+    if (customVideoBg?.value) {
+      const prev = customVideoBg.value
+      if (Array.isArray(prev)) prev.forEach((u) => URL.revokeObjectURL(u))
+      else URL.revokeObjectURL(prev)
+    }
+
+    const urls = kept.map((f) => URL.createObjectURL(f))
     const custom: BackgroundOption = {
-      id: CUSTOM_VIDEO_ID, name: file.name, type: 'video', value: url, thumbnail: url,
+      id: CUSTOM_VIDEO_ID,
+      name: kept.length === 1 ? kept[0].name : `Playlist (${kept.length} videos)`,
+      type: 'video',
+      value: urls,
+      thumbnail: urls[0],
     }
     setCustomVideoBg(custom)
     setConfig({ background: custom })
@@ -138,20 +162,24 @@ export function BackgroundSelector() {
   }
 
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    applyVideoFile(file)
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+    applyVideoFiles(files)
   }
 
   const clearCustomImage = () => {
-    if (customImageBg?.value) URL.revokeObjectURL(customImageBg.value)
+    if (customImageBg?.value && typeof customImageBg.value === 'string') URL.revokeObjectURL(customImageBg.value)
     setCustomImageBg(null)
     if (isCustomImageActive) setConfig({ background: PRESET_BACKGROUNDS[0] })
     if (imageInputRef.current) imageInputRef.current.value = ''
   }
 
   const clearCustomVideo = () => {
-    if (customVideoBg?.value) URL.revokeObjectURL(customVideoBg.value)
+    if (customVideoBg?.value) {
+      const prev = customVideoBg.value
+      if (Array.isArray(prev)) prev.forEach((u) => URL.revokeObjectURL(u))
+      else URL.revokeObjectURL(prev)
+    }
     setCustomVideoBg(null)
     if (isCustomVideoActive) setConfig({ background: PRESET_BACKGROUNDS[0] })
     if (videoInputRef.current) videoInputRef.current.value = ''
@@ -273,7 +301,7 @@ export function BackgroundSelector() {
                         : 'border-transparent hover:border-primary/50'
                     )}
                   >
-                    <img src={customImageBg.value} alt="" className="w-full h-full object-cover" />
+                    <img src={typeof customImageBg.value === 'string' ? customImageBg.value : (customImageBg.value[0] ?? '')} alt="" className="w-full h-full object-cover" />
                     {isCustomImageActive && <ActiveBadge />}
                     {isCustomImageActive && (
                       <div className="absolute inset-0 flex items-center justify-center bg-black/20">
@@ -337,7 +365,7 @@ export function BackgroundSelector() {
                     )}
                   >
                     <video
-                      src={customVideoBg.value}
+                      src={typeof customVideoBg.value === 'string' ? customVideoBg.value : (customVideoBg.value[0] ?? '')}
                       muted
                       playsInline
                       loop
@@ -387,6 +415,7 @@ export function BackgroundSelector() {
             <input
               ref={videoInputRef}
               type="file"
+              multiple
               accept="video/*"
               onChange={handleVideoUpload}
               className="hidden"

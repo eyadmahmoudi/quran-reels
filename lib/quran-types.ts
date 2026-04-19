@@ -140,7 +140,7 @@ export interface BackgroundOption {
   name: string
   type: 'preset' | 'custom' | 'gradient' | 'animated' | 'video'
   /** URL: preset/custom image, object URL for custom video, CSS gradient string, or animation key */
-  value: string
+  value: string | string[]
   thumbnail?: string
 }
 

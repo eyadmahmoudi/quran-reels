@@ -6,7 +6,6 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
 import { PRESET_BACKGROUNDS, ANIMATED_BACKGROUNDS, type BackgroundOption } from '@/lib/quran-types'
-import { STOCK_VIDEOS } from '@/lib/stock-videos'
 import { drawAnimatedBackground } from '@/lib/animations'
 
 const gradients = PRESET_BACKGROUNDS.filter((b) => b.type === 'gradient')
@@ -118,17 +117,6 @@ export function BackgroundSelector() {
 
   const handleSelect = (bg: BackgroundOption) => setConfig({ background: bg })
 
-  const handleSelectStockVideo = (video: (typeof STOCK_VIDEOS)[number]) => {
-    setConfig({
-      background: {
-        id: video.id,
-        name: video.name,
-        type: 'video',
-        value: [video.url],
-        thumbnail: video.thumbnail,
-      },
-    })
-  }
 
   const revokeCurrentImageUrl = () => {
     const b = config.background
@@ -233,43 +221,7 @@ export function BackgroundSelector() {
       {/* ── Stock videos ── */}
       <div>
         <p className="mb-2 text-xs font-medium text-stone-600 dark:text-slate-400">Stock Videos</p>
-        <div className="grid grid-cols-4 gap-2">
-          {STOCK_VIDEOS.map((video) => {
-            const isSelected = config.background?.id === video.id
-            const bgOption: BackgroundOption = {
-              id: video.id,
-              name: video.name,
-              type: 'video',
-              value: [video.url],
-              thumbnail: video.thumbnail,
-            }
-            return (
-              <button
-                key={video.id}
-                type="button"
-                onClick={() => handleSelectStockVideo(video)}
-                title={video.name}
-                className={cn(
-                  'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all bg-black',
-                  isSelected
-                    ? 'border-green-500 ring-2 ring-green-500/20'
-                    : 'border-transparent hover:border-primary/50'
-                )}
-              >
-                <BgThumbnail bg={bgOption} />
-                {isSelected && <ActiveBadge />}
-                {isSelected && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                    <Check className="h-4 w-4 text-white drop-shadow" />
-                  </div>
-                )}
-                <span className="absolute bottom-0 inset-x-0 text-[9px] text-white/90 text-center py-0.5 bg-black/50 truncate px-0.5">
-                  {video.name}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+        
       </div>
 
       {/* ── Custom image upload ── */}

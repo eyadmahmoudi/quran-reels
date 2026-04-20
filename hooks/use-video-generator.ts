@@ -1187,15 +1187,17 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
               })
             }
 
-            // 2. Force the playhead to 0 and strictly await the 'seeked' event
+            // 2. Force the playhead to 0.1 and strictly await the 'seeked' event
             await new Promise<void>((resolve) => {
               const seekHandler = () => {
                 firstVideo.removeEventListener('seeked', seekHandler)
                 resolve()
               }
               firstVideo.addEventListener('seeked', seekHandler)
-              try { firstVideo.currentTime = 0 } catch { /* noop */ }
-
+              try {
+                // Nudge to 0.1 to guarantee a seeked event
+                firstVideo.currentTime = 0.1
+              } catch { /* noop */ }
               setTimeout(() => {
                 firstVideo.removeEventListener('seeked', seekHandler)
                 resolve()

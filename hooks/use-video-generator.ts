@@ -53,28 +53,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
-function loadVideo(src: string): Promise<HTMLVideoElement> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video')
-    video.muted = true
-    video.defaultMuted = true
-    video.loop = false
-    video.playsInline = true
-    video.setAttribute('playsinline', '')
-    video.setAttribute('webkit-playsinline', '')
-    video.autoplay = true
-    video.preload = 'auto'
-    video.crossOrigin = 'anonymous'
-
-    video.onloadeddata = () => resolve(video)
-    video.onerror = () => reject(new Error('Failed to load background video'))
-
-    const mobileOptimizedSrc = src.startsWith('blob:') ? `${src}#t=0.001` : src
-    video.src = mobileOptimizedSrc
-    video.load()
-  })
-}
-
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath()
   ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y)
@@ -190,18 +168,6 @@ function findInternalPauses(
   }
 
   // ── FILTER BREATHING PAUSES ──
-  // When a reciter approaches a waqf mark, they often do a quick breath
-  // (~200-350ms silence) followed by the actual waqf pause (~400-600ms).
-  // Both get detected as raw pauses. The breathing pause is a false
-  // positive that steals the boundary assignment from the real waqf pause.
-  //
-  // Fix: if two pauses are within 2 seconds of each other, drop the
-  // shorter one. The longer one is the real waqf pause.
-  //
-  // Example (An-Nisa verse 2):
-  //   Pause at buf ~8.0s (340ms) ← breathing before waqf
-  //   Pause at buf ~9.2s (440ms) ← actual waqf stop
-  //   Distance: 0.9s → within 2s → drop the 340ms one ✓
   const filtered: Array<{ startMs: number; endMs: number }> = [...rawPauses]
 
   for (let i = filtered.length - 1; i > 0; i--) {
@@ -210,13 +176,12 @@ function findInternalPauses(
     const gap = curr.startMs - prev.endMs
 
     if (gap < 2000) {
-      // Close pauses → drop the shorter one (breathing)
       const prevDur = prev.endMs - prev.startMs
       const currDur = curr.endMs - curr.startMs
       if (prevDur <= currDur) {
-        filtered.splice(i - 1, 1) // remove the shorter earlier pause
+        filtered.splice(i - 1, 1)
       } else {
-        filtered.splice(i, 1) // remove the shorter later pause
+        filtered.splice(i, 1)
       }
     }
   }
@@ -226,17 +191,17 @@ function findInternalPauses(
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// DRAWING (unchanged)
+// DRAWING
 // ═══════════════════════════════════════════════════════════════════════
 
 function drawRasterBackground(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  el: HTMLImageElement | HTMLVideoElement,
+  el: HTMLImageElement,
 ) {
-  const w = el instanceof HTMLVideoElement ? el.videoWidth : el.width
-  const h = el instanceof HTMLVideoElement ? el.videoHeight : el.height
+  const w = el.width
+  const h = el.height
   if (!w || !h) return
   const scale = Math.max(width / w, height / h)
   const x = (width - w * scale) / 2
@@ -247,15 +212,12 @@ function drawRasterBackground(
 function drawFrame(
   ctx: CanvasRenderingContext2D, width: number, height: number,
   backgroundImage: HTMLImageElement | null,
-  backgroundVideo: HTMLVideoElement | null,
   background: BackgroundOption,
   surahName: string, verse: Verse | undefined, showTranslation: boolean,
   displayMode: 'minimal' | 'classic', taawudhText?: string, animTimeMs?: number,
   chunkText?: string, showMarker: boolean = true, showTranslationOverride: boolean = true,
   fadeOpacity: number = 1, translationChunkText?: string,
   videoProgress?: number,
-  secondaryBackgroundVideo: HTMLVideoElement | null = null,
-  crossfadeAlpha: number = 0,
 ) {
   let translationBottomForBar: number | undefined
   const uiScale = width / 1080
@@ -268,14 +230,6 @@ function drawFrame(
   if (background.type === 'animated') {
     if (typeof background.value === 'string') {
       drawAnimatedBackground(ctx, width, height, animTimeMs ?? 0, background.value)
-    }
-  } else if (background.type === 'video' && backgroundVideo) {
-    drawRasterBackground(ctx, width, height, backgroundVideo)
-    if (secondaryBackgroundVideo && crossfadeAlpha > 0) {
-      ctx.save()
-      ctx.globalAlpha = Math.max(0, Math.min(1, crossfadeAlpha))
-      drawRasterBackground(ctx, width, height, secondaryBackgroundVideo)
-      ctx.restore()
     }
   } else if (backgroundImage) {
     drawRasterBackground(ctx, width, height, backgroundImage)
@@ -296,10 +250,7 @@ function drawFrame(
     ctx.fillRect(0, 0, width, height)
   }
 
-  const hasRichBg =
-    background.type === 'animated' ||
-    (background.type === 'video' && !!backgroundVideo) ||
-    !!backgroundImage
+  const hasRichBg = background.type === 'animated' || !!backgroundImage
   if (displayMode === 'minimal') {
     ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.20)'
   } else {
@@ -473,12 +424,11 @@ function drawFrame(
 async function exportVerseImages(
   ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, verses: Verse[],
   background: BackgroundOption, backgroundImage: HTMLImageElement | null,
-  backgroundVideo: HTMLVideoElement | null,
   surahName: string, showTranslation: boolean, displayMode: 'minimal' | 'classic',
   setProgress: (n: number) => void
 ) {
   for (let i = 0; i < verses.length; i++) {
-    drawFrame(ctx, canvas.width, canvas.height, backgroundImage, backgroundVideo, background, surahName, verses[i], showTranslation, displayMode, undefined, i * 3000)
+    drawFrame(ctx, canvas.width, canvas.height, backgroundImage, background, surahName, verses[i], showTranslation, displayMode, undefined, i * 3000)
     const blob = await new Promise<Blob>((resolve) => { canvas.toBlob((b) => resolve(b!), 'image/png', 1.0) })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -495,39 +445,6 @@ async function exportVerseImages(
 // DISPLAY SEGMENT BUILDING — POSITION-MATCHED AUDIO PAUSES
 // ═══════════════════════════════════════════════════════════════════════
 
-/**
- * FIX v3 — POSITION-BASED MATCHING
- *
- * The v2 approach tried to match detected audio pauses to text waqf groups
- * 1:1. This failed because:
- *   - Reciters pause for breathing, emphasis, etc. — not just waqf marks
- *   - Close consecutive pauses created 0.8s segments → blank frames
- *   - "Pick the longest N pauses" didn't guarantee correct positions
- *
- * v3 approach: POSITION MATCHING
- * ─────────────────────────────────────────────────────────────────────
- * 1. Text chunks have cumulative proportional positions:
- *    e.g., 3 chunks → boundaries at 40% and 75% of text
- *
- * 2. These proportions estimate where in the AUDIO the boundary should be:
- *    e.g., 40% of audio duration ≈ first boundary
- *
- * 3. For each estimated boundary, find the NEAREST detected audio pause.
- *    This is more robust than 1:1 matching because:
- *    - Extra pauses (breathing) are harmlessly ignored
- *    - Missing pauses → the estimate is used without correction
- *    - Close pauses → only the one nearest to the text boundary is used
- *
- * 4. Each selected pause is snapped to: no two boundaries use the same
- *    pause, and they stay in chronological order.
- *
- * Result: For An-Nisa v1, the 400ms waqf pause at ~16s is the nearest
- * pause to the ~40% text boundary, and it gets selected. The 240ms
- * breathing pauses at other positions are ignored because they're not
- * nearest to any text boundary.
- */
-
-// ── Word-by-word translation (WBW) for chunked Arabic display ─────────────
 const ARABIC_MARKS_FOR_MATCH = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E4\u06E7-\u06E8\u06EA-\u06ED\u08D3-\u08E1\u08E3-\u08FF]/g
 
 function stripHtmlTags(text: string): string {
@@ -556,10 +473,6 @@ function getContentWords(verse: Verse): Word[] {
   return (verse.words ?? []).filter(w => w.char_type_name === 'word')
 }
 
-/**
- * Maps a contiguous Arabic substring (as shown in a display chunk/group) to
- * verse content words and joins their WBW English glosses.
- */
 function translationFromArabicGroupText(
   verse: Verse,
   arabicGroupText: string,
@@ -632,9 +545,6 @@ function buildDisplaySegments(
   qdcSegmentsByDisplayIndex: Array<number[][] | null>
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
-  // Slight nudge so waqf-bearing chunks weigh more in proportional boundaries,
-  // without shifting early boundaries too far right (which invited pause “stealing”
-  // in verses like An-Nisa 4:2). Was 14; 11 keeps boundaries closer to raw character share.
   const WAQF_BONUS_CHARS = 11
 
   for (let i = 0; i < verseTimings.length; i++) {
@@ -660,7 +570,6 @@ function buildDisplaySegments(
     const fullTranslation = verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? ''
     const translationChunks = splitTranslation(fullTranslation, chunks)
 
-    // ── Single chunk → no splitting needed ──
     if (chunks.length === 1) {
       segments.push({
         type: 'verse-chunk', verseIndex: verseArrayIdx, chunkText: undefined,
@@ -671,18 +580,14 @@ function buildDisplaySegments(
       continue
     }
 
-    // ── Multiple chunks: position-matched audio pauses ──
-
     const verseDuration = timing.endMs - timing.startMs
     const numBoundaries = chunks.length - 1
 
-    // Compute text-based proportional boundary positions
     const weights = chunks.map(c =>
       c.charCount + (c.endsWithWaqf ? WAQF_BONUS_CHARS : 0)
     )
     const totalWeight = weights.reduce((s, w) => s + w, 0) || 1
 
-    // textBoundaries[k] = the proportional position (0–1) where chunk k ends
     const textBoundaries: number[] = []
     let cumW = 0
     for (let j = 0; j < numBoundaries; j++) {
@@ -690,51 +595,25 @@ function buildDisplaySegments(
       textBoundaries.push(cumW / totalWeight)
     }
 
-    // Convert buffer-relative pauses → milliseconds from verse display start
     const bufferPauses = perBufferPauses[i] ?? []
     const rawStart = rawTimings[i].startMs
     const qdcSegments = qdcSegmentsByDisplayIndex[i] ?? null
 
-    // Pause midpoints relative to verse display start, as proportions (0–1)
     const pauseProportions = bufferPauses.map(p => {
       const midMs = (p.startMs + p.endMs) / 2
       const relativeMs = (rawStart + midMs) - timing.startMs
       return {
         proportion: Math.max(0, Math.min(1, relativeMs / verseDuration)),
-        // Actual timeline positions for building segments
-        transitionMs: rawStart + p.startMs,  // text changes at pause start
-        resumeMs: rawStart + p.endMs,        // voice resumes at pause end
+        transitionMs: rawStart + p.startMs,
+        resumeMs: rawStart + p.endMs,
       }
     })
 
     if (pauseProportions.length > 0 && numBoundaries > 0) {
-      // ═══ OPTIMAL PAUSE-FIRST MATCHING ═══
-      //
-      // FIX v4: The v3 algorithm was GREEDY in the wrong direction —
-      // it iterated boundaries in order and each boundary grabbed the
-      // nearest available pause. This caused boundary 0 to steal a
-      // pause that was actually closer to boundary 1.
-      //
-      // Example (An-Nisa verse 2):
-      //   Boundary 0 at 25.6%, Boundary 1 at 54.1%
-      //   Single pause at 40.9%
-      //   Greedy: Boundary 0 grabs it (dist 15.3%) → Boundary 1 gets nothing
-      //   Optimal: Pause goes to Boundary 1 (dist 13.2%) → correct!
-      //
-      // New algorithm: PAUSE-FIRST assignment
-      //   1. For each pause, find the boundary it's closest to
-      //   2. If two pauses claim the same boundary, keep the closer one
-      //   3. Enforce chronological order in a cleanup pass
-      //   4. Boundaries without a pause use proportional fallback
-
-      // Step 1+2: Each pause claims its closest boundary
-      // pauseToBoundary[pi] = boundary index, or -1 if no boundary is close
       const boundaryAssignment: Array<{ pauseIdx: number; dist: number } | null> =
         new Array(numBoundaries).fill(null)
 
-      // Max ratio distance between pause position and a text boundary (0–1 scale of verse duration).
-      // 25% was too loose: a pause near the second waqf could still lie within range of the first boundary.
-      const MAX_PAUSE_TO_BOUNDARY_DIST = 0.13 // ~13% — stricter; use 0.15 if too many misses in practice
+      const MAX_PAUSE_TO_BOUNDARY_DIST = 0.13
 
       for (let pi = 0; pi < pauseProportions.length; pi++) {
         let bestBoundary = -1
@@ -756,15 +635,12 @@ function buildDisplaySegments(
         }
       }
 
-      // Step 3: Enforce chronological order — if boundary K's pause is
-      // earlier than boundary K-1's pause, drop the out-of-order one
       for (let k = 1; k < numBoundaries; k++) {
         const prev = boundaryAssignment[k - 1]
         const curr = boundaryAssignment[k]
         if (prev && curr) {
           if (pauseProportions[curr.pauseIdx].transitionMs <=
               pauseProportions[prev.pauseIdx].resumeMs) {
-            // Out of order — drop the one with worse fit
             if (prev.dist > curr.dist) {
               boundaryAssignment[k - 1] = null
             } else {
@@ -774,7 +650,6 @@ function buildDisplaySegments(
         }
       }
 
-      // Convert to selectedBoundaries format
       const selectedBoundaries: Array<{ startMs: number; endMs: number } | null> =
         boundaryAssignment.map(a => {
           if (!a) return null
@@ -784,7 +659,6 @@ function buildDisplaySegments(
           }
         })
 
-      // Debug: show how pauses were assigned
       console.log(`[sync] V${verseArrayIdx} pause assignment (${pauseProportions.length} pauses, ${numBoundaries} boundaries):`)
       for (let k = 0; k < numBoundaries; k++) {
         const a = boundaryAssignment[k]
@@ -795,9 +669,6 @@ function buildDisplaySegments(
         }
       }
 
-      // Split only when BOTH conditions are true:
-      // 1) boundary is semantic waqf boundary, and
-      // 2) reciter made a real detected pause near that boundary.
       const effectiveBoundaries = selectedBoundaries.map((b, idx) =>
         b && chunks[idx].endsWithWaqf ? b : null
       )
@@ -869,7 +740,6 @@ function buildDisplaySegments(
       }
 
     } else {
-      // No internal stop detected -> keep full verse on screen.
       segments.push({
         type: 'verse-chunk',
         verseIndex: verseArrayIdx,
@@ -992,7 +862,6 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
             : totalDurationMs,
         }))
 
-        // ── Internal pause detection (v3: higher threshold + merged) ──
         const perBufferPauses = decodedBuffers.map(buf => findInternalPauses(buf))
 
         perBufferPauses.forEach((pauses, i) => {
@@ -1005,47 +874,6 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         setProgress(35)
 
         let backgroundImage: HTMLImageElement | null = null
-        // ── Dual-video crossfade for seamless looping ──
-        const CROSSFADE_DURATION_SEC = 1.5
-        let videoA: HTMLVideoElement | null = null
-        let videoB: HTMLVideoElement | null = null
-        let primaryIdx: 0 | 1 = 0
-        let secondaryStarted = false
-
-        const getVideoPair = (): [HTMLVideoElement | null, HTMLVideoElement | null] =>
-          primaryIdx === 0 ? [videoA, videoB] : [videoB, videoA]
-
-        const disposeBackgroundVideos = () => {
-          for (const v of [videoA, videoB]) {
-            if (!v) continue
-            try { v.onended = null } catch { /* noop */ }
-            try { v.pause() } catch { /* noop */ }
-            try { v.removeAttribute('src') } catch { /* noop */ }
-            try { v.load() } catch { /* noop */ }
-          }
-          videoA = null
-          videoB = null
-          primaryIdx = 0
-          secondaryStarted = false
-        }
-
-        const rebuildBackgroundVideosFromConfig = async () => {
-          disposeBackgroundVideos()
-          const currentBackground = latestConfigRef.current.background
-          if (currentBackground.type !== 'video') return
-          try {
-            const urls = Array.isArray(currentBackground.value) ? currentBackground.value : [currentBackground.value]
-            const src = urls[0]
-            if (!src) return
-            const [a, b] = await Promise.all([loadVideo(src), loadVideo(src)])
-            videoA = a
-            videoB = b
-            primaryIdx = 0
-            secondaryStarted = false
-          } catch (e) {
-            console.error('[video-bg] Error loading video:', e)
-          }
-        }
 
         if (background.type === 'custom' || background.type === 'preset' || background.type === 'image') {
           try {
@@ -1108,16 +936,13 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
 
         if (!useMediaRecorder) {
           audioCtx.close()
-          await rebuildBackgroundVideosFromConfig()
-          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, getVideoPair()[0] ?? null, surahName, showTranslation, displayMode, setProgress)
+          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording is not supported in this browser. Downloaded verse images instead.')
           return
         }
 
         try {
-          await rebuildBackgroundVideosFromConfig()
-
           const audioDest = audioCtx.createMediaStreamDestination()
           const source = audioCtx.createBufferSource()
           source.buffer = combined; source.connect(audioDest)
@@ -1140,90 +965,19 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
             mediaRecorder.onerror = (e) => reject(new Error('MediaRecorder: ' + (e as ErrorEvent).message))
           })
 
-          // ── Mobile stability: pause/resume on background tab ──
-          let visibilityListenerActive = true
-          const onVisibilityChange = async () => {
-            if (!visibilityListenerActive) return
-            const [primary, secondary] = getVideoPair()
-            if (document.hidden) {
-              try { primary?.pause() } catch { /* noop */ }
-              try { secondary?.pause() } catch { /* noop */ }
-              try { await audioCtx.suspend() } catch { /* noop */ }
-            } else {
-              try { await audioCtx.resume() } catch { /* noop */ }
-              primary?.play().catch((e) => console.warn('Play blocked:', e))
-              if (secondaryStarted) {
-                secondary?.play().catch((e) => console.warn('Play blocked:', e))
-              }
-            }
-          }
-          document.addEventListener('visibilitychange', onVisibilityChange)
-
           const cleanupAfterGeneration = () => {
-            visibilityListenerActive = false
-            document.removeEventListener('visibilitychange', onVisibilityChange)
             try { canvas.width = 0; canvas.height = 0 } catch { /* noop */ }
-            for (const v of [videoA, videoB]) {
-              if (!v) continue
-              try { v.pause() } catch { /* noop */ }
-              try { v.removeAttribute('src') } catch { /* noop */ }
-              try { v.load() } catch { /* noop */ }
-            }
           }
 
-          if (videoA && videoB) {
-            primaryIdx = 0
-            secondaryStarted = false
-            const firstVideo = videoA
-
-            if (firstVideo.readyState < 2) {
-              await new Promise<void>((resolve) => {
-                firstVideo.onloadeddata = () => resolve()
-              })
-            }
-
-            await new Promise<void>((resolve) => {
-              const seekHandler = () => {
-                firstVideo.removeEventListener('seeked', seekHandler)
-                resolve()
-              }
-              firstVideo.addEventListener('seeked', seekHandler)
-              try {
-                firstVideo.currentTime = 0
-              } catch { /* noop */ }
-              setTimeout(() => {
-                firstVideo.removeEventListener('seeked', seekHandler)
-                resolve()
-              }, 150)
-            })
-
-            await new Promise<void>((resolve) => {
-              firstVideo.onplaying = () => resolve()
-              firstVideo.play().catch((e) => {
-                console.warn('Play blocked:', e)
-                resolve()
-              })
-            })
-
-            const coldSeg = displaySegments[0]
-            if (coldSeg) {
-              const elapsedMs = 0
-              const videoProgress = Math.min(elapsedMs / totalDurationMs, 1)
-              let coldFadeOpacity = 1
-              const msIntoSegment = elapsedMs - coldSeg.startMs
-              const msBeforeEnd = coldSeg.endMs - elapsedMs
-              if (msIntoSegment < FADE_DURATION_MS) {
-                coldFadeOpacity = Math.min(1, msIntoSegment / FADE_DURATION_MS)
-              } else if (msBeforeEnd < FADE_DURATION_MS && displaySegments.length > 1) {
-                coldFadeOpacity = Math.max(0, msBeforeEnd / FADE_DURATION_MS)
-              }
-              const [primary] = getVideoPair()
-              if (coldSeg.type === 'intro') {
-                drawFrame(ctx, width, height, backgroundImage, primary, background, surahName, undefined, showTranslation, displayMode, coldSeg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress, null, 0)
-              } else {
-                const verse = coldSeg.verseIndex !== undefined ? verses[coldSeg.verseIndex] : undefined
-                drawFrame(ctx, width, height, backgroundImage, primary, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, coldSeg.chunkText, coldSeg.showMarker, coldSeg.showTranslationForChunk, coldFadeOpacity, coldSeg.translationChunkText, videoProgress, null, 0)
-              }
+          // Draw a cold first frame before recording starts
+          const coldSeg = displaySegments[0]
+          if (coldSeg) {
+            const videoProgress = 0
+            if (coldSeg.type === 'intro') {
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, coldSeg.introText, 0, undefined, true, true, 1, undefined, videoProgress)
+            } else {
+              const verse = coldSeg.verseIndex !== undefined ? verses[coldSeg.verseIndex] : undefined
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, verse, showTranslation, displayMode, undefined, 0, coldSeg.chunkText, coldSeg.showMarker, coldSeg.showTranslationForChunk, 1, coldSeg.translationChunkText, videoProgress)
             }
           }
 
@@ -1262,37 +1016,11 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
               fadeOpacity = Math.max(0, msBeforeEnd / FADE_DURATION_MS)
             }
 
-            // ── Dual-video crossfade ──
-            let [primary, secondary] = getVideoPair()
-            let crossfadeAlpha = 0
-            if (primary && Number.isFinite(primary.duration) && primary.duration > 0) {
-              const remaining = primary.duration - primary.currentTime
-              if (remaining <= CROSSFADE_DURATION_SEC && secondary) {
-                if (!secondaryStarted) {
-                  secondaryStarted = true
-                  try { secondary.currentTime = 0 } catch { /* noop */ }
-                  secondary.play().catch((e) => console.warn('Crossfade play blocked:', e))
-                }
-                const timeIntoFade = CROSSFADE_DURATION_SEC - remaining
-                crossfadeAlpha = Math.max(0, Math.min(1, timeIntoFade / CROSSFADE_DURATION_SEC))
-              }
-              // Swap roles when primary finishes
-              if (primary.ended || remaining <= 0) {
-                const oldPrimary = primary
-                primaryIdx = (primaryIdx === 0 ? 1 : 0) as 0 | 1
-                secondaryStarted = false
-                try { oldPrimary.pause() } catch { /* noop */ }
-                try { oldPrimary.currentTime = 0 } catch { /* noop */ }
-                ;[primary, secondary] = getVideoPair()
-                crossfadeAlpha = 0
-              }
-            }
-
             if (seg.type === 'intro') {
-              drawFrame(ctx, width, height, backgroundImage, primary, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress, secondary, crossfadeAlpha)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress)
             } else {
               const verse = seg.verseIndex !== undefined ? verses[seg.verseIndex] : undefined
-              drawFrame(ctx, width, height, backgroundImage, primary, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText, videoProgress, secondary, crossfadeAlpha)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText, videoProgress)
             }
 
             setProgress(50 + videoProgress * 48)
@@ -1300,10 +1028,6 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
               recordingFinished = true
               timerWorker.postMessage('stop'); timerWorker.terminate(); URL.revokeObjectURL(timerUrl)
               setTimeout(() => {
-                for (const v of [videoA, videoB]) {
-                  if (!v) continue
-                  try { v.pause() } catch { /* noop */ }
-                }
                 source.stop(); mediaRecorder.stop(); audioCtx.close()
                 cleanupAfterGeneration()
               }, 300)
@@ -1337,8 +1061,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         } catch (mediaErr) {
           audioCtx.close()
           try { canvas.width = width; canvas.height = height } catch { /* noop */ }
-          await rebuildBackgroundVideosFromConfig()
-          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, getVideoPair()[0] ?? null, surahName, showTranslation, displayMode, setProgress)
+          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording failed. Downloaded verse images instead.')
         }

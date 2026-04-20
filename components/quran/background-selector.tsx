@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, Upload, X, ChevronDown, ImageIcon, Video } from 'lucide-react'
+import { Check, X, ChevronDown, ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
@@ -45,7 +45,7 @@ function AnimatedPreview({ name }: { name: string }) {
 }
 
 function BgThumbnail({ bg }: { bg: BackgroundOption }) {
-  const valueStr = typeof bg.value === 'string' ? bg.value : (bg.value[0] ?? '')
+  const valueStr = bg.value
   if (bg.type === 'animated') {
     return <AnimatedPreview name={valueStr} />
   }
@@ -59,17 +59,6 @@ function BgThumbnail({ bg }: { bg: BackgroundOption }) {
         alt={bg.name}
         className="w-full h-full object-cover"
         loading="lazy"
-      />
-    )
-  }
-  if (bg.type === 'video') {
-    return (
-      <video
-        src={bg.thumbnail || valueStr}
-        muted
-        playsInline
-        loop
-        className="h-full w-full object-cover"
       />
     )
   }
@@ -101,40 +90,20 @@ function ActiveBadge() {
 }
 
 const CUSTOM_IMAGE_ID = 'custom-upload'
-const CUSTOM_VIDEO_ID = 'custom-video-upload'
 
 export function BackgroundSelector() {
   const { config, setConfig } = useReel()
   const imageInputRef = useRef<HTMLInputElement>(null)
-  const videoInputRef = useRef<HTMLInputElement>(null)
   const [activeCategory, setActiveCategory] = useState<Category>('animated')
   const [expanded, setExpanded] = useState(false)
   const [isDraggingImage, setIsDraggingImage] = useState(false)
-  const [isDraggingVideo, setIsDraggingVideo] = useState(false)
 
-  const isCustomVideoActive = config.background?.id === CUSTOM_VIDEO_ID && config.background?.type === 'video'
   const isCustomImageActive =
     config.background?.id === CUSTOM_IMAGE_ID &&
     (config.background?.type === 'image' || config.background?.type === 'custom')
-  const isCustomActive = isCustomImageActive || isCustomVideoActive
-  const customVideoUrls =
-    isCustomVideoActive && config.background
-      ? (Array.isArray(config.background.value) ? config.background.value : [config.background.value as string])
-      : []
-  const isVideoLimitReached = customVideoUrls.length >= 4
-  const imageColumnLocked = isCustomVideoActive
-  const videoColumnLocked = isCustomImageActive
+  const isCustomActive = isCustomImageActive
 
   const handleSelect = (bg: BackgroundOption) => setConfig({ background: bg })
-
-  const revokeCurrentVideoUrls = () => {
-    const b = config.background
-    if (b?.id === CUSTOM_VIDEO_ID && b.type === 'video') {
-      const v = b.value
-      if (Array.isArray(v)) v.forEach((u) => URL.revokeObjectURL(u))
-      else URL.revokeObjectURL(v as string)
-    }
-  }
 
   const revokeCurrentImageUrl = () => {
     const b = config.background
@@ -149,7 +118,6 @@ export function BackgroundSelector() {
 
   const applyImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) { alert('Please select an image file'); return }
-    revokeCurrentVideoUrls()
     revokeCurrentImageUrl()
     const url = URL.createObjectURL(file)
     setConfig({
@@ -163,64 +131,16 @@ export function BackgroundSelector() {
     })
   }
 
-  const applyVideoFile = (file: File) => {
-    if (!file.type.startsWith('video/')) { alert('Please select a video file'); return }
-    applyVideoFiles([file])
-  }
-
-  const applyVideoFiles = (files: File[]) => {
-    const videoFiles = files.filter((f) => f.type.startsWith('video/'))
-    if (videoFiles.length === 0) { alert('Please select a video file'); return }
-
-    const MAX_VIDEOS = 4
-    revokeCurrentImageUrl()
-    const existing =
-      config.background?.id === CUSTOM_VIDEO_ID && config.background.type === 'video'
-        ? (Array.isArray(config.background.value) ? config.background.value : [config.background.value as string])
-        : []
-
-    const remainingSlots = Math.max(0, MAX_VIDEOS - existing.length)
-    if (remainingSlots === 0) { alert(`You already have ${MAX_VIDEOS} videos in your playlist.`); return }
-
-    if (videoFiles.length > remainingSlots) {
-      alert(`You can add up to ${remainingSlots} more video${remainingSlots === 1 ? '' : 's'} (max ${MAX_VIDEOS} total).`)
-    }
-
-    const kept = videoFiles.slice(0, remainingSlots)
-    const newUrls = kept.map((f) => URL.createObjectURL(f))
-    const urls = [...existing, ...newUrls].slice(0, MAX_VIDEOS)
-    const custom: BackgroundOption = {
-      id: CUSTOM_VIDEO_ID,
-      name: urls.length === 1 ? (kept[0]?.name ?? 'Video') : `Playlist (${urls.length} videos)`,
-      type: 'video',
-      value: urls,
-      thumbnail: urls[0],
-    }
-    setConfig({ background: custom })
-  }
-
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     applyImageFile(file)
   }
 
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
-    if (files.length === 0) return
-    applyVideoFiles(files)
-  }
-
   const clearCustomImage = () => {
     revokeCurrentImageUrl()
     if (isCustomImageActive) setConfig({ background: PRESET_BACKGROUNDS[0] })
     if (imageInputRef.current) imageInputRef.current.value = ''
-  }
-
-  const clearCustomVideo = () => {
-    revokeCurrentVideoUrls()
-    if (isCustomVideoActive) setConfig({ background: PRESET_BACKGROUNDS[0] })
-    if (videoInputRef.current) videoInputRef.current.value = ''
   }
 
   // Get items for current category
@@ -258,47 +178,6 @@ export function BackgroundSelector() {
     if (file) applyImageFile(file)
   }
 
-  const onDragOverVideo = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.dataTransfer.types?.includes('Files')) setIsDraggingVideo(true)
-  }
-
-  const onDragLeaveVideo = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDraggingVideo(false)
-  }
-
-  const onDropVideo = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDraggingVideo(false)
-    const files = Array.from(e.dataTransfer.files ?? [])
-    if (files.length > 0) applyVideoFiles(files)
-  }
-
-  const removeVideoFromPlaylist = (urlToRemove: string) => {
-    const b = config.background
-    if (!b || b.type !== 'video' || b.id !== CUSTOM_VIDEO_ID) return
-    const existing = Array.isArray(b.value) ? b.value : [b.value as string]
-    const next = existing.filter((u) => u !== urlToRemove)
-    try { URL.revokeObjectURL(urlToRemove) } catch { /* noop */ }
-
-    if (next.length === 0) {
-      clearCustomVideo()
-      return
-    }
-
-    const updated: BackgroundOption = {
-      ...b,
-      name: next.length === 1 ? 'Video' : `Playlist (${next.length} videos)`,
-      value: next,
-      thumbnail: next[0],
-    }
-    setConfig({ background: updated })
-  }
-
   return (
     <div className="flex flex-col gap-5">
       <label className="text-sm font-medium text-stone-600 dark:text-slate-400">
@@ -315,22 +194,17 @@ export function BackgroundSelector() {
           borderColor: isCustomActive ? 'rgba(34,197,94,0.25)' : undefined,
         }}
       >
-        {isCustomVideoActive ? (
-          <Video className="h-3.5 w-3.5 flex-shrink-0" style={{ color: '#22c55e' }} />
-        ) : (
-          <ImageIcon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }} />
-        )}
+        <ImageIcon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }} />
         <span style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }}>
           Using:{' '}
           <strong>
             {isCustomImageActive && `Image — ${config.background?.name}`}
-            {isCustomVideoActive && `Video — ${config.background?.name}`}
             {!isCustomActive && (config.background?.name || 'None')}
           </strong>
         </span>
       </div>
 
-      {/* ── Custom image & video uploads ── */}
+      {/* ── Custom image upload ── */}
       <div
         className="border-b border-t border-stone-200/90 pt-2 pb-3 dark:border-slate-800/90"
         style={{
@@ -338,63 +212,14 @@ export function BackgroundSelector() {
         }}
       >
         <p className="mb-3 text-xs text-stone-600 dark:text-slate-500">
-          Custom media {isCustomActive && <span className="font-semibold text-emerald-600 dark:text-emerald-400"> • In use</span>}
+          Custom image {isCustomActive && <span className="font-semibold text-emerald-600 dark:text-emerald-400"> • In use</span>}
         </p>
 
-        {isCustomVideoActive && customVideoUrls.length > 0 && config.background && (
-          <div className="flex flex-wrap gap-3 w-full mb-4">
-            {customVideoUrls.map((url) => (
-              <div key={url} className="relative">
-                <button
-                  type="button"
-                  onClick={() => handleSelect(config.background!)}
-                  className={cn(
-                    'relative w-16 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all block bg-black',
-                    isCustomVideoActive
-                      ? 'border-green-500 ring-2 ring-green-500/20'
-                      : 'border-transparent hover:border-primary/50'
-                  )}
-                  title="Use this playlist"
-                >
-                  <video
-                    src={url}
-                    muted
-                    playsInline
-                    loop
-                    className="h-full w-full object-cover"
-                  />
-                  {isCustomVideoActive && <ActiveBadge />}
-                  {isCustomVideoActive && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                      <Check className="h-4 w-4 text-white" />
-                    </div>
-                  )}
-                </button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground"
-                  onClick={() => removeVideoFromPlaylist(url)}
-                  title="Remove video"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="max-w-md mx-auto md:mx-0">
           {/* Image */}
-          <div
-            className={cn(
-              'min-w-0',
-              isVideoLimitReached ? 'md:col-span-2' : '',
-              imageColumnLocked && 'opacity-40 pointer-events-none select-none',
-            )}
-          >
+          <div className="min-w-0">
             <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">
-              Image
+              Upload
             </p>
             {isCustomImageActive && config.background ? (
               <div className="flex items-center gap-2">
@@ -410,7 +235,7 @@ export function BackgroundSelector() {
                     )}
                   >
                     <img
-                      src={typeof config.background.value === 'string' ? config.background.value : ''}
+                      src={config.background.value}
                       alt=""
                       className="w-full h-full object-cover"
                     />
@@ -429,9 +254,6 @@ export function BackgroundSelector() {
                     <X className="h-3 w-3" />
                   </Button>
                 </div>
-                {!isCustomImageActive && (
-                  <p className="text-[11px] text-stone-600 dark:text-slate-500">Tap thumbnail to select</p>
-                )}
               </div>
             ) : (
               <button
@@ -457,45 +279,6 @@ export function BackgroundSelector() {
             )}
             <input ref={imageInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
           </div>
-
-          {/* Video */}
-          {!isVideoLimitReached && (
-            <div className={cn('min-w-0', videoColumnLocked && 'opacity-40 pointer-events-none select-none')}>
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-stone-500 dark:text-slate-500">
-                Video
-              </p>
-              <button
-                type="button"
-                onClick={() => videoInputRef.current?.click()}
-                onDragOver={onDragOverVideo}
-                onDragLeave={onDragLeaveVideo}
-                onDrop={onDropVideo}
-                className={cn(
-                  'relative flex w-full flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-3 py-7 text-center transition-colors',
-                  'bg-stone-50/90 hover:bg-amber-50/60 dark:bg-slate-900/30 dark:hover:bg-slate-800/40',
-                  isDraggingVideo
-                    ? 'border-amber-500/80 bg-amber-100/80 ring-2 ring-amber-400/25 dark:bg-amber-500/10 dark:ring-amber-500/20'
-                    : 'border-stone-400/90 hover:border-amber-400/70 dark:border-slate-600/90 dark:hover:border-slate-500'
-                )}
-              >
-                <div className="rounded-full bg-white p-2 ring-1 ring-stone-300 dark:bg-slate-800/90 dark:ring-slate-600/80">
-                  <Video className="h-4 w-4 text-stone-600 dark:text-slate-300" />
-                </div>
-                <span className="text-xs font-medium text-stone-800 dark:text-slate-200">
-                  {isCustomVideoActive && customVideoUrls.length > 0 ? 'Add videos' : 'Video upload'}
-                </span>
-                <span className="text-[10px] text-stone-600 dark:text-slate-500">Drag &amp; drop or click</span>
-              </button>
-            </div>
-          )}
-          <input
-            ref={videoInputRef}
-            type="file"
-            multiple
-            accept="video/*"
-            onChange={handleVideoUpload}
-            className="hidden"
-          />
         </div>
       </div>
 
@@ -535,7 +318,7 @@ export function BackgroundSelector() {
               title={bg.name}
               className={cn(
                 'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all',
-                bg.type === 'animated' || bg.type === 'preset' || bg.type === 'video' || bg.type === 'image'
+                bg.type === 'animated' || bg.type === 'preset' || bg.type === 'image'
                   ? 'bg-black'
                   : 'bg-muted',
                 isSelected

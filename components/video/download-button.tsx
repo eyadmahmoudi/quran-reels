@@ -7,7 +7,7 @@ import { useVideoGenerator } from '@/hooks/use-video-generator'
 
 export function DownloadButton() {
   const { config, verses, isConfigValid } = useReel()
-  const { isGenerating, progress, error, generateVideo, cancelGeneration } = useVideoGenerator(config)
+  const { isGenerating, progress, error, generateVideo, cancelGeneration } = useVideoGenerator()
 
   const handleGenerate = async () => {
     if (!config.surah || !config.background) return

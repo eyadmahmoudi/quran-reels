@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
-import type { Verse, Word, BackgroundOption, ReelConfig } from '@/lib/quran-types'
+import { useState, useCallback, useRef } from 'react'
+import type { Verse, Word, BackgroundOption } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
 import { splitVerseByWordTimings, splitTranslation } from '@/lib/verse-chunking'
 import { fetchAudioSegments } from '@/lib/quran-api'
@@ -51,31 +51,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     }
     img.onload = () => resolve(img); img.onerror = reject; img.src = src
   })
-}
-
-function loadVideo(src: string): Promise<HTMLVideoElement> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement('video');
-    video.muted = true;
-    video.defaultMuted = true;
-    video.loop = false;
-    video.playsInline = true; // Crucial for iOS
-    video.setAttribute('playsinline', '');
-    video.setAttribute('webkit-playsinline', '');
-    video.autoplay = true;
-    video.preload = 'auto';
-    video.crossOrigin = 'anonymous';
-    
-    video.onloadeddata = () => resolve(video);
-    video.onerror = () => reject(new Error('Failed to load background video'));
-    
-    // iOS Safari Hack: Appending #t=0.001 forces the mobile media engine 
-    // to seek to the first frame and actually load the blob data.
-    const mobileOptimizedSrc = src.startsWith('blob:') ? `${src}#t=0.001` : src;
-    
-    video.src = mobileOptimizedSrc;
-    video.load();
-  });
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -236,10 +211,10 @@ function drawRasterBackground(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  el: HTMLImageElement | HTMLVideoElement,
+  el: HTMLImageElement,
 ) {
-  const w = el instanceof HTMLVideoElement ? el.videoWidth : el.width
-  const h = el instanceof HTMLVideoElement ? el.videoHeight : el.height
+  const w = el.width
+  const h = el.height
   if (!w || !h) return
   const scale = Math.max(width / w, height / h)
   const x = (width - w * scale) / 2
@@ -250,45 +225,23 @@ function drawRasterBackground(
 function drawFrame(
   ctx: CanvasRenderingContext2D, width: number, height: number,
   backgroundImage: HTMLImageElement | null,
-  backgroundVideo: HTMLVideoElement | null,
   background: BackgroundOption,
   surahName: string, verse: Verse | undefined, showTranslation: boolean,
   displayMode: 'minimal' | 'classic', taawudhText?: string, animTimeMs?: number,
   chunkText?: string, showMarker: boolean = true, showTranslationOverride: boolean = true,
   fadeOpacity: number = 1, translationChunkText?: string,
   videoProgress?: number,
-  transitionCount = 0,
 ) {
   let translationBottomForBar: number | undefined
   const uiScale = width / 1080
   const s = (n: number) => n * uiScale
-  const bgValue = typeof background.value === 'string' ? background.value : (background.value[0] ?? '')
+  const bgValue = background.value
 
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
 
   if (background.type === 'animated') {
-    if (typeof background.value === 'string') {
-      drawAnimatedBackground(ctx, width, height, animTimeMs ?? 0, background.value)
-    }
-  } else if (background.type === 'video' && backgroundVideo) {
-    drawRasterBackground(ctx, width, height, backgroundVideo)
-
-    // Fade-through-black between playlist clips (background only; text stays crisp)
-    const fadeDuration = 0.75 // seconds
-    let bgFadeOpacity = 0
-    if (!backgroundVideo.paused && Number.isFinite(backgroundVideo.duration) && backgroundVideo.duration > 0) {
-      if (backgroundVideo.currentTime < fadeDuration && transitionCount > 0) {
-        bgFadeOpacity = 1 - (backgroundVideo.currentTime / fadeDuration)
-      } else if (backgroundVideo.currentTime > backgroundVideo.duration - fadeDuration) {
-        bgFadeOpacity = (backgroundVideo.currentTime - (backgroundVideo.duration - fadeDuration)) / fadeDuration
-      }
-      bgFadeOpacity = Math.max(0, Math.min(1, bgFadeOpacity))
-    }
-    if (bgFadeOpacity > 0) {
-      ctx.fillStyle = `rgba(0, 0, 0, ${bgFadeOpacity})`
-      ctx.fillRect(0, 0, width, height)
-    }
+    drawAnimatedBackground(ctx, width, height, animTimeMs ?? 0, background.value)
   } else if (backgroundImage) {
     drawRasterBackground(ctx, width, height, backgroundImage)
   } else {
@@ -308,10 +261,7 @@ function drawFrame(
     ctx.fillRect(0, 0, width, height)
   }
 
-  const hasRichBg =
-    background.type === 'animated' ||
-    (background.type === 'video' && !!backgroundVideo) ||
-    !!backgroundImage
+  const hasRichBg = background.type === 'animated' || !!backgroundImage
   if (displayMode === 'minimal') {
     ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.20)'
   } else {
@@ -485,12 +435,11 @@ function drawFrame(
 async function exportVerseImages(
   ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, verses: Verse[],
   background: BackgroundOption, backgroundImage: HTMLImageElement | null,
-  backgroundVideo: HTMLVideoElement | null,
   surahName: string, showTranslation: boolean, displayMode: 'minimal' | 'classic',
   setProgress: (n: number) => void
 ) {
   for (let i = 0; i < verses.length; i++) {
-    drawFrame(ctx, canvas.width, canvas.height, backgroundImage, backgroundVideo, background, surahName, verses[i], showTranslation, displayMode, undefined, i * 3000)
+    drawFrame(ctx, canvas.width, canvas.height, backgroundImage, background, surahName, verses[i], showTranslation, displayMode, undefined, i * 3000)
     const blob = await new Promise<Blob>((resolve) => { canvas.toBlob((b) => resolve(b!), 'image/png', 1.0) })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -905,15 +854,11 @@ function buildDisplaySegments(
 
 const FADE_DURATION_MS = 150
 
-export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
+export function useVideoGenerator(): UseVideoGeneratorReturn {
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const cancelledRef = useRef(false)
-  const latestConfigRef = useRef(config)
-  useEffect(() => {
-    latestConfigRef.current = config
-  }, [config])
 
   const generateVideo = useCallback(
     async (options: VideoGeneratorOptions) => {
@@ -1017,53 +962,10 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         setProgress(35)
 
         let backgroundImage: HTMLImageElement | null = null
-        let backgroundVideos: HTMLVideoElement[] = []
-        let activeBgIndex = 0
-        let transitionCount = 0
-
-        const disposeBackgroundVideos = () => {
-          if (backgroundVideos.length === 0) return
-          backgroundVideos.forEach((video) => {
-            try { video.onended = null } catch { /* noop */ }
-            try { video.pause() } catch { /* noop */ }
-            try { video.removeAttribute('src') } catch { /* noop */ }
-            try { video.load() } catch { /* noop */ }
-          })
-          backgroundVideos = []
-        }
-
-        const rebuildBackgroundVideosFromConfig = async () => {
-          disposeBackgroundVideos()
-          const currentBackground = latestConfigRef.current.background
-          if (currentBackground.type !== 'video') return
-          try {
-            const urls = Array.isArray(currentBackground.value) ? currentBackground.value : [currentBackground.value]
-            backgroundVideos = (await Promise.all(urls.map((u) => loadVideo(u)))).filter(Boolean)
-            activeBgIndex = 0
-            transitionCount = 0
-
-            backgroundVideos.forEach((v, idx) => {
-              v.onended = async () => {
-                try { v.pause() } catch { /* noop */ }
-                if (backgroundVideos.length === 0) return
-                const next = backgroundVideos[(idx + 1) % backgroundVideos.length]
-                activeBgIndex = (idx + 1) % backgroundVideos.length
-                try {
-                  // Nudge to 0.1 to prevent the GPU from freezing on the loop
-                  next.currentTime = 0.1
-                } catch { /* noop */ }
-                transitionCount++
-                next.play().catch((e) => console.warn('Relay play blocked:', e))
-              }
-            })
-          } catch (e) {
-            console.error('[video-bg] Error loading video:', e)
-          }
-        }
 
         if (background.type === 'custom' || background.type === 'preset' || background.type === 'image') {
           try {
-            if (typeof background.value === 'string') backgroundImage = await loadImage(background.value)
+            backgroundImage = await loadImage(background.value)
           } catch { }
         }
 
@@ -1121,16 +1023,13 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
 
         if (!useMediaRecorder) {
           audioCtx.close()
-          await rebuildBackgroundVideosFromConfig()
-          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideos[activeBgIndex] ?? null, surahName, showTranslation, displayMode, setProgress)
+          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording is not supported in this browser. Downloaded verse images instead.')
           return
         }
 
         try {
-          await rebuildBackgroundVideosFromConfig()
-
           const audioDest = audioCtx.createMediaStreamDestination()
           const source = audioCtx.createBufferSource()
           source.buffer = combined; source.connect(audioDest)
@@ -1157,14 +1056,10 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           let visibilityListenerActive = true
           const onVisibilityChange = async () => {
             if (!visibilityListenerActive) return
-            const activeVideo = backgroundVideos[activeBgIndex]
             if (document.hidden) {
-              try { activeVideo?.pause() } catch { /* noop */ }
               try { await audioCtx.suspend() } catch { /* noop */ }
             } else {
-              // Resume both streams so A/V sync stays aligned with the shared clock.
               try { await audioCtx.resume() } catch { /* noop */ }
-              activeVideo?.play().catch((e) => console.warn('Play blocked:', e))
             }
           }
           document.addEventListener('visibilitychange', onVisibilityChange)
@@ -1172,75 +1067,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           const cleanupAfterGeneration = () => {
             visibilityListenerActive = false
             document.removeEventListener('visibilitychange', onVisibilityChange)
-
-            // Aggressive memory cleanup (mobile Safari/Chrome)
             try { canvas.width = 0; canvas.height = 0 } catch { /* noop */ }
-            if (backgroundVideos.length > 0) {
-              backgroundVideos.forEach((video) => {
-                try { video.pause() } catch { /* noop */ }
-                try { video.removeAttribute('src') } catch { /* noop */ }
-                try { video.load() } catch { /* noop */ }
-              })
-            }
-          }
-
-          if (backgroundVideos.length > 0) {
-            activeBgIndex = 0
-            const firstVideo = backgroundVideos[0]
-
-            // 1. Ensure the browser has actually loaded the frame data
-            if (firstVideo.readyState < 2) { // HAVE_CURRENT_DATA
-              await new Promise<void>((resolve) => {
-                firstVideo.onloadeddata = () => resolve()
-              })
-            }
-
-            // 2. Force the playhead to 0.1 and strictly await the 'seeked' event
-            await new Promise<void>((resolve) => {
-              const seekHandler = () => {
-                firstVideo.removeEventListener('seeked', seekHandler)
-                resolve()
-              }
-              firstVideo.addEventListener('seeked', seekHandler)
-              try {
-                // Nudge to 0.1 to guarantee a seeked event
-                firstVideo.currentTime = 0.1
-              } catch { /* noop */ }
-              setTimeout(() => {
-                firstVideo.removeEventListener('seeked', seekHandler)
-                resolve()
-              }, 150)
-            })
-
-            // 3. Start playback and wait until it is active
-            await new Promise<void>((resolve) => {
-              firstVideo.onplaying = () => resolve()
-              firstVideo.play().catch((e) => {
-                console.warn('Play blocked:', e)
-                resolve()
-              })
-            })
-
-            const coldSeg = displaySegments[0]
-            if (coldSeg) {
-              const elapsedMs = 0
-              const videoProgress = Math.min(elapsedMs / totalDurationMs, 1)
-              let coldFadeOpacity = 1
-              const msIntoSegment = elapsedMs - coldSeg.startMs
-              const msBeforeEnd = coldSeg.endMs - elapsedMs
-              if (msIntoSegment < FADE_DURATION_MS) {
-                coldFadeOpacity = Math.min(1, msIntoSegment / FADE_DURATION_MS)
-              } else if (msBeforeEnd < FADE_DURATION_MS && displaySegments.length > 1) {
-                coldFadeOpacity = Math.max(0, msBeforeEnd / FADE_DURATION_MS)
-              }
-              const activeVideo = backgroundVideos[activeBgIndex] ?? null
-              if (coldSeg.type === 'intro') {
-                drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, undefined, showTranslation, displayMode, coldSeg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress, transitionCount)
-              } else {
-                const verse = coldSeg.verseIndex !== undefined ? verses[coldSeg.verseIndex] : undefined
-                drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, coldSeg.chunkText, coldSeg.showMarker, coldSeg.showTranslationForChunk, coldFadeOpacity, coldSeg.translationChunkText, videoProgress, transitionCount)
-              }
-            }
           }
 
           mediaRecorder.start()
@@ -1278,12 +1105,11 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
               fadeOpacity = Math.max(0, msBeforeEnd / FADE_DURATION_MS)
             }
 
-            const activeVideo = backgroundVideos[activeBgIndex] ?? null
             if (seg.type === 'intro') {
-              drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress, transitionCount)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress)
             } else {
               const verse = seg.verseIndex !== undefined ? verses[seg.verseIndex] : undefined
-              drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText, videoProgress, transitionCount)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText, videoProgress)
             }
 
             setProgress(50 + videoProgress * 48)
@@ -1291,9 +1117,6 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
               recordingFinished = true
               timerWorker.postMessage('stop'); timerWorker.terminate(); URL.revokeObjectURL(timerUrl)
               setTimeout(() => {
-                if (backgroundVideos.length > 0) {
-                  backgroundVideos.forEach((v) => { try { v.pause() } catch { /* noop */ } })
-                }
                 source.stop(); mediaRecorder.stop(); audioCtx.close()
                 cleanupAfterGeneration()
               }, 300)
@@ -1327,8 +1150,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         } catch (mediaErr) {
           audioCtx.close()
           try { canvas.width = width; canvas.height = height } catch { /* noop */ }
-          await rebuildBackgroundVideosFromConfig()
-          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideos[activeBgIndex] ?? null, surahName, showTranslation, displayMode, setProgress)
+          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording failed. Downloaded verse images instead.')
         }

@@ -115,7 +115,6 @@ export function BackgroundSelector() {
     config.background?.id === CUSTOM_IMAGE_ID &&
     (config.background?.type === 'image' || config.background?.type === 'custom')
   const isStockVideoActive = config.background?.type === 'video'
-  const isCustomActive = isCustomImageActive
 
   const handleSelect = (bg: BackgroundOption) => setConfig({ background: bg })
 
@@ -214,19 +213,19 @@ export function BackgroundSelector() {
       <div
         className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white/90 px-3 py-2 text-xs dark:border-slate-700/80 dark:bg-slate-900/50"
         style={{
-          background: isCustomActive
+          background: isCustomImageActive
             ? 'rgba(34,197,94,0.08)'
             : 'rgba(201,168,76,0.06)',
-          borderColor: isCustomActive ? 'rgba(34,197,94,0.25)' : undefined,
+          borderColor: isCustomImageActive ? 'rgba(34,197,94,0.25)' : undefined,
         }}
       >
-        <ImageIcon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }} />
-        <span style={{ color: isCustomActive ? '#22c55e' : '#c9a84c' }}>
+        <ImageIcon className="h-3.5 w-3.5 flex-shrink-0" style={{ color: isCustomImageActive ? '#22c55e' : '#c9a84c' }} />
+        <span style={{ color: isCustomImageActive ? '#22c55e' : '#c9a84c' }}>
           Using:{' '}
           <strong>
             {isCustomImageActive && `Image — ${config.background?.name}`}
             {isStockVideoActive && !isCustomImageActive && `Video — ${config.background?.name}`}
-            {!isCustomActive && !isStockVideoActive && (config.background?.name || 'None')}
+            {!isCustomImageActive && !isStockVideoActive && (config.background?.name || 'None')}
           </strong>
         </span>
       </div>
@@ -253,7 +252,7 @@ export function BackgroundSelector() {
                 className={cn(
                   'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all bg-black',
                   isSelected
-                    ? 'border-primary ring-2 ring-primary/20'
+                    ? 'border-green-500 ring-2 ring-green-500/20'
                     : 'border-transparent hover:border-primary/50'
                 )}
               >
@@ -277,11 +276,11 @@ export function BackgroundSelector() {
       <div
         className="border-b border-t border-stone-200/90 pt-2 pb-3 dark:border-slate-800/90"
         style={{
-          background: isCustomActive ? 'rgba(34,197,94,0.03)' : undefined,
+          background: isCustomImageActive ? 'rgba(34,197,94,0.03)' : undefined,
         }}
       >
         <p className="mb-3 text-xs text-stone-600 dark:text-slate-500">
-          Custom image {isCustomActive && <span className="font-semibold text-emerald-600 dark:text-emerald-400"> • In use</span>}
+          Custom image {isCustomImageActive && <span className="font-semibold text-emerald-600 dark:text-emerald-400"> • In use</span>}
         </p>
 
         <div className="max-w-md mx-auto md:mx-0">

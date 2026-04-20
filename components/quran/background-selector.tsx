@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useReel } from '@/lib/reel-context'
 import { PRESET_BACKGROUNDS, ANIMATED_BACKGROUNDS, type BackgroundOption } from '@/lib/quran-types'
+import { STOCK_VIDEOS } from '@/lib/stock-videos'
 import { drawAnimatedBackground } from '@/lib/animations'
 
 const gradients = PRESET_BACKGROUNDS.filter((b) => b.type === 'gradient')
@@ -45,7 +46,7 @@ function AnimatedPreview({ name }: { name: string }) {
 }
 
 function BgThumbnail({ bg }: { bg: BackgroundOption }) {
-  const valueStr = bg.value
+  const valueStr = typeof bg.value === 'string' ? bg.value : (bg.value[0] ?? '')
   if (bg.type === 'animated') {
     return <AnimatedPreview name={valueStr} />
   }
@@ -59,6 +60,18 @@ function BgThumbnail({ bg }: { bg: BackgroundOption }) {
         alt={bg.name}
         className="w-full h-full object-cover"
         loading="lazy"
+      />
+    )
+  }
+  if (bg.type === 'video') {
+    return (
+      <video
+        src={valueStr}
+        poster={bg.thumbnail}
+        muted
+        playsInline
+        loop
+        className="h-full w-full object-cover"
       />
     )
   }
@@ -101,9 +114,22 @@ export function BackgroundSelector() {
   const isCustomImageActive =
     config.background?.id === CUSTOM_IMAGE_ID &&
     (config.background?.type === 'image' || config.background?.type === 'custom')
+  const isStockVideoActive = config.background?.type === 'video'
   const isCustomActive = isCustomImageActive
 
   const handleSelect = (bg: BackgroundOption) => setConfig({ background: bg })
+
+  const handleSelectStockVideo = (video: (typeof STOCK_VIDEOS)[number]) => {
+    setConfig({
+      background: {
+        id: video.id,
+        name: video.name,
+        type: 'video',
+        value: [video.url],
+        thumbnail: video.thumbnail,
+      },
+    })
+  }
 
   const revokeCurrentImageUrl = () => {
     const b = config.background
@@ -199,9 +225,52 @@ export function BackgroundSelector() {
           Using:{' '}
           <strong>
             {isCustomImageActive && `Image — ${config.background?.name}`}
-            {!isCustomActive && (config.background?.name || 'None')}
+            {isStockVideoActive && !isCustomImageActive && `Video — ${config.background?.name}`}
+            {!isCustomActive && !isStockVideoActive && (config.background?.name || 'None')}
           </strong>
         </span>
+      </div>
+
+      {/* ── Stock videos ── */}
+      <div>
+        <p className="mb-2 text-xs font-medium text-stone-600 dark:text-slate-400">Stock Videos</p>
+        <div className="grid grid-cols-4 gap-2">
+          {STOCK_VIDEOS.map((video) => {
+            const isSelected = config.background?.id === video.id
+            const bgOption: BackgroundOption = {
+              id: video.id,
+              name: video.name,
+              type: 'video',
+              value: [video.url],
+              thumbnail: video.thumbnail,
+            }
+            return (
+              <button
+                key={video.id}
+                type="button"
+                onClick={() => handleSelectStockVideo(video)}
+                title={video.name}
+                className={cn(
+                  'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all bg-black',
+                  isSelected
+                    ? 'border-primary ring-2 ring-primary/20'
+                    : 'border-transparent hover:border-primary/50'
+                )}
+              >
+                <BgThumbnail bg={bgOption} />
+                {isSelected && <ActiveBadge />}
+                {isSelected && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                    <Check className="h-4 w-4 text-white drop-shadow" />
+                  </div>
+                )}
+                <span className="absolute bottom-0 inset-x-0 text-[9px] text-white/90 text-center py-0.5 bg-black/50 truncate px-0.5">
+                  {video.name}
+                </span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* ── Custom image upload ── */}
@@ -235,7 +304,7 @@ export function BackgroundSelector() {
                     )}
                   >
                     <img
-                      src={config.background.value}
+                      src={typeof config.background.value === 'string' ? config.background.value : ''}
                       alt=""
                       className="w-full h-full object-cover"
                     />
@@ -318,7 +387,7 @@ export function BackgroundSelector() {
               title={bg.name}
               className={cn(
                 'relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all',
-                bg.type === 'animated' || bg.type === 'preset' || bg.type === 'image'
+                bg.type === 'animated' || bg.type === 'preset' || bg.type === 'image' || bg.type === 'video'
                   ? 'bg-black'
                   : 'bg-muted',
                 isSelected

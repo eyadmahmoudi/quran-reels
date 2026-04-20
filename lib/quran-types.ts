@@ -138,9 +138,12 @@ export interface ReelConfig {
 export interface BackgroundOption {
   id: string
   name: string
-  type: 'preset' | 'custom' | 'image' | 'gradient' | 'animated'
-  /** Preset/custom image URL, object URL for uploads, CSS gradient string, or animation key */
-  value: string
+  type: 'preset' | 'custom' | 'image' | 'gradient' | 'animated' | 'video'
+  /**
+   * Image / gradient / animation: single string.
+   * Video: one or more MP4 URLs (playlist); stock backgrounds use `[url]`.
+   */
+  value: string | string[]
   thumbnail?: string
 }
 

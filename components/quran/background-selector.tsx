@@ -66,8 +66,8 @@ function BgThumbnail({ bg }: { bg: BackgroundOption }) {
   if (bg.type === 'video') {
     return (
       <video
-        src={valueStr}
-        poster={bg.thumbnail}
+        src={`${valueStr}#t=0.1`}
+        preload="metadata"
         muted
         playsInline
         loop

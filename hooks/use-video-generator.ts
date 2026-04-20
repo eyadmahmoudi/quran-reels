@@ -254,7 +254,8 @@ function drawFrame(
   chunkText?: string, showMarker: boolean = true, showTranslationOverride: boolean = true,
   fadeOpacity: number = 1, translationChunkText?: string,
   videoProgress?: number,
-  transitionCount = 0,
+  secondaryBackgroundVideo: HTMLVideoElement | null = null,
+  crossfadeAlpha: number = 0,
 ) {
   let translationBottomForBar: number | undefined
   const uiScale = width / 1080
@@ -270,20 +271,11 @@ function drawFrame(
     }
   } else if (background.type === 'video' && backgroundVideo) {
     drawRasterBackground(ctx, width, height, backgroundVideo)
-
-    const fadeDuration = 0.75
-    let bgFadeOpacity = 0
-    if (!backgroundVideo.paused && Number.isFinite(backgroundVideo.duration) && backgroundVideo.duration > 0) {
-      if (backgroundVideo.currentTime < fadeDuration && transitionCount > 0) {
-        bgFadeOpacity = 1 - (backgroundVideo.currentTime / fadeDuration)
-      } else if (backgroundVideo.currentTime > backgroundVideo.duration - fadeDuration) {
-        bgFadeOpacity = (backgroundVideo.currentTime - (backgroundVideo.duration - fadeDuration)) / fadeDuration
-      }
-      bgFadeOpacity = Math.max(0, Math.min(1, bgFadeOpacity))
-    }
-    if (bgFadeOpacity > 0) {
-      ctx.fillStyle = `rgba(0, 0, 0, ${bgFadeOpacity})`
-      ctx.fillRect(0, 0, width, height)
+    if (secondaryBackgroundVideo && crossfadeAlpha > 0) {
+      ctx.save()
+      ctx.globalAlpha = Math.max(0, Math.min(1, crossfadeAlpha))
+      drawRasterBackground(ctx, width, height, secondaryBackgroundVideo)
+      ctx.restore()
     }
   } else if (backgroundImage) {
     drawRasterBackground(ctx, width, height, backgroundImage)
@@ -1013,19 +1005,28 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         setProgress(35)
 
         let backgroundImage: HTMLImageElement | null = null
-        let backgroundVideos: HTMLVideoElement[] = []
-        let activeBgIndex = 0
-        let transitionCount = 0
+        // ── Dual-video crossfade for seamless looping ──
+        const CROSSFADE_DURATION_SEC = 1.5
+        let videoA: HTMLVideoElement | null = null
+        let videoB: HTMLVideoElement | null = null
+        let primaryIdx: 0 | 1 = 0
+        let secondaryStarted = false
+
+        const getVideoPair = (): [HTMLVideoElement | null, HTMLVideoElement | null] =>
+          primaryIdx === 0 ? [videoA, videoB] : [videoB, videoA]
 
         const disposeBackgroundVideos = () => {
-          if (backgroundVideos.length === 0) return
-          backgroundVideos.forEach((video) => {
-            try { video.onended = null } catch { /* noop */ }
-            try { video.pause() } catch { /* noop */ }
-            try { video.removeAttribute('src') } catch { /* noop */ }
-            try { video.load() } catch { /* noop */ }
-          })
-          backgroundVideos = []
+          for (const v of [videoA, videoB]) {
+            if (!v) continue
+            try { v.onended = null } catch { /* noop */ }
+            try { v.pause() } catch { /* noop */ }
+            try { v.removeAttribute('src') } catch { /* noop */ }
+            try { v.load() } catch { /* noop */ }
+          }
+          videoA = null
+          videoB = null
+          primaryIdx = 0
+          secondaryStarted = false
         }
 
         const rebuildBackgroundVideosFromConfig = async () => {
@@ -1034,23 +1035,13 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           if (currentBackground.type !== 'video') return
           try {
             const urls = Array.isArray(currentBackground.value) ? currentBackground.value : [currentBackground.value]
-            backgroundVideos = (await Promise.all(urls.map((u) => loadVideo(u)))).filter(Boolean)
-            activeBgIndex = 0
-            transitionCount = 0
-
-            backgroundVideos.forEach((v, idx) => {
-              v.onended = async () => {
-                try { v.pause() } catch { /* noop */ }
-                if (backgroundVideos.length === 0) return
-                const next = backgroundVideos[(idx + 1) % backgroundVideos.length]
-                activeBgIndex = (idx + 1) % backgroundVideos.length
-                try {
-                  next.currentTime = 0.1
-                } catch { /* noop */ }
-                transitionCount++
-                next.play().catch((e) => console.warn('Relay play blocked:', e))
-              }
-            })
+            const src = urls[0]
+            if (!src) return
+            const [a, b] = await Promise.all([loadVideo(src), loadVideo(src)])
+            videoA = a
+            videoB = b
+            primaryIdx = 0
+            secondaryStarted = false
           } catch (e) {
             console.error('[video-bg] Error loading video:', e)
           }
@@ -1118,7 +1109,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         if (!useMediaRecorder) {
           audioCtx.close()
           await rebuildBackgroundVideosFromConfig()
-          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideos[activeBgIndex] ?? null, surahName, showTranslation, displayMode, setProgress)
+          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, getVideoPair()[0] ?? null, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording is not supported in this browser. Downloaded verse images instead.')
           return
@@ -1153,13 +1144,17 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           let visibilityListenerActive = true
           const onVisibilityChange = async () => {
             if (!visibilityListenerActive) return
-            const activeVideo = backgroundVideos[activeBgIndex]
+            const [primary, secondary] = getVideoPair()
             if (document.hidden) {
-              try { activeVideo?.pause() } catch { /* noop */ }
+              try { primary?.pause() } catch { /* noop */ }
+              try { secondary?.pause() } catch { /* noop */ }
               try { await audioCtx.suspend() } catch { /* noop */ }
             } else {
               try { await audioCtx.resume() } catch { /* noop */ }
-              activeVideo?.play().catch((e) => console.warn('Play blocked:', e))
+              primary?.play().catch((e) => console.warn('Play blocked:', e))
+              if (secondaryStarted) {
+                secondary?.play().catch((e) => console.warn('Play blocked:', e))
+              }
             }
           }
           document.addEventListener('visibilitychange', onVisibilityChange)
@@ -1168,18 +1163,18 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
             visibilityListenerActive = false
             document.removeEventListener('visibilitychange', onVisibilityChange)
             try { canvas.width = 0; canvas.height = 0 } catch { /* noop */ }
-            if (backgroundVideos.length > 0) {
-              backgroundVideos.forEach((video) => {
-                try { video.pause() } catch { /* noop */ }
-                try { video.removeAttribute('src') } catch { /* noop */ }
-                try { video.load() } catch { /* noop */ }
-              })
+            for (const v of [videoA, videoB]) {
+              if (!v) continue
+              try { v.pause() } catch { /* noop */ }
+              try { v.removeAttribute('src') } catch { /* noop */ }
+              try { v.load() } catch { /* noop */ }
             }
           }
 
-          if (backgroundVideos.length > 0) {
-            activeBgIndex = 0
-            const firstVideo = backgroundVideos[0]
+          if (videoA && videoB) {
+            primaryIdx = 0
+            secondaryStarted = false
+            const firstVideo = videoA
 
             if (firstVideo.readyState < 2) {
               await new Promise<void>((resolve) => {
@@ -1194,7 +1189,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
               }
               firstVideo.addEventListener('seeked', seekHandler)
               try {
-                firstVideo.currentTime = 0.1
+                firstVideo.currentTime = 0
               } catch { /* noop */ }
               setTimeout(() => {
                 firstVideo.removeEventListener('seeked', seekHandler)
@@ -1222,12 +1217,12 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
               } else if (msBeforeEnd < FADE_DURATION_MS && displaySegments.length > 1) {
                 coldFadeOpacity = Math.max(0, msBeforeEnd / FADE_DURATION_MS)
               }
-              const activeVideo = backgroundVideos[activeBgIndex] ?? null
+              const [primary] = getVideoPair()
               if (coldSeg.type === 'intro') {
-                drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, undefined, showTranslation, displayMode, coldSeg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress, transitionCount)
+                drawFrame(ctx, width, height, backgroundImage, primary, background, surahName, undefined, showTranslation, displayMode, coldSeg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress, null, 0)
               } else {
                 const verse = coldSeg.verseIndex !== undefined ? verses[coldSeg.verseIndex] : undefined
-                drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, coldSeg.chunkText, coldSeg.showMarker, coldSeg.showTranslationForChunk, coldFadeOpacity, coldSeg.translationChunkText, videoProgress, transitionCount)
+                drawFrame(ctx, width, height, backgroundImage, primary, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, coldSeg.chunkText, coldSeg.showMarker, coldSeg.showTranslationForChunk, coldFadeOpacity, coldSeg.translationChunkText, videoProgress, null, 0)
               }
             }
           }
@@ -1267,12 +1262,37 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
               fadeOpacity = Math.max(0, msBeforeEnd / FADE_DURATION_MS)
             }
 
-            const activeVideo = backgroundVideos[activeBgIndex] ?? null
+            // ── Dual-video crossfade ──
+            let [primary, secondary] = getVideoPair()
+            let crossfadeAlpha = 0
+            if (primary && Number.isFinite(primary.duration) && primary.duration > 0) {
+              const remaining = primary.duration - primary.currentTime
+              if (remaining <= CROSSFADE_DURATION_SEC && secondary) {
+                if (!secondaryStarted) {
+                  secondaryStarted = true
+                  try { secondary.currentTime = 0 } catch { /* noop */ }
+                  secondary.play().catch((e) => console.warn('Crossfade play blocked:', e))
+                }
+                const timeIntoFade = CROSSFADE_DURATION_SEC - remaining
+                crossfadeAlpha = Math.max(0, Math.min(1, timeIntoFade / CROSSFADE_DURATION_SEC))
+              }
+              // Swap roles when primary finishes
+              if (primary.ended || remaining <= 0) {
+                const oldPrimary = primary
+                primaryIdx = (primaryIdx === 0 ? 1 : 0) as 0 | 1
+                secondaryStarted = false
+                try { oldPrimary.pause() } catch { /* noop */ }
+                try { oldPrimary.currentTime = 0 } catch { /* noop */ }
+                ;[primary, secondary] = getVideoPair()
+                crossfadeAlpha = 0
+              }
+            }
+
             if (seg.type === 'intro') {
-              drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress, transitionCount)
+              drawFrame(ctx, width, height, backgroundImage, primary, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress, secondary, crossfadeAlpha)
             } else {
               const verse = seg.verseIndex !== undefined ? verses[seg.verseIndex] : undefined
-              drawFrame(ctx, width, height, backgroundImage, activeVideo, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText, videoProgress, transitionCount)
+              drawFrame(ctx, width, height, backgroundImage, primary, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText, videoProgress, secondary, crossfadeAlpha)
             }
 
             setProgress(50 + videoProgress * 48)
@@ -1280,8 +1300,9 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
               recordingFinished = true
               timerWorker.postMessage('stop'); timerWorker.terminate(); URL.revokeObjectURL(timerUrl)
               setTimeout(() => {
-                if (backgroundVideos.length > 0) {
-                  backgroundVideos.forEach((v) => { try { v.pause() } catch { /* noop */ } })
+                for (const v of [videoA, videoB]) {
+                  if (!v) continue
+                  try { v.pause() } catch { /* noop */ }
                 }
                 source.stop(); mediaRecorder.stop(); audioCtx.close()
                 cleanupAfterGeneration()
@@ -1317,7 +1338,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           audioCtx.close()
           try { canvas.width = width; canvas.height = height } catch { /* noop */ }
           await rebuildBackgroundVideosFromConfig()
-          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, backgroundVideos[activeBgIndex] ?? null, surahName, showTranslation, displayMode, setProgress)
+          await exportVerseImages(ctx, canvas, verses, background, backgroundImage, getVideoPair()[0] ?? null, surahName, showTranslation, displayMode, setProgress)
           setProgress(100); setIsGenerating(false)
           setError('Video recording failed. Downloaded verse images instead.')
         }

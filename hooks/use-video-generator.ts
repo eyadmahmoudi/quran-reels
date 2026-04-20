@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
-import type { Verse, Word, BackgroundOption } from '@/lib/quran-types'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import type { Verse, Word, BackgroundOption, ReelConfig } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
 import { splitVerseByWordTimings, splitTranslation } from '@/lib/verse-chunking'
 import { fetchAudioSegments } from '@/lib/quran-api'
@@ -905,11 +905,15 @@ function buildDisplaySegments(
 
 const FADE_DURATION_MS = 150
 
-export function useVideoGenerator(): UseVideoGeneratorReturn {
+export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
   const [isGenerating, setIsGenerating] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const cancelledRef = useRef(false)
+  const latestConfigRef = useRef(config)
+  useEffect(() => {
+    latestConfigRef.current = config
+  }, [config])
 
   const generateVideo = useCallback(
     async (options: VideoGeneratorOptions) => {
@@ -1030,9 +1034,10 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
 
         const rebuildBackgroundVideosFromConfig = async () => {
           disposeBackgroundVideos()
-          if (background.type !== 'video') return
+          const currentBackground = latestConfigRef.current.background
+          if (currentBackground.type !== 'video') return
           try {
-            const urls = Array.isArray(background.value) ? background.value : [background.value]
+            const urls = Array.isArray(currentBackground.value) ? currentBackground.value : [currentBackground.value]
             backgroundVideos = (await Promise.all(urls.map((u) => loadVideo(u)))).filter(Boolean)
             activeBgIndex = 0
             transitionCount = 0
@@ -1041,11 +1046,14 @@ export function useVideoGenerator(): UseVideoGeneratorReturn {
               v.onended = async () => {
                 try { v.pause() } catch { /* noop */ }
                 if (backgroundVideos.length === 0) return
+                const next = backgroundVideos[(idx + 1) % backgroundVideos.length]
                 activeBgIndex = (idx + 1) % backgroundVideos.length
-                const next = backgroundVideos[activeBgIndex]
-                try { next.currentTime = 0 } catch { /* noop */ }
+                try {
+                  // Nudge to 0.1 to prevent the GPU from freezing on the loop
+                  next.currentTime = 0.1
+                } catch { /* noop */ }
                 transitionCount++
-                next.play().catch((e) => console.warn('Play blocked:', e))
+                next.play().catch((e) => console.warn('Relay play blocked:', e))
               }
             })
           } catch (e) {

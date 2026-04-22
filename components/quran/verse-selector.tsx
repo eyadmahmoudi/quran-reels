@@ -2,11 +2,45 @@
 
 import { useEffect, useState } from 'react'
 import { useReel } from '@/lib/reel-context'
-import { Field, FieldLabel, FieldGroup } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
 import { AlertTriangle } from 'lucide-react'
 
 const MAX_VERSES = 20
+
+function NumberField({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+  onBlur,
+  disabled,
+}: {
+  label: string
+  value: number | ''
+  min: number
+  max: number
+  onChange: (raw: string) => void
+  onBlur: () => void
+  disabled?: boolean
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+        {label}
+      </span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        className="h-10 rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-sm text-zinc-100 tabular-nums outline-none transition-all placeholder:text-zinc-600 focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+      />
+    </label>
+  )
+}
 
 export function VerseSelector() {
   const { config, setConfig } = useReel()
@@ -52,83 +86,55 @@ export function VerseSelector() {
     endDraft !== '' &&
     clampVerse(startDraft) > clampVerse(endDraft)
 
-  if (!config.surah) {
-    return (
-      <div className="flex flex-col gap-2">
-        <label className="text-sm font-medium text-muted-foreground">
-          Verse Range / نطاق الآيات
-        </label>
-        <div className="h-12 flex items-center justify-center rounded-md border border-dashed border-border text-muted-foreground text-sm">
-          Select a surah first
-        </div>
-      </div>
-    )
-  }
+  const disabled = !config.surah
 
   return (
-    <div className="flex flex-col gap-3">
-      <label className="text-sm font-medium text-muted-foreground">
-        Verse Range / نطاق الآيات
+    <div className="flex flex-col gap-2">
+      <label className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+        Verse Range
       </label>
 
-      {/* Number inputs for precise selection */}
-      <FieldGroup className="grid grid-cols-2 gap-4">
-        <Field>
-          <FieldLabel className="text-xs">From Verse</FieldLabel>
-          <Input
-            type="number"
-            min={1}
-            max={maxVerses}
-            value={startDraft}
-            onChange={(e) => handleStartChange(e.target.value)}
-            onBlur={() => normalizeAndSave(startDraft, endDraft)}
-            className="h-10"
-          />
-        </Field>
-        <Field>
-          <FieldLabel className="text-xs">To Verse</FieldLabel>
-          <Input
-            type="number"
-            min={1}
-            max={maxVerses}
-            value={endDraft}
-            onChange={(e) => handleEndChange(e.target.value)}
-            onBlur={() => normalizeAndSave(startDraft, endDraft)}
-            className="h-10"
-          />
-        </Field>
-      </FieldGroup>
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField
+          label="From"
+          value={startDraft}
+          min={1}
+          max={maxVerses}
+          onChange={handleStartChange}
+          onBlur={() => normalizeAndSave(startDraft, endDraft)}
+          disabled={disabled}
+        />
+        <NumberField
+          label="To"
+          value={endDraft}
+          min={1}
+          max={maxVerses}
+          onChange={handleEndChange}
+          onBlur={() => normalizeAndSave(startDraft, endDraft)}
+          disabled={disabled}
+        />
+      </div>
 
-      {/* Validation: start > end */}
-      {startExceedsEnd && (
-        <div className="flex items-center gap-1.5 text-xs px-1" style={{ color: '#f87171' }}>
-          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-          <span>Start verse must be ≤ end verse</span>
+      {!disabled && (
+        <div className="flex items-center justify-between text-[10px] text-zinc-500">
+          <span>{maxVerses} verses total</span>
+          <span className="font-medium text-emerald-400">
+            {verseCount} selected
+          </span>
         </div>
       )}
 
-      {/* Info display */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-        <span>
-          Surah has {maxVerses} verses
-        </span>
-        <span className="font-medium text-foreground">
-          {verseCount} verse{verseCount > 1 ? 's' : ''} selected
-        </span>
-      </div>
+      {startExceedsEnd && (
+        <div className="flex items-center gap-1.5 rounded-md bg-red-500/10 px-2 py-1.5 text-[10px] text-red-400">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          Start verse must be ≤ end verse
+        </div>
+      )}
 
-      {/* Max verse limit warning */}
       {isAtLimit && (
-        <div
-          className="flex items-center gap-1.5 text-xs px-2.5 py-2 rounded-lg border"
-          style={{
-            color: '#fbbf24',
-            background: 'rgba(251,191,36,0.06)',
-            borderColor: 'rgba(251,191,36,0.2)',
-          }}
-        >
-          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-          <span>Maximum {MAX_VERSES} verses per video to ensure smooth generation</span>
+        <div className="flex items-center gap-1.5 rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-400">
+          <AlertTriangle className="h-3 w-3 shrink-0" />
+          Maximum {MAX_VERSES} verses per reel
         </div>
       )}
     </div>

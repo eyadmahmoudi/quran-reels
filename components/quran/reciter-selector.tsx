@@ -35,7 +35,7 @@ export function ReciterSelector() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+    <div className="flex flex-col gap-1.5">
       {POPULAR_RECITERS.map((reciter) => {
         const isSelected = config.reciterId === reciter.id
         const isPlaying = previewPlaying === reciter.id
@@ -49,32 +49,35 @@ export function ReciterSelector() {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelect(reciter) } }}
             className={cn(
-              'group relative flex flex-col gap-1 rounded-xl px-2.5 py-2.5 sm:px-3 sm:py-3 cursor-pointer transition-all duration-200',
-              'last:col-span-full sm:last:col-span-2',
-              'border-2 outline-none focus-visible:ring-2 focus-visible:ring-amber-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-100 dark:focus-visible:ring-offset-slate-950',
+              'group relative flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-all duration-150 outline-none',
+              'focus-visible:ring-2 focus-visible:ring-emerald-500/40',
               isSelected
-                ? 'border-amber-500/85 bg-amber-500/[0.12] shadow-[0_0_0_1px_rgba(251,191,36,0.15)]'
-                : 'border-stone-300/90 bg-white/70 hover:border-stone-400 hover:bg-stone-50 dark:border-slate-700/90 dark:bg-slate-900/40 dark:hover:border-slate-600 dark:hover:bg-slate-800/50'
+                ? 'border-emerald-500/50 bg-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.15)]'
+                : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900',
             )}
           >
-            <div className="min-w-0 pr-8">
+            {isSelected && (
+              <span
+                className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r bg-emerald-400"
+                aria-hidden
+              />
+            )}
+
+            <div className="min-w-0 flex-1">
               <p
                 className={cn(
-                  'text-xs sm:text-sm font-semibold leading-tight line-clamp-2',
-                  isSelected
-                    ? 'text-amber-900 dark:text-amber-100'
-                    : 'text-stone-800 group-hover:text-stone-950 dark:text-slate-200 dark:group-hover:text-slate-100'
+                  'truncate text-sm font-medium leading-tight',
+                  isSelected ? 'text-emerald-300' : 'text-zinc-200',
                 )}
               >
                 {reciter.name}
               </p>
               <p
                 className={cn(
-                  'mt-0.5 truncate font-arabic text-[10px] sm:text-xs',
-                  isSelected
-                    ? 'text-amber-800/90 dark:text-amber-200/65'
-                    : 'text-stone-600 group-hover:text-stone-700 dark:text-slate-500 dark:group-hover:text-slate-400'
+                  'mt-0.5 truncate font-arabic text-[11px] leading-tight',
+                  isSelected ? 'text-emerald-400/60' : 'text-zinc-500',
                 )}
+                style={{ direction: 'rtl' }}
               >
                 {reciter.arabicName}
               </p>
@@ -84,19 +87,18 @@ export function ReciterSelector() {
               type="button"
               onClick={(e) => { e.stopPropagation(); togglePreview(reciter) }}
               className={cn(
-                'absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-200',
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-colors',
                 isPlaying
-                  ? 'border-amber-500/70 bg-amber-500/20 text-amber-900 dark:text-amber-100'
-                  : 'border-stone-300 bg-white text-stone-600 hover:border-amber-500/50 hover:text-amber-800 dark:border-slate-600/80 dark:bg-slate-800/80 dark:text-slate-400 dark:hover:border-amber-500/40 dark:hover:text-amber-200/90'
+                  ? 'border-amber-500/50 bg-amber-500/15 text-amber-400'
+                  : 'border-zinc-800 bg-zinc-900 text-zinc-500 hover:border-emerald-500/40 hover:text-emerald-400',
               )}
               title="Preview reciter"
             >
               {isLoading
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700 dark:text-amber-400" />
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 : isPlaying
                   ? <Pause className="h-3.5 w-3.5" />
-                  : <Volume2 className="h-3.5 w-3.5" />
-              }
+                  : <Volume2 className="h-3.5 w-3.5" />}
             </button>
           </div>
         )

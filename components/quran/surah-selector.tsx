@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { Check, ChevronsUpDown, Book } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
 import {
   Command,
   CommandEmpty,
@@ -51,72 +50,96 @@ export function SurahSelector() {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <label className="text-sm font-medium text-muted-foreground">
-        Select Surah / اختر السورة
+    <div className="flex flex-col gap-1.5">
+      <label className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+        Surah
       </label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button
-            variant="outline"
+          <button
+            type="button"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between h-12 text-base"
             disabled={loading}
+            className={cn(
+              'group relative flex h-11 w-full items-center justify-between gap-2 rounded-lg border px-3 text-left text-sm transition-all',
+              'border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900/70',
+              'focus:outline-none focus:ring-2 focus:ring-emerald-500/30',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            )}
           >
             {loading ? (
-              <span className="text-muted-foreground">Loading surahs...</span>
+              <span className="text-zinc-500">Loading surahs…</span>
             ) : config.surah ? (
-              <span className="flex items-center gap-3">
-                <span className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-medium">
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/15 text-[11px] font-semibold text-emerald-400 tabular-nums">
                   {config.surah.id}
                 </span>
-                <span className="font-arabic text-lg">{config.surah.name_arabic}</span>
-                <span className="text-muted-foreground text-sm">
-                  ({config.surah.name_simple})
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span className="truncate text-zinc-100">{config.surah.name_simple}</span>
+                  <span
+                    className="font-arabic text-[13px] text-emerald-400/70"
+                    style={{ direction: 'rtl' }}
+                  >
+                    {config.surah.name_arabic}
+                  </span>
                 </span>
               </span>
             ) : (
-              <span className="flex items-center gap-2 text-muted-foreground">
+              <span className="flex items-center gap-2 text-zinc-500">
                 <Book className="h-4 w-4" />
-                Select a surah...
+                Select a surah
               </span>
             )}
-            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-          </Button>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-zinc-500 transition-colors group-hover:text-zinc-300" />
+          </button>
         </PopoverTrigger>
-        <PopoverContent className="w-[400px] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Search surah..." className="h-10" />
-            <CommandList>
+        <PopoverContent
+          className="w-[340px] border-zinc-800 bg-zinc-900 p-0 text-zinc-100"
+          align="start"
+        >
+          <Command className="bg-zinc-900">
+            <CommandInput placeholder="Search surah…" className="h-10" />
+            <CommandList className="bg-zinc-900">
               <CommandEmpty>No surah found.</CommandEmpty>
               <CommandGroup className="max-h-[300px] overflow-y-auto">
-                {surahs.map((surah) => (
-                  <CommandItem
-                    key={surah.id}
-                    value={`${surah.name_simple} ${surah.name_arabic} ${surah.id}`}
-                    onSelect={() => handleSelect(surah)}
-                    className="group flex items-center gap-3 py-3"
-                  >
-                    <span className="flex items-center justify-center w-8 h-8 rounded-full bg-secondary text-secondary-foreground text-sm font-medium">
-                      {surah.id}
-                    </span>
-                    <div className="flex flex-col flex-1">
-                      <span className="font-arabic text-lg">{surah.name_arabic}</span>
-                      <span className="text-xs text-muted-foreground transition-colors group-hover:text-emerald-50 group-data-[selected=true]:text-emerald-50 group-aria-selected:text-emerald-50">
-                        {surah.name_simple} - {surah.verses_count} verses - {surah.revelation_place}
+                {surahs.map((surah) => {
+                  const isSelected = config.surah?.id === surah.id
+                  return (
+                    <CommandItem
+                      key={surah.id}
+                      value={`${surah.name_simple} ${surah.name_arabic} ${surah.id}`}
+                      onSelect={() => handleSelect(surah)}
+                      className="group flex items-center gap-3 py-2.5 data-[selected=true]:bg-emerald-500/10"
+                    >
+                      <span
+                        className={cn(
+                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold tabular-nums transition-colors',
+                          isSelected
+                            ? 'bg-emerald-500/20 text-emerald-300'
+                            : 'bg-zinc-800 text-zinc-400 group-data-[selected=true]:bg-emerald-500/15 group-data-[selected=true]:text-emerald-300',
+                        )}
+                      >
+                        {surah.id}
                       </span>
-                    </div>
-                    <Check
-                      className={cn(
-                        'h-4 w-4',
-                        config.surah?.id === surah.id
-                          ? 'opacity-100 text-primary'
-                          : 'opacity-0'
+                      <div className="flex flex-1 flex-col leading-tight">
+                        <span className="text-sm text-zinc-100">{surah.name_simple}</span>
+                        <span
+                          className="font-arabic text-[13px] text-zinc-500"
+                          style={{ direction: 'rtl' }}
+                        >
+                          {surah.name_arabic}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-zinc-600">
+                        {surah.verses_count} vs
+                      </span>
+                      {isSelected && (
+                        <Check className="h-4 w-4 text-emerald-400" />
                       )}
-                    />
-                  </CommandItem>
-                ))}
+                    </CommandItem>
+                  )
+                })}
               </CommandGroup>
             </CommandList>
           </Command>

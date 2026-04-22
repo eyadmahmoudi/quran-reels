@@ -8,69 +8,99 @@ export function DisplayModeSelector() {
   const { config, setConfig } = useReel()
   const mode = config.displayMode ?? 'minimal'
 
-  return (
-    <div className="flex flex-col gap-3">
-      <label className="text-sm font-medium text-muted-foreground">
-        Display Style / نمط العرض
-      </label>
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => setConfig({ displayMode: 'minimal' })}
-          className={cn(
-            'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all text-left',
-            mode === 'minimal'
-              ? 'border-primary bg-primary/5'
-              : 'border-border hover:border-primary/40'
-          )}
-        >
-          <div className="w-full aspect-[9/16] max-h-24 rounded bg-gray-800 relative overflow-hidden flex items-center justify-center">
-            <p className="text-white text-[6px] text-center px-1 leading-tight" style={{ direction: 'rtl' }}>
-              وَقَالَ يَٰٓأَيُّهَا ٱلنَّاسُ
-            </p>
-            <p className="absolute bottom-2 text-white/70 text-[5px] text-center px-1">
-              And he said, O people
-            </p>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Minimize2 className="h-3.5 w-3.5 text-primary shrink-0" />
-            <div>
-              <p className="text-xs font-medium">Minimal</p>
-              <p className="text-[10px] text-muted-foreground">Clean, no chrome</p>
-            </div>
-          </div>
-        </button>
+  const modes = [
+    {
+      key: 'minimal' as const,
+      label: 'Minimal',
+      hint: 'Clean, no chrome',
+      Icon: Minimize2,
+    },
+    {
+      key: 'classic' as const,
+      label: 'Classic',
+      hint: 'Header + bar',
+      Icon: Layers,
+    },
+  ]
 
-        <button
-          onClick={() => setConfig({ displayMode: 'classic' })}
-          className={cn(
-            'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all text-left',
-            mode === 'classic'
-              ? 'border-primary bg-primary/5'
-              : 'border-border hover:border-primary/40'
-          )}
-        >
-          <div className="w-full aspect-[9/16] max-h-24 rounded bg-gray-800 relative overflow-hidden flex flex-col items-center justify-between py-1">
-            <div className="bg-black/50 rounded-full px-2 py-0.5">
-              <p className="text-yellow-400 text-[5px]">سورة النمل</p>
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {modes.map(({ key, label, hint, Icon }) => {
+        const active = mode === key
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setConfig({ displayMode: key })}
+            className={cn(
+              'group relative flex flex-col items-center gap-2 rounded-lg border p-3 text-left transition-all',
+              active
+                ? 'border-emerald-500/50 bg-emerald-500/10'
+                : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700 hover:bg-zinc-900',
+            )}
+          >
+            {/* Mini preview */}
+            <div
+              className={cn(
+                'relative flex aspect-[9/16] w-full max-h-20 items-center justify-center overflow-hidden rounded-sm',
+                'bg-gradient-to-b from-zinc-800 to-zinc-950',
+              )}
+            >
+              {key === 'minimal' ? (
+                <>
+                  <p
+                    className="px-1 text-center text-[5px] leading-tight text-white"
+                    style={{ direction: 'rtl' }}
+                  >
+                    وَقَالَ يَٰٓأَيُّهَا ٱلنَّاسُ
+                  </p>
+                  <p className="absolute bottom-1.5 px-1 text-center text-[4px] text-white/70">
+                    And he said, O people
+                  </p>
+                </>
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-between py-1">
+                  <div className="rounded-full bg-black/60 px-1.5 py-0.5">
+                    <p className="text-[4px] text-amber-400">سورة النمل</p>
+                  </div>
+                  <p
+                    className="px-1 text-center text-[4px] leading-tight text-white"
+                    style={{ direction: 'rtl' }}
+                  >
+                    وَقَالَ يَٰٓأَيُّهَا ٱلنَّاسُ
+                  </p>
+                  <div className="w-full px-1">
+                    <div className="h-0.5 rounded-full bg-white/20">
+                      <div className="h-full w-1/3 rounded-full bg-emerald-400" />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <p className="text-white text-[5px] text-center px-1 leading-tight" style={{ direction: 'rtl' }}>
-              وَقَالَ يَٰٓأَيُّهَا ٱلنَّاسُ
-            </p>
-            <div className="w-full px-1">
-              <div className="h-0.5 bg-white/20 rounded-full w-full">
-                <div className="h-full bg-primary w-1/3 rounded-full" />
+
+            {/* Label */}
+            <div className="flex w-full items-center gap-1.5">
+              <Icon
+                className={cn(
+                  'h-3.5 w-3.5 shrink-0',
+                  active ? 'text-emerald-400' : 'text-zinc-500',
+                )}
+              />
+              <div className="min-w-0">
+                <p
+                  className={cn(
+                    'text-xs font-medium leading-tight',
+                    active ? 'text-emerald-300' : 'text-zinc-200',
+                  )}
+                >
+                  {label}
+                </p>
+                <p className="truncate text-[9px] text-zinc-500">{hint}</p>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Layers className="h-3.5 w-3.5 text-primary shrink-0" />
-            <div>
-              <p className="text-xs font-medium">Classic</p>
-              <p className="text-[10px] text-muted-foreground">With header & bar</p>
-            </div>
-          </div>
-        </button>
-      </div>
+          </button>
+        )
+      })}
     </div>
   )
 }

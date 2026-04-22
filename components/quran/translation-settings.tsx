@@ -2,11 +2,12 @@
 
 import { useReel } from '@/lib/reel-context'
 import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -15,76 +16,66 @@ import { TRANSLATION_RESOURCES } from '@/lib/quran-types'
 export function TranslationSettings() {
   const { config, setConfig } = useReel()
 
-  const handleToggle = (checked: boolean) => {
-    setConfig({ showTranslation: checked })
-  }
-
-  const handleTranslationChange = (value: string) => {
-    setConfig({ translationId: parseInt(value) })
-  }
+  const handleToggle = (checked: boolean) => setConfig({ showTranslation: checked })
+  const handleTranslationChange = (value: string) => setConfig({ translationId: parseInt(value) })
 
   const selectedTranslation = TRANSLATION_RESOURCES.find(
-    (t) => t.id === config.translationId
+    (t) => t.id === config.translationId,
   )
 
-  return (
-    <div className="flex flex-col gap-4">
-      <label className="text-sm font-medium text-muted-foreground">
-        Translation / الترجمة
-      </label>
+  const languages = ['English', 'Urdu', 'French', 'German', 'Italian', 'Indonesian', 'Turkish', 'Russian']
 
-      {/* Toggle */}
-      <div className="flex items-center gap-3">
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2.5">
+        <div>
+          <p className="text-sm font-medium text-zinc-200">Show translation</p>
+          <p className="text-[10px] text-zinc-500">Render under Arabic verse</p>
+        </div>
         <Switch
           id="translation-toggle"
           checked={config.showTranslation}
           onCheckedChange={handleToggle}
+          className="data-[state=checked]:bg-emerald-600"
         />
-        <Label htmlFor="translation-toggle" className="cursor-pointer">
-          Show translation in video
-        </Label>
       </div>
 
-      {/* Language selector */}
       {config.showTranslation && (
         <Select
           value={config.translationId?.toString() || ''}
           onValueChange={handleTranslationChange}
         >
-          <SelectTrigger className="h-10">
+          <SelectTrigger className="h-10 w-full rounded-lg border-zinc-800 bg-zinc-950 text-sm text-zinc-100 hover:bg-zinc-900 focus:ring-emerald-500/30">
             <SelectValue placeholder="Select translation">
               {selectedTranslation && (
-                <span>
-                  {selectedTranslation.name} ({selectedTranslation.language})
+                <span className="truncate">
+                  {selectedTranslation.name}{' '}
+                  <span className="text-zinc-500">({selectedTranslation.language})</span>
                 </span>
               )}
             </SelectValue>
           </SelectTrigger>
-          <SelectContent>
-            {/* Group by language */}
-            {['English', 'Urdu', 'French', 'German', 'Italian', 'Indonesian'].map(
-              (lang) => {
-                const translations = TRANSLATION_RESOURCES.filter(
-                  (t) => t.language === lang
-                )
-                if (translations.length === 0) return null
-                return (
-                  <div key={lang}>
-                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                      {lang}
-                    </div>
-                    {translations.map((translation) => (
-                      <SelectItem
-                        key={translation.id}
-                        value={translation.id.toString()}
-                      >
-                        {translation.name}
-                      </SelectItem>
-                    ))}
-                  </div>
-                )
-              }
-            )}
+          <SelectContent className="border-zinc-800 bg-zinc-900 text-zinc-100">
+            {languages.map((lang) => {
+              const translations = TRANSLATION_RESOURCES.filter((t) => t.language === lang)
+              if (translations.length === 0) return null
+              return (
+                <SelectGroup key={lang}>
+                  <SelectLabel className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    {lang}
+                  </SelectLabel>
+                  {translations.map((translation) => (
+                    <SelectItem
+                      key={translation.id}
+                      value={translation.id.toString()}
+                      className="focus:bg-emerald-500/10 focus:text-emerald-300"
+                    >
+                      {translation.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              )
+            })}
           </SelectContent>
         </Select>
       )}

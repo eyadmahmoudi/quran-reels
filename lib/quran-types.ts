@@ -133,6 +133,7 @@ export interface ReelConfig {
   showTranslation: boolean
   translationId: number | null
   displayMode: 'minimal' | 'classic'  // minimal = no header/footer chrome
+  watermark: string                    // optional creator handle shown on preview
 }
 
 export interface BackgroundOption {

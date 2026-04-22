@@ -17,6 +17,18 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
 }
 
+/**
+ * Clamp a radius value so canvas shape drawing (arc / ellipse / radial
+ * gradient) never receives a zero or negative number. This protects against
+ * crashes on tiny thumbnail canvases (e.g. 72×128) where size-dependent
+ * math can underflow, and against negative modulo results like
+ * `(t * freq - ring * 0.15) % 1` which can be < 0 early in the animation.
+ */
+function safeR(value: number): number {
+  if (!Number.isFinite(value)) return 0.1
+  return Math.max(0.1, Math.abs(value))
+}
+
 // ── 1. Starfield ───────────────────────────────────────────────────────────
 export function drawStarfield(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
   ctx.fillStyle = '#00010a'
@@ -31,7 +43,7 @@ export function drawStarfield(ctx: CanvasRenderingContext2D, w: number, h: numbe
     const brightness = Math.floor(lerp(160, 255, twinkle))
     ctx.fillStyle = `rgba(${brightness},${brightness},${Math.min(255, brightness + 30)},${twinkle})`
     ctx.beginPath()
-    ctx.arc(x, y, baseSize * twinkle, 0, Math.PI * 2)
+    ctx.arc(x, y, safeR(baseSize * twinkle), 0, Math.PI * 2)
     ctx.fill()
   }
 
@@ -65,7 +77,7 @@ export function drawAurora(ctx: CanvasRenderingContext2D, w: number, h: number, 
     const y = rng(i * 9.7) * h * 0.5
     const a = 0.2 + 0.3 * rng(i * 3.3)
     ctx.fillStyle = `rgba(200,210,255,${a})`
-    ctx.beginPath(); ctx.arc(x, y, 0.8, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x, y, safeR(0.8), 0, Math.PI * 2); ctx.fill()
   }
 
   // Aurora bands
@@ -123,11 +135,11 @@ export function drawOcean(ctx: CanvasRenderingContext2D, w: number, h: number, t
 
   // Moon reflection on water
   const moonX = w * 0.72, moonY = h * 0.12
-  const moonGrad = ctx.createRadialGradient(moonX, moonY, 0, moonX, moonY, 40)
+  const moonGrad = ctx.createRadialGradient(moonX, moonY, 0, moonX, moonY, safeR(40))
   moonGrad.addColorStop(0, 'rgba(255,248,230,1)')
   moonGrad.addColorStop(0.4, 'rgba(255,240,200,0.8)')
   moonGrad.addColorStop(1, 'rgba(255,240,200,0)')
-  ctx.fillStyle = moonGrad; ctx.beginPath(); ctx.arc(moonX, moonY, 40, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = moonGrad; ctx.beginPath(); ctx.arc(moonX, moonY, safeR(40), 0, Math.PI * 2); ctx.fill()
 
   // Moon shimmer on sea
   for (let i = 0; i < 12; i++) {
@@ -212,11 +224,11 @@ export function drawRain(ctx: CanvasRenderingContext2D, w: number, h: number, t:
     const rx = rng(i * 5.5) * w
     const ry = h * 0.92 + rng(i * 2.9) * h * 0.06
     const phase = ((t * 0.002 + i * 1.3) % (Math.PI * 2))
-    const radius = 10 + phase * 25
+    const radius = safeR(10 + phase * 25)
     const alpha = Math.max(0, 0.2 - phase * 0.03)
     ctx.strokeStyle = `rgba(150,200,255,${alpha})`
     ctx.lineWidth = 1
-    ctx.beginPath(); ctx.ellipse(rx, ry, radius, radius * 0.25, 0, 0, Math.PI * 2); ctx.stroke()
+    ctx.beginPath(); ctx.ellipse(rx, ry, radius, safeR(radius * 0.25), 0, 0, Math.PI * 2); ctx.stroke()
   }
 }
 
@@ -232,11 +244,11 @@ export function drawDesert(ctx: CanvasRenderingContext2D, w: number, h: number, 
 
   // Sun/moon near horizon
   const sunX = w * 0.5, sunY = h * 0.5
-  const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 60)
+  const sunGrad = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, safeR(60))
   sunGrad.addColorStop(0, 'rgba(255,200,80,1)')
   sunGrad.addColorStop(0.5, 'rgba(255,120,0,0.6)')
   sunGrad.addColorStop(1, 'rgba(255,80,0,0)')
-  ctx.fillStyle = sunGrad; ctx.beginPath(); ctx.arc(sunX, sunY, 60, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = sunGrad; ctx.beginPath(); ctx.arc(sunX, sunY, safeR(60), 0, Math.PI * 2); ctx.fill()
 
   // Sand dunes
   const duneGrad = ctx.createLinearGradient(0, h * 0.5, 0, h)
@@ -268,7 +280,7 @@ export function drawDesert(ctx: CanvasRenderingContext2D, w: number, h: number, 
     const y = h * (0.6 + rng(i * 7.3) * 0.35)
     const size = 0.8 + rng(i * 5.5) * 1.5
     ctx.fillStyle = `rgba(255,200,100,${0.2 + rng(i * 2.3) * 0.2})`
-    ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x, y, safeR(size), 0, Math.PI * 2); ctx.fill()
   }
 }
 
@@ -284,7 +296,7 @@ export function drawGalaxy(ctx: CanvasRenderingContext2D, w: number, h: number, 
     const x = rng(i * 3.1) * w; const y = rng(i * 7.7) * h
     const a = 0.1 + 0.2 * rng(i * 5.5)
     ctx.fillStyle = `rgba(200,210,255,${a})`
-    ctx.beginPath(); ctx.arc(x, y, 0.6, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x, y, safeR(0.6), 0, Math.PI * 2); ctx.fill()
   }
 
   // Galaxy spiral arms
@@ -301,15 +313,15 @@ export function drawGalaxy(ctx: CanvasRenderingContext2D, w: number, h: number, 
     const colors = ['220,200,255', '200,220,255', '255,220,200']
     const cr = colors[arm]
     ctx.fillStyle = `rgba(${cr},${brightness})`
-    ctx.beginPath(); ctx.arc(x, y, 0.8 + rng(i * 2.9) * 1.2, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x, y, safeR(0.8 + rng(i * 2.9) * 1.2), 0, Math.PI * 2); ctx.fill()
   }
 
   // Bright core
-  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80)
+  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, safeR(80))
   coreGrad.addColorStop(0, 'rgba(255,240,200,0.6)')
   coreGrad.addColorStop(0.4, 'rgba(200,180,255,0.2)')
   coreGrad.addColorStop(1, 'rgba(100,80,200,0)')
-  ctx.fillStyle = coreGrad; ctx.beginPath(); ctx.arc(cx, cy, 80, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = coreGrad; ctx.beginPath(); ctx.arc(cx, cy, safeR(80), 0, Math.PI * 2); ctx.fill()
   ctx.restore()
 }
 
@@ -318,7 +330,7 @@ export function drawCandle(ctx: CanvasRenderingContext2D, w: number, h: number, 
   const flicker = 0.85 + 0.15 * Math.sin(t * 0.012) * Math.sin(t * 0.019 + 0.5)
 
   // Dark room gradient
-  const bgGrad = ctx.createRadialGradient(w * 0.5, h * 0.65, 0, w * 0.5, h * 0.65, w * 0.7)
+  const bgGrad = ctx.createRadialGradient(w * 0.5, h * 0.65, 0, w * 0.5, h * 0.65, safeR(w * 0.7))
   bgGrad.addColorStop(0, `rgba(80,40,10,${0.5 * flicker})`)
   bgGrad.addColorStop(0.5, '#160800')
   bgGrad.addColorStop(1, '#080300')
@@ -345,7 +357,7 @@ export function drawCandle(ctx: CanvasRenderingContext2D, w: number, h: number, 
   const fW = (18 + 8 * flicker) * flicker
   const flameSway = 5 * Math.sin(t * 0.007)
 
-  const flameGrad = ctx.createRadialGradient(flameX + flameSway, flameY, 2, flameX + flameSway, flameY - fH * 0.4, fH)
+  const flameGrad = ctx.createRadialGradient(flameX + flameSway, flameY, 2, flameX + flameSway, flameY - fH * 0.4, safeR(fH))
   flameGrad.addColorStop(0, 'rgba(255,255,200,1)')
   flameGrad.addColorStop(0.2, 'rgba(255,200,50,0.9)')
   flameGrad.addColorStop(0.6, 'rgba(255,80,0,0.5)')
@@ -360,11 +372,11 @@ export function drawCandle(ctx: CanvasRenderingContext2D, w: number, h: number, 
   ctx.fill()
 
   // Light glow
-  const glowGrad = ctx.createRadialGradient(flameX, flameY, 0, flameX, flameY, 280)
+  const glowGrad = ctx.createRadialGradient(flameX, flameY, 0, flameX, flameY, safeR(280))
   glowGrad.addColorStop(0, `rgba(255,160,30,${0.35 * flicker})`)
   glowGrad.addColorStop(0.4, `rgba(255,100,0,${0.12 * flicker})`)
   glowGrad.addColorStop(1, 'rgba(200,60,0,0)')
-  ctx.fillStyle = glowGrad; ctx.beginPath(); ctx.arc(flameX, flameY, 280, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = glowGrad; ctx.beginPath(); ctx.arc(flameX, flameY, safeR(280), 0, Math.PI * 2); ctx.fill()
   ctx.restore()
 }
 
@@ -396,7 +408,7 @@ export function drawSnow(ctx: CanvasRenderingContext2D, w: number, h: number, t:
     const size = 1.2 + rng(i * 4.4) * 2.5
     const alpha = 0.5 + 0.4 * rng(i * 6.6)
     ctx.fillStyle = `rgba(220,235,255,${alpha})`
-    ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x, y, safeR(size), 0, Math.PI * 2); ctx.fill()
   }
 }
 
@@ -407,18 +419,18 @@ export function drawForest(ctx: CanvasRenderingContext2D, w: number, h: number, 
   ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, w, h)
 
   // Moon
-  const moonGrad = ctx.createRadialGradient(w * 0.65, h * 0.08, 0, w * 0.65, h * 0.08, 35)
+  const moonGrad = ctx.createRadialGradient(w * 0.65, h * 0.08, 0, w * 0.65, h * 0.08, safeR(35))
   moonGrad.addColorStop(0, 'rgba(255,250,220,1)')
   moonGrad.addColorStop(0.6, 'rgba(220,230,200,0.7)')
   moonGrad.addColorStop(1, 'rgba(200,220,180,0)')
-  ctx.fillStyle = moonGrad; ctx.beginPath(); ctx.arc(w * 0.65, h * 0.08, 35, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = moonGrad; ctx.beginPath(); ctx.arc(w * 0.65, h * 0.08, safeR(35), 0, Math.PI * 2); ctx.fill()
 
   // Stars
   for (let i = 0; i < 80; i++) {
     const x = rng(i * 3.3) * w; const y = rng(i * 8.1) * h * 0.45
     const a = 0.3 + 0.4 * Math.abs(Math.sin(t * 0.001 + i * 2))
     ctx.fillStyle = `rgba(220,230,255,${a})`
-    ctx.beginPath(); ctx.arc(x, y, 0.8, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x, y, safeR(0.8), 0, Math.PI * 2); ctx.fill()
   }
 
   // Tree silhouettes
@@ -449,10 +461,10 @@ export function drawForest(ctx: CanvasRenderingContext2D, w: number, h: number, 
     const fy = h * (0.45 + rng(i * 3.7) * 0.4)
     const glow = Math.abs(Math.sin(t * 0.002 * (1 + rng(i * 2.1) * 0.5) + i * 2.4))
     if (glow > 0.6) {
-      const gr = ctx.createRadialGradient(fx, fy, 0, fx, fy, 12)
+      const gr = ctx.createRadialGradient(fx, fy, 0, fx, fy, safeR(12))
       gr.addColorStop(0, `rgba(180,255,100,${glow * 0.8})`)
       gr.addColorStop(1, 'rgba(150,255,80,0)')
-      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(fx, fy, 12, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(fx, fy, safeR(12), 0, Math.PI * 2); ctx.fill()
     }
   }
 }
@@ -474,7 +486,7 @@ export function drawNebula(ctx: CanvasRenderingContext2D, w: number, h: number, 
   for (const c of clouds) {
     const drift = Math.sin(t * c.speed * Math.PI * 2) * 0.04
     const cx2 = (c.x + drift) * w, cy2 = c.y * h
-    const gr = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, c.r * Math.min(w, h))
+    const gr = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, safeR(c.r * Math.min(w, h)))
     gr.addColorStop(0, `rgba(${c.color},0.18)`)
     gr.addColorStop(0.5, `rgba(${c.color},0.08)`)
     gr.addColorStop(1, `rgba(${c.color},0)`)
@@ -486,7 +498,7 @@ export function drawNebula(ctx: CanvasRenderingContext2D, w: number, h: number, 
     const x = rng(i * 3.1) * w; const y = rng(i * 8.7) * h
     const a = 0.2 + 0.7 * Math.abs(Math.sin(t * 0.0007 + i * 1.3))
     ctx.fillStyle = `rgba(255,255,255,${a})`
-    ctx.beginPath(); ctx.arc(x, y, 0.5 + rng(i * 4.4), 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x, y, safeR(0.5 + rng(i * 4.4)), 0, Math.PI * 2); ctx.fill()
   }
   ctx.restore()
 }
@@ -513,11 +525,12 @@ export function drawFire(ctx: CanvasRenderingContext2D, w: number, h: number, t:
       ? ['255,150,0', '255,80,0', '200,30,0']
       : ['180,20,0', '120,10,0', '60,0,0']
 
-    const gr = ctx.createRadialGradient(x, y, 0, x, y, size)
+    const safeSize = safeR(size)
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, safeSize)
     gr.addColorStop(0, `rgba(${colors[0]},${alpha})`)
     gr.addColorStop(0.5, `rgba(${colors[1]},${alpha * 0.6})`)
     gr.addColorStop(1, `rgba(${colors[2]},0)`)
-    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill()
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, safeSize, 0, Math.PI * 2); ctx.fill()
   }
   ctx.restore()
 }
@@ -534,7 +547,7 @@ export function drawWaterRipple(ctx: CanvasRenderingContext2D, w: number, h: num
     const cx2 = rng(i * 5.5) * w
     const cy2 = rng(i * 3.3) * h
     const phase = t * 0.001 + i * 0.8
-    const r = 80 + 60 * Math.sin(phase)
+    const r = safeR(80 + 60 * Math.sin(phase))
     const gr = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, r)
     gr.addColorStop(0, `rgba(0,150,255,${0.06 + 0.04 * Math.sin(phase)})`)
     gr.addColorStop(1, 'rgba(0,80,180,0)')
@@ -551,12 +564,15 @@ export function drawWaterRipple(ctx: CanvasRenderingContext2D, w: number, h: num
   for (const src of rippleSources) {
     const cx2 = src.x * w, cy2 = src.y * h
     for (let ring = 0; ring < 8; ring++) {
-      const phase = (t * src.freq - ring * 0.15) % 1
-      const r = phase * Math.min(w, h) * 0.5
-      const alpha = (1 - phase) * 0.12
+      // `(x % 1)` is negative in JS when x < 0, so normalize into [0, 1).
+      const rawPhase = (t * src.freq - ring * 0.15) % 1
+      const phase = rawPhase < 0 ? rawPhase + 1 : rawPhase
+      const r = safeR(phase * Math.min(w, h) * 0.5)
+      const ry = safeR(r * 0.4)
+      const alpha = Math.max(0, (1 - phase) * 0.12)
       ctx.strokeStyle = `rgba(100,200,255,${alpha})`
       ctx.lineWidth = 1.5
-      ctx.beginPath(); ctx.ellipse(cx2, cy2, r, r * 0.4, 0, 0, Math.PI * 2); ctx.stroke()
+      ctx.beginPath(); ctx.ellipse(cx2, cy2, r, ry, 0, 0, Math.PI * 2); ctx.stroke()
     }
   }
 }
@@ -573,7 +589,7 @@ export function drawMountains(ctx: CanvasRenderingContext2D, w: number, h: numbe
     const x = rng(i * 3.3) * w; const y = rng(i * 9.1) * h * 0.55
     const a = 0.25 + 0.4 * Math.abs(Math.sin(t * 0.0007 + i * 1.8))
     ctx.fillStyle = `rgba(220,230,255,${a})`
-    ctx.beginPath(); ctx.arc(x, y, 0.7 + rng(i * 4.2) * 0.8, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x, y, safeR(0.7 + rng(i * 4.2) * 0.8), 0, Math.PI * 2); ctx.fill()
   }
 
   // Mist layer
@@ -641,7 +657,7 @@ export function drawGreenHills(ctx: CanvasRenderingContext2D, w: number, h: numb
     const x = rng(i * 4.1) * w; const y = rng(i * 7.3) * h * 0.5
     const a = 0.3 + 0.5 * Math.abs(Math.sin(t * 0.0006 + i))
     ctx.fillStyle = `rgba(220,210,255,${a})`
-    ctx.beginPath(); ctx.arc(x, y, 0.6 + rng(i * 3.5) * 1.4, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.arc(x, y, safeR(0.6 + rng(i * 3.5) * 1.4), 0, Math.PI * 2); ctx.fill()
   }
 
   // Rolling hills
@@ -670,7 +686,7 @@ export function drawGreenHills(ctx: CanvasRenderingContext2D, w: number, h: numb
     const glow = Math.pow(Math.abs(Math.sin(t * 0.0015 * (1 + rng(i) * 0.5) + i * 1.7)), 3)
     if (glow > 0.3) {
       ctx.fillStyle = `rgba(200,255,150,${glow * 0.7})`
-      ctx.beginPath(); ctx.arc(fx, fy, 2 * glow, 0, Math.PI * 2); ctx.fill()
+      ctx.beginPath(); ctx.arc(fx, fy, safeR(2 * glow), 0, Math.PI * 2); ctx.fill()
     }
   }
 }

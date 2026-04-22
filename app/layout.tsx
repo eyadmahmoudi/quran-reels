@@ -49,14 +49,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" dir="ltr" suppressHydrationWarning className="h-[100dvh] overflow-hidden">
+    <html lang="en" dir="ltr" suppressHydrationWarning className="lg:h-[100dvh] lg:overflow-hidden">
       <head />
       <body
-        className={`${amiri.variable} ${amiriQuran.variable} ${scheherazade.variable} ${notoSans.variable} font-sans antialiased h-full min-h-0 overflow-hidden bg-background text-foreground`}
+        className={`${amiri.variable} ${amiriQuran.variable} ${scheherazade.variable} ${notoSans.variable} font-sans antialiased min-h-screen lg:h-full lg:min-h-0 lg:overflow-hidden bg-background text-foreground`}
       >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+          <div className="flex min-h-screen flex-col lg:h-full lg:min-h-0">
+            <div className="flex flex-1 flex-col lg:min-h-0">{children}</div>
             {process.env.NODE_ENV === 'production' && <Analytics />}
           </div>
         </ThemeProvider>

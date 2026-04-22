@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Check, X, ChevronDown, ImageIcon, Upload } from 'lucide-react'
+import { Check, X, ChevronDown, Upload } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useReel } from '@/lib/reel-context'
 import { PRESET_BACKGROUNDS, ANIMATED_BACKGROUNDS, type BackgroundOption } from '@/lib/quran-types'
@@ -36,7 +36,7 @@ function AnimatedPreview({ name }: { name: string }) {
       ref={ref}
       width={72}
       height={128}
-      className="w-full h-full object-cover"
+      className="h-full w-full object-cover"
       style={{ display: 'block' }}
     />
   )
@@ -45,12 +45,12 @@ function AnimatedPreview({ name }: { name: string }) {
 function BgThumbnail({ bg }: { bg: BackgroundOption }) {
   const valueStr = typeof bg.value === 'string' ? bg.value : (bg.value[0] ?? '')
   if (bg.type === 'animated') return <AnimatedPreview name={valueStr} />
-  if (bg.type === 'gradient') return <div className="w-full h-full" style={{ background: valueStr }} />
+  if (bg.type === 'gradient') return <div className="h-full w-full" style={{ background: valueStr }} />
   return (
     <img
       src={bg.thumbnail || valueStr}
       alt={bg.name}
-      className="w-full h-full object-cover"
+      className="h-full w-full object-cover"
       loading="lazy"
     />
   )
@@ -146,7 +146,7 @@ export function BackgroundSelector() {
     <div className="flex flex-col gap-4">
       {/* ── Custom image dropzone ── */}
       <div>
-        <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+        <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
           Custom upload
         </p>
         {isCustomImageActive && config.background ? (
@@ -161,16 +161,16 @@ export function BackgroundSelector() {
                 <Check className="h-3.5 w-3.5 text-emerald-300" />
               </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-xs font-medium text-emerald-300">In use</p>
-              <p className="truncate text-[10px] text-zinc-500">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-emerald-700 dark:text-emerald-300">In use</p>
+              <p className="truncate text-[10px] text-zinc-500 dark:text-zinc-500">
                 {config.background.name}
               </p>
             </div>
             <button
               type="button"
               onClick={clearCustomImage}
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-zinc-400 transition-colors hover:border-red-500/40 hover:text-red-400"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 bg-white text-zinc-500 transition-colors hover:border-red-500/40 hover:text-red-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:text-red-400"
               title="Remove custom image"
             >
               <X className="h-3.5 w-3.5" />
@@ -187,24 +187,24 @@ export function BackgroundSelector() {
               'group relative flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-6 text-center transition-all',
               isDraggingImage
                 ? 'border-emerald-500/70 bg-emerald-500/10'
-                : 'border-zinc-800 bg-zinc-950 hover:border-emerald-500/50 hover:bg-zinc-900',
+                : 'border-zinc-300 bg-white hover:border-emerald-500/50 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-900',
             )}
           >
             <div
               className={cn(
                 'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
                 isDraggingImage
-                  ? 'bg-emerald-500/20 text-emerald-300'
-                  : 'bg-zinc-800 text-zinc-400 group-hover:bg-emerald-500/15 group-hover:text-emerald-400',
+                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
+                  : 'bg-zinc-100 text-zinc-500 group-hover:bg-emerald-500/15 group-hover:text-emerald-600 dark:bg-zinc-800 dark:text-zinc-400 dark:group-hover:text-emerald-400',
               )}
             >
               <Upload className="h-4 w-4" strokeWidth={2.25} />
             </div>
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-medium text-zinc-200">
+              <span className="text-xs font-medium text-zinc-800 dark:text-zinc-200">
                 Drop image or click to upload
               </span>
-              <span className="text-[10px] text-zinc-500">
+              <span className="text-[10px] text-zinc-500 dark:text-zinc-500">
                 JPG, PNG, WebP
               </span>
             </div>
@@ -215,7 +215,7 @@ export function BackgroundSelector() {
 
       {/* ── Category tabs ── */}
       <div
-        className="inline-flex w-full rounded-lg bg-zinc-950 p-1 ring-1 ring-inset ring-zinc-800"
+        className="inline-flex w-full rounded-lg bg-zinc-100 p-1 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-950 dark:ring-zinc-800"
         role="tablist"
       >
         {CATEGORIES.map((cat) => (
@@ -228,8 +228,8 @@ export function BackgroundSelector() {
             className={cn(
               'flex-1 rounded-md py-1.5 text-[11px] font-semibold transition-all',
               activeCategory === cat.key
-                ? 'bg-emerald-500/10 text-emerald-300 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.2)]'
-                : 'text-zinc-500 hover:text-zinc-300',
+                ? 'bg-emerald-500/10 text-emerald-700 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.2)] dark:text-emerald-300'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300',
             )}
           >
             {cat.label}
@@ -250,7 +250,7 @@ export function BackgroundSelector() {
                 'group relative aspect-[9/16] overflow-hidden rounded-md border transition-all',
                 isSelected
                   ? 'border-emerald-500 ring-2 ring-emerald-500/30'
-                  : 'border-zinc-800 hover:border-zinc-700',
+                  : 'border-zinc-200 hover:border-zinc-300 dark:border-zinc-800 dark:hover:border-zinc-700',
               )}
             >
               <BgThumbnail bg={bg} />
@@ -273,7 +273,7 @@ export function BackgroundSelector() {
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex w-full items-center justify-center gap-1 rounded-md py-1.5 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-zinc-800/60 hover:text-zinc-200"
+          className="flex w-full items-center justify-center gap-1 rounded-md py-1.5 text-[11px] font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-200"
         >
           <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
           {expanded ? 'Show less' : `Show ${allItems.length - INITIAL_COUNT} more`}

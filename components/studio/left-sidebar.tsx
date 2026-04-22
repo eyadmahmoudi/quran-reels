@@ -26,17 +26,17 @@ interface SidebarSectionProps {
 
 function SidebarSection({ title, icon, description, children }: SidebarSectionProps) {
   return (
-    <section className="border-b border-zinc-800/80 px-4 py-5 last:border-b-0">
+    <section className="border-b border-zinc-200 px-4 py-5 last:border-b-0 dark:border-zinc-800/80">
       <header className="mb-4 flex items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-zinc-800/80 text-emerald-400">
+        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:bg-zinc-800/80 dark:text-emerald-400">
           {icon}
         </span>
-        <div className="flex-1 min-w-0">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-300">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-700 dark:text-zinc-300">
             {title}
           </h2>
           {description && (
-            <p className="mt-0.5 text-[10px] text-zinc-500">{description}</p>
+            <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-500">{description}</p>
           )}
         </div>
       </header>
@@ -47,17 +47,18 @@ function SidebarSection({ title, icon, description, children }: SidebarSectionPr
 
 export function LeftSidebar() {
   return (
-    <aside className="flex w-[350px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-900">
-      <div className="shrink-0 border-b border-zinc-800 px-4 py-3">
-        <h1 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+    <aside className="flex w-full min-h-0 shrink-0 flex-col border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 lg:w-[350px] lg:border-b-0 lg:border-r">
+      <div className="shrink-0 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+        <h1 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-500">
           Studio Controls
         </h1>
-        <p className="mt-0.5 text-[10px] text-zinc-600">
+        <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
           Configure, preview &amp; export your Quran reel
         </p>
       </div>
 
-      <div className="sidebar-scroll flex-1 overflow-y-auto">
+      {/* Independent scroll. Extra bottom padding on mobile to clear the sticky action bar. */}
+      <div className="sidebar-scroll flex-1 overflow-y-auto pb-24 lg:pb-6">
         <SidebarSection
           title="Source"
           icon={<BookMarked className="h-3.5 w-3.5" strokeWidth={2.25} />}

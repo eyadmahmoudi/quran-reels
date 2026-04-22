@@ -35,7 +35,10 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#09090b',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
+    { media: '(prefers-color-scheme: dark)', color: '#09090b' },
+  ],
   width: 'device-width',
   initialScale: 1,
 }
@@ -46,12 +49,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" dir="ltr" suppressHydrationWarning className="dark h-[100dvh] overflow-hidden">
+    <html lang="en" dir="ltr" suppressHydrationWarning className="h-[100dvh] overflow-hidden">
       <head />
       <body
-        className={`${amiri.variable} ${amiriQuran.variable} ${scheherazade.variable} ${notoSans.variable} font-sans antialiased h-full min-h-0 overflow-hidden bg-zinc-950 text-zinc-100`}
+        className={`${amiri.variable} ${amiriQuran.variable} ${scheherazade.variable} ${notoSans.variable} font-sans antialiased h-full min-h-0 overflow-hidden bg-background text-foreground`}
       >
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} forcedTheme="dark">
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
           <div className="flex h-full min-h-0 flex-col">
             <div className="flex min-h-0 flex-1 flex-col">{children}</div>
             {process.env.NODE_ENV === 'production' && <Analytics />}

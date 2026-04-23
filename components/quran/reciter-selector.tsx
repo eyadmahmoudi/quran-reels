@@ -6,6 +6,13 @@ import { useReel } from '@/lib/reel-context'
 import { POPULAR_RECITERS } from '@/lib/quran-types'
 import { cn } from '@/lib/utils'
 
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
 export function ReciterSelector() {
   const { config, setConfig } = useReel()
   const [previewPlaying, setPreviewPlaying] = useState<number | null>(null)
@@ -49,37 +56,44 @@ export function ReciterSelector() {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelect(reciter) } }}
             className={cn(
-              'group relative flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-all duration-150 outline-none',
-              'focus-visible:ring-2 focus-visible:ring-emerald-500/40',
+              'group relative flex h-14 items-center gap-3 rounded-[10px] border pl-3 pr-2 cursor-pointer transition-all duration-150 ease-out outline-none',
+              'focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ring)]',
               isSelected
-                ? 'border-emerald-500/50 bg-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.15)]'
-                : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50',
+                ? 'border-accent-primary/30 bg-accent-soft'
+                : 'border-border-subtle bg-surface hover:border-border-default hover:bg-subtle',
             )}
           >
             {isSelected && (
               <span
-                className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r bg-emerald-500"
+                className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-accent-primary"
                 aria-hidden
               />
             )}
 
+            <span
+              className={cn(
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-display font-semibold transition-colors',
+                isSelected
+                  ? 'bg-accent-primary text-white'
+                  : 'bg-accent-soft text-accent-primary',
+              )}
+            >
+              {getInitials(reciter.name)}
+            </span>
+
             <div className="min-w-0 flex-1">
               <p
                 className={cn(
-                  'truncate text-sm font-medium leading-tight',
-                  isSelected
-                    ? 'text-emerald-700'
-                    : 'text-zinc-800',
+                  'truncate text-[14px] font-medium leading-tight',
+                  isSelected ? 'text-accent-primary' : 'text-ink-primary',
                 )}
               >
                 {reciter.name}
               </p>
               <p
                 className={cn(
-                  'mt-0.5 truncate font-arabic text-[11px] leading-tight',
-                  isSelected
-                    ? 'text-emerald-600/70'
-                    : 'text-zinc-500',
+                  'mt-0.5 truncate font-arabic-ui text-[12px] leading-tight',
+                  isSelected ? 'text-gold' : 'text-ink-tertiary',
                 )}
                 style={{ direction: 'rtl' }}
               >
@@ -91,10 +105,11 @@ export function ReciterSelector() {
               type="button"
               onClick={(e) => { e.stopPropagation(); togglePreview(reciter) }}
               className={cn(
-                'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-colors',
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border transition-colors duration-150 ease-out',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ring)]',
                 isPlaying
-                  ? 'border-amber-500/50 bg-amber-500/15 text-amber-600'
-                  : 'border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-emerald-500/40 hover:text-emerald-600',
+                  ? 'border-gold/40 bg-gold/15 text-gold'
+                  : 'border-border-subtle bg-surface text-ink-tertiary hover:border-accent-primary/40 hover:text-accent-primary',
               )}
               title="Preview reciter"
             >

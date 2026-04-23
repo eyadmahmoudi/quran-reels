@@ -280,3 +280,46 @@
   height: 1px;
   background: var(--border-subtle);
 }
+
+/* ───────────────────────────────────────────────────────────────
+   Canvas shadow utility
+   ─────────────────────────────────────────────────────────────── */
+.shadow-canvas {
+  box-shadow: var(--shadow-canvas);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Entry fade-in — sidebar slides from left, canvas fades in
+   ─────────────────────────────────────────────────────────────── */
+@keyframes editorial-slide-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes editorial-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.enter-sidebar {
+  animation: editorial-slide-in 400ms var(--ease-standard) both;
+}
+.enter-canvas {
+  animation: editorial-fade-in 400ms var(--ease-standard) 60ms both;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Skeleton shimmer (warm)
+   ─────────────────────────────────────────────────────────────── */
+@keyframes editorial-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-muted) 0%,
+    var(--bg-subtle) 50%,
+    var(--bg-muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: editorial-shimmer 1400ms var(--ease-standard) infinite;
+}

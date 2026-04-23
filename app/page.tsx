@@ -14,10 +14,10 @@ export default function QuranReelsStudio() {
         <div className="flex min-h-screen flex-1 flex-col bg-canvas text-ink-primary lg:h-full lg:min-h-0">
           <TopBar />
           <div className="flex flex-1 flex-col lg:min-h-0 lg:overflow-hidden lg:flex-row">
-            <div className="min-h-0 flex-1 lg:order-2">
+            <div className="enter-canvas min-h-0 flex-1 lg:order-2">
               <MainStage />
             </div>
-            <div className="hidden min-h-0 lg:order-1 lg:flex lg:flex-none">
+            <div className="enter-sidebar hidden min-h-0 lg:order-1 lg:flex lg:flex-none">
               <LeftSidebar />
             </div>
           </div>

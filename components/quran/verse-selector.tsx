@@ -25,7 +25,7 @@ function NumberField({
 }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
         {label}
       </span>
       <input
@@ -36,7 +36,7 @@ function NumberField({
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
-        className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 tabular-nums outline-none transition-all placeholder:text-zinc-400 focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-600"
+        className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 tabular-nums outline-none transition-all placeholder:text-zinc-400 focus:border-emerald-500/60 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
       />
     </label>
   )
@@ -90,7 +90,7 @@ export function VerseSelector() {
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+      <label className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
         Verse Range
       </label>
 
@@ -116,23 +116,23 @@ export function VerseSelector() {
       </div>
 
       {!disabled && (
-        <div className="flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-500">
+        <div className="flex items-center justify-between text-[10px] text-zinc-500">
           <span>{maxVerses} verses total</span>
-          <span className="font-medium text-emerald-600 dark:text-emerald-400">
+          <span className="font-medium text-emerald-600">
             {verseCount} selected
           </span>
         </div>
       )}
 
       {startExceedsEnd && (
-        <div className="flex items-center gap-1.5 rounded-md bg-red-500/10 px-2 py-1.5 text-[10px] text-red-600 dark:text-red-400">
+        <div className="flex items-center gap-1.5 rounded-md bg-red-500/10 px-2 py-1.5 text-[10px] text-red-600">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           Start verse must be ≤ end verse
         </div>
       )}
 
       {isAtLimit && (
-        <div className="flex items-center gap-1.5 rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-600 dark:text-amber-400">
+        <div className="flex items-center gap-1.5 rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-600">
           <AlertTriangle className="h-3 w-3 shrink-0" />
           Maximum {MAX_VERSES} verses per reel
         </div>

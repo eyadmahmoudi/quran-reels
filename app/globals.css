@@ -1,8 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-@custom-variant dark (&:is(.dark *));
-
 @font-face {
   font-family: 'Nabi';
   src: url('/fonts/Nabi.ttf') format('truetype');
@@ -19,61 +17,112 @@
   font-display: swap;
 }
 
+/* ───────────────────────────────────────────────────────────────
+   Design tokens — editorial studio palette (light mode only)
+   ─────────────────────────────────────────────────────────────── */
 :root {
-  /* slate-50 base, emerald primary, amber accent (mirrors .dark) */
-  --background: oklch(0.985 0.002 247);            /* slate-50 */
-  --foreground: oklch(0.21 0.03 264);              /* zinc-900 */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.03 264);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.03 264);
-  --primary: oklch(0.596 0.145 163.225);           /* emerald-600 */
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.96 0.004 260);              /* zinc-100 */
-  --secondary-foreground: oklch(0.21 0.03 264);
-  --muted: oklch(0.96 0.004 260);
-  --muted-foreground: oklch(0.52 0.02 260);        /* zinc-500 */
-  --accent: oklch(0.765 0.165 73.3);               /* amber-500 */
-  --accent-foreground: oklch(0.21 0.03 264);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.92 0.006 260);                 /* zinc-200 */
-  --input: oklch(0.92 0.006 260);
-  --ring: oklch(0.72 0.145 163.225);               /* emerald-400 */
-  --radius: 0.75rem;
-  --gold: oklch(0.765 0.165 73.3);
-  --gold-dark: oklch(0.596 0.145 163.225);
+  /* Backgrounds */
+  --bg-canvas: #FAF7F0;
+  --bg-surface: #FFFFFF;
+  --bg-subtle: #F3EFE4;
+  --bg-muted: #EAE4D3;
+
+  /* Ink (text) */
+  --ink-primary: #1A1714;
+  --ink-secondary: #4A433B;
+  --ink-tertiary: #8A8175;
+  --ink-disabled: #B8AFA1;
+
+  /* Accent — deep forest green */
+  --accent-primary: #1F4E3D;
+  --accent-hover: #163A2D;
+  --accent-soft: #E8EFEA;
+  --accent-ring: rgba(31, 78, 61, 0.18);
+
+  /* Gold — for Arabic accents / ornamentation */
+  --gold: #B8893A;
+  --gold-soft: #F4EBD5;
+
+  /* Borders */
+  --border-subtle: #E8E1D0;
+  --border-default: #D4CBB5;
+  --border-strong: #8A8175;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(26, 23, 20, 0.04), 0 1px 3px rgba(26, 23, 20, 0.06);
+  --shadow-md: 0 4px 12px rgba(26, 23, 20, 0.06), 0 2px 4px rgba(26, 23, 20, 0.04);
+  --shadow-lg: 0 12px 32px rgba(26, 23, 20, 0.08), 0 4px 8px rgba(26, 23, 20, 0.04);
+  --shadow-canvas: 0 24px 64px rgba(26, 23, 20, 0.12), 0 8px 16px rgba(26, 23, 20, 0.06);
+
+  /* Transition */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-standard: 160ms;
+
+  /* ── Shadcn compatibility aliases ─────────────────────────
+     Existing shadcn primitives reference --background, --primary,
+     etc. Map them to the new editorial tokens so the UI still
+     resolves during Phase 1 before we rebuild primitives. */
+  --background: var(--bg-canvas);
+  --foreground: var(--ink-primary);
+  --card: var(--bg-surface);
+  --card-foreground: var(--ink-primary);
+  --popover: var(--bg-surface);
+  --popover-foreground: var(--ink-primary);
+  --primary: var(--accent-primary);
+  --primary-foreground: #FFFFFF;
+  --secondary: var(--bg-subtle);
+  --secondary-foreground: var(--ink-secondary);
+  --muted: var(--bg-subtle);
+  --muted-foreground: var(--ink-tertiary);
+  --accent: var(--accent-soft);
+  --accent-foreground: var(--accent-primary);
+  --destructive: #B42318;
+  --destructive-foreground: #FFFFFF;
+  --border: var(--border-subtle);
+  --input: var(--border-subtle);
+  --ring: var(--accent-primary);
+  --radius: 0.625rem;
+
+  /* Preserved — referenced by some components */
+  --gold-dark: var(--accent-primary);
 }
 
-.dark {
-  /* zinc-950 base, emerald primary, amber secondary (gold) */
-  --background: oklch(0.145 0.004 285.823);        /* zinc-950 */
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);               /* zinc-900 */
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.596 0.145 163.225);           /* emerald-600 */
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.274 0.006 286.033);         /* zinc-800 */
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067); /* zinc-400 */
-  --accent: oklch(0.765 0.165 73.3);               /* amber-500 (gold) */
-  --accent-foreground: oklch(0.145 0.004 285.823);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.274 0.006 286.033);            /* zinc-800 */
-  --input: oklch(0.274 0.006 286.033);
-  --ring: oklch(0.72 0.145 163.225);               /* emerald-400 */
-}
-
+/* ───────────────────────────────────────────────────────────────
+   Tailwind v4 theme — exposes tokens as utility classes
+   (bg-canvas, text-ink-primary, border-border-subtle, etc.)
+   ─────────────────────────────────────────────────────────────── */
 @theme inline {
-  --font-sans: var(--font-noto), 'Noto Sans', system-ui, sans-serif;
-  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --font-sans: var(--font-inter), 'Inter', system-ui, sans-serif;
+  --font-display: var(--font-fraunces), 'Fraunces', Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), 'JetBrains Mono', 'Geist Mono', monospace;
   --font-arabic: var(--font-amiri), 'Amiri', serif;
-  --font-uthmani: 'UthmanicHafs', 'Amiri Quran', 'Scheherazade New', serif;
+  --font-arabic-ui: var(--font-reem-kufi), 'Reem Kufi', sans-serif;
+  --font-uthmani: 'UthmanicHafs', var(--font-amiri), 'Amiri', serif;
   --font-nabi: 'Nabi', sans-serif;
+
+  /* Editorial tokens exposed as color utilities */
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-subtle: var(--bg-subtle);
+  --color-muted-bg: var(--bg-muted);
+
+  --color-ink-primary: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-tertiary: var(--ink-tertiary);
+  --color-ink-disabled: var(--ink-disabled);
+
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-default: var(--border-default);
+  --color-border-strong: var(--border-strong);
+
+  /* Shadcn aliases (kept for primitives that reference them) */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -93,26 +142,25 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  --shadow-canvas: var(--shadow-canvas);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: var(--border-subtle);
+    outline-color: var(--accent-ring);
   }
   body {
-    @apply bg-background text-foreground;
+    background: var(--bg-canvas);
+    color: var(--ink-primary);
+    font-family: var(--font-inter), 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 }
 
@@ -120,83 +168,65 @@
   .font-arabic {
     font-family: var(--font-amiri), 'Amiri', serif;
   }
-
-  /* STRICT UTILITY CLASSES ADDED HERE */
+  .font-arabic-ui {
+    font-family: var(--font-reem-kufi), 'Reem Kufi', sans-serif;
+  }
+  .font-display {
+    font-family: var(--font-fraunces), 'Fraunces', Georgia, serif;
+  }
   .font-nabi {
     font-family: 'Nabi', sans-serif !important;
   }
-
   .font-uthmani {
-    font-family: 'UthmanicHafs', serif !important;
+    font-family: 'UthmanicHafs', var(--font-amiri), serif !important;
     font-feature-settings: "liga" 1, "calt" 1;
     text-rendering: optimizeLegibility;
   }
+  .text-caption {
+    font-size: 11px;
+    line-height: 16px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
-/* Sidebar scrollbar — subtle zinc tone */
+/* ───────────────────────────────────────────────────────────────
+   Sidebar scrollbar — thin, warm
+   ─────────────────────────────────────────────────────────────── */
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
 .sidebar-scroll::-webkit-scrollbar { width: 6px; }
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
 .sidebar-scroll::-webkit-scrollbar-thumb {
-  background: rgba(161, 161, 170, 0.4);
+  background: var(--border-default);
   border-radius: 9999px;
 }
 .sidebar-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(113, 113, 122, 0.6);
-}
-.dark .sidebar-scroll::-webkit-scrollbar-thumb {
-  background: rgba(63, 63, 70, 0.5);
-}
-.dark .sidebar-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(82, 82, 91, 0.7);
+  background: var(--border-strong);
 }
 
-/* Emerald glow utility for the MainStage preview frame */
+/* ───────────────────────────────────────────────────────────────
+   Preview frame shadow (replaces the emerald stage-glow)
+   ─────────────────────────────────────────────────────────────── */
 .stage-glow {
-  box-shadow:
-    0 25px 50px -12px rgba(6, 78, 59, 0.35),
-    0 0 0 1px rgba(16, 185, 129, 0.08),
-    0 0 80px -20px rgba(16, 185, 129, 0.25);
+  box-shadow: var(--shadow-canvas);
 }
 
-/* ── Islamic geometric pattern background ──────────────────────────────── */
-.geo-pattern {
-  background-image:
-    radial-gradient(circle at 25% 25%, rgba(201,168,76,0.04) 0%, transparent 50%),
-    radial-gradient(circle at 75% 75%, rgba(201,168,76,0.03) 0%, transparent 50%),
-    repeating-linear-gradient(
-      45deg,
-      transparent,
-      transparent 30px,
-      rgba(201,168,76,0.015) 30px,
-      rgba(201,168,76,0.015) 31px
-    ),
-    repeating-linear-gradient(
-      -45deg,
-      transparent,
-      transparent 30px,
-      rgba(201,168,76,0.015) 30px,
-      rgba(201,168,76,0.015) 31px
-    );
-}
-
-/* ── Gold text (static — no animation) ─────────────────────────────────── */
-.gold-shimmer-text {
-  background: linear-gradient(90deg, #b8922a, #f0d080, #c9a84c);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* ── Quran card ─────────────────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────
+   Quran card — warm parchment surface
+   ─────────────────────────────────────────────────────────────── */
 .quran-card {
   position: relative;
-  background: linear-gradient(145deg,
-    rgba(18,22,36,0.95) 0%,
-    rgba(14,18,30,0.98) 100%
-  );
-  border: 1px solid rgba(201,168,76,0.18);
-  border-radius: 16px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 
@@ -207,33 +237,37 @@
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(201,168,76,0.5), transparent);
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0.4;
 }
 
-/* ── Light mode card override ───────────────────────────────────────────── */
-:root:not(.dark) .quran-card {
-  background: linear-gradient(145deg,
-    rgba(255,252,245,0.97) 0%,
-    rgba(250,244,232,0.99) 100%
-  );
-  border-color: rgba(160,120,48,0.22);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-}
-:root:not(.dark) .geo-pattern {
+/* ───────────────────────────────────────────────────────────────
+   Subtle geometric wash for the canvas area
+   ─────────────────────────────────────────────────────────────── */
+.geo-pattern {
   background-image:
-    radial-gradient(circle at 25% 25%, rgba(201,168,76,0.06) 0%, transparent 50%),
-    radial-gradient(circle at 75% 75%, rgba(201,168,76,0.05) 0%, transparent 50%),
+    radial-gradient(circle at 25% 25%, rgba(184, 137, 58, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, rgba(184, 137, 58, 0.035) 0%, transparent 50%),
     repeating-linear-gradient(
       45deg, transparent, transparent 30px,
-      rgba(160,120,48,0.04) 30px, rgba(160,120,48,0.04) 31px
+      rgba(26, 23, 20, 0.018) 30px, rgba(26, 23, 20, 0.018) 31px
     ),
     repeating-linear-gradient(
       -45deg, transparent, transparent 30px,
-      rgba(160,120,48,0.04) 30px, rgba(160,120,48,0.04) 31px
+      rgba(26, 23, 20, 0.018) 30px, rgba(26, 23, 20, 0.018) 31px
     );
 }
 
-/* ── Ornamental divider ─────────────────────────────────────────────────── */
+/* ───────────────────────────────────────────────────────────────
+   Gold text (static)
+   ─────────────────────────────────────────────────────────────── */
+.gold-shimmer-text {
+  color: var(--gold);
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Ornamental divider (for sidebar section breaks)
+   ─────────────────────────────────────────────────────────────── */
 .ornament-divider {
   display: flex;
   align-items: center;
@@ -244,5 +278,5 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(201,168,76,0.4), transparent);
+  background: var(--border-subtle);
 }

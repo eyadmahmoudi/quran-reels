@@ -53,12 +53,12 @@ export function ReciterSelector() {
               'focus-visible:ring-2 focus-visible:ring-emerald-500/40',
               isSelected
                 ? 'border-emerald-500/50 bg-emerald-500/10 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.15)]'
-                : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700 dark:hover:bg-zinc-900',
+                : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50',
             )}
           >
             {isSelected && (
               <span
-                className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r bg-emerald-500 dark:bg-emerald-400"
+                className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r bg-emerald-500"
                 aria-hidden
               />
             )}
@@ -68,8 +68,8 @@ export function ReciterSelector() {
                 className={cn(
                   'truncate text-sm font-medium leading-tight',
                   isSelected
-                    ? 'text-emerald-700 dark:text-emerald-300'
-                    : 'text-zinc-800 dark:text-zinc-200',
+                    ? 'text-emerald-700'
+                    : 'text-zinc-800',
                 )}
               >
                 {reciter.name}
@@ -78,8 +78,8 @@ export function ReciterSelector() {
                 className={cn(
                   'mt-0.5 truncate font-arabic text-[11px] leading-tight',
                   isSelected
-                    ? 'text-emerald-600/70 dark:text-emerald-400/60'
-                    : 'text-zinc-500 dark:text-zinc-500',
+                    ? 'text-emerald-600/70'
+                    : 'text-zinc-500',
                 )}
                 style={{ direction: 'rtl' }}
               >
@@ -93,8 +93,8 @@ export function ReciterSelector() {
               className={cn(
                 'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-colors',
                 isPlaying
-                  ? 'border-amber-500/50 bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                  : 'border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-emerald-500/40 hover:text-emerald-600 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:text-emerald-400',
+                  ? 'border-amber-500/50 bg-amber-500/15 text-amber-600'
+                  : 'border-zinc-200 bg-zinc-50 text-zinc-500 hover:border-emerald-500/40 hover:text-emerald-600',
               )}
               title="Preview reciter"
             >

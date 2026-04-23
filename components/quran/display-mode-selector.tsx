@@ -36,14 +36,14 @@ export function DisplayModeSelector() {
               'group relative flex flex-col items-center gap-2 rounded-lg border p-3 text-left transition-all',
               active
                 ? 'border-emerald-500/50 bg-emerald-500/10'
-                : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700 dark:hover:bg-zinc-900',
+                : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50',
             )}
           >
             {/* Mini preview */}
             <div
               className={cn(
                 'relative flex aspect-[9/16] max-h-20 w-full items-center justify-center overflow-hidden rounded-sm',
-                'bg-gradient-to-b from-zinc-700 to-zinc-950 dark:from-zinc-800 dark:to-zinc-950',
+                'bg-gradient-to-b from-zinc-700 to-zinc-950',
               )}
             >
               {key === 'minimal' ? (
@@ -84,8 +84,8 @@ export function DisplayModeSelector() {
                 className={cn(
                   'h-3.5 w-3.5 shrink-0',
                   active
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-zinc-500 dark:text-zinc-500',
+                    ? 'text-emerald-600'
+                    : 'text-zinc-500',
                 )}
               />
               <div className="min-w-0">
@@ -93,13 +93,13 @@ export function DisplayModeSelector() {
                   className={cn(
                     'text-xs font-medium leading-tight',
                     active
-                      ? 'text-emerald-700 dark:text-emerald-300'
-                      : 'text-zinc-800 dark:text-zinc-200',
+                      ? 'text-emerald-700'
+                      : 'text-zinc-800',
                   )}
                 >
                   {label}
                 </p>
-                <p className="truncate text-[9px] text-zinc-500 dark:text-zinc-500">{hint}</p>
+                <p className="truncate text-[9px] text-zinc-500">{hint}</p>
               </div>
             </div>
           </button>

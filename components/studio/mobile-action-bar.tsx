@@ -31,18 +31,18 @@ export function MobileActionBar() {
     <div
       className={cn(
         'fixed bottom-0 left-0 right-0 z-50 border-t p-3 backdrop-blur-md lg:hidden',
-        'border-zinc-200 bg-background/85 dark:border-zinc-800 dark:bg-background/80',
+        'border-zinc-200 bg-background/85',
       )}
       style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
     >
       {isGenerating ? (
         <div className="flex items-center gap-2">
-          <div className="relative h-11 flex-1 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="relative h-11 flex-1 overflow-hidden rounded-lg border border-zinc-200 bg-white">
             <div
               className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-600 to-emerald-400 transition-[width] duration-500"
               style={{ width: `${Math.max(progress, 2)}%` }}
             />
-            <div className="relative flex h-full items-center justify-center gap-2 text-xs font-medium text-zinc-900 dark:text-zinc-100">
+            <div className="relative flex h-full items-center justify-center gap-2 text-xs font-medium text-zinc-900">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Rendering · {Math.round(progress)}%
             </div>
@@ -51,7 +51,7 @@ export function MobileActionBar() {
             type="button"
             onClick={cancelGeneration}
             aria-label="Cancel"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 transition-colors hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-500"
           >
             <X className="h-4 w-4" />
           </button>
@@ -65,7 +65,7 @@ export function MobileActionBar() {
             'flex h-11 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold transition-all duration-200',
             canGenerate
               ? 'bg-emerald-600 text-white shadow-[0_2px_14px_rgba(16,185,129,0.35)] hover:bg-emerald-500 active:scale-[0.99]'
-              : 'cursor-not-allowed border border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-600',
+              : 'cursor-not-allowed border border-zinc-200 bg-zinc-100 text-zinc-400',
           )}
         >
           <Download className="h-4 w-4" />

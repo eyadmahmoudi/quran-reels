@@ -51,9 +51,7 @@ export function SurahSelector() {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-        Surah
-      </label>
+      <label className="text-caption text-ink-tertiary">Surah</label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
@@ -62,47 +60,50 @@ export function SurahSelector() {
             aria-expanded={open}
             disabled={loading}
             className={cn(
-              'group relative flex h-11 w-full items-center justify-between gap-2 rounded-lg border px-3 text-left text-sm transition-all',
-              'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50',
-              '',
-              'focus:outline-none focus:ring-2 focus:ring-emerald-500/30',
+              'group relative flex h-10 w-full items-center justify-between gap-2 rounded-[10px] border border-border-subtle bg-surface px-3 text-left text-[14px] transition-all duration-150 ease-out',
+              'hover:border-border-default',
+              'focus-visible:border-accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ring)]',
               'disabled:cursor-not-allowed disabled:opacity-60',
             )}
           >
             {loading ? (
-              <span className="text-zinc-500">Loading surahs…</span>
+              <span className="text-ink-tertiary">Loading surahs…</span>
             ) : config.surah ? (
               <span className="flex min-w-0 items-center gap-2.5">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-500/15 text-[11px] font-semibold text-emerald-700 tabular-nums">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] bg-accent-soft text-[11px] font-semibold text-accent-primary tabular-nums">
                   {config.surah.id}
                 </span>
                 <span className="flex min-w-0 flex-col leading-tight">
-                  <span className="truncate text-zinc-900">{config.surah.name_simple}</span>
-                  <span
-                    className="font-arabic text-[13px] text-emerald-600/80"
-                    style={{ direction: 'rtl' }}
-                  >
-                    {config.surah.name_arabic}
+                  <span className="truncate text-ink-primary">
+                    {config.surah.name_simple}
                   </span>
+                </span>
+                <span
+                  className="font-arabic-ui text-[13px] text-gold"
+                  style={{ direction: 'rtl' }}
+                >
+                  {config.surah.name_arabic}
                 </span>
               </span>
             ) : (
-              <span className="flex items-center gap-2 text-zinc-500">
+              <span className="flex items-center gap-2 text-ink-tertiary">
                 <Book className="h-4 w-4" />
                 Select a surah
               </span>
             )}
-            <ChevronsUpDown className="h-4 w-4 shrink-0 text-zinc-500 transition-colors group-hover:text-zinc-700" />
+            <ChevronsUpDown className="h-4 w-4 shrink-0 text-ink-tertiary transition-colors group-hover:text-ink-secondary" />
           </button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-[340px] border-zinc-200 bg-white p-0 text-zinc-900"
+          className="w-[320px] rounded-[10px] border border-border-subtle bg-surface p-0 text-ink-primary shadow-lg"
           align="start"
         >
-          <Command className="bg-white">
+          <Command className="bg-surface">
             <CommandInput placeholder="Search surah…" className="h-10" />
-            <CommandList className="bg-white">
-              <CommandEmpty>No surah found.</CommandEmpty>
+            <CommandList className="bg-surface">
+              <CommandEmpty className="py-6 text-center text-[13px] text-ink-tertiary">
+                No surah found.
+              </CommandEmpty>
               <CommandGroup className="max-h-[300px] overflow-y-auto">
                 {surahs.map((surah) => {
                   const isSelected = config.surah?.id === surah.id
@@ -111,32 +112,34 @@ export function SurahSelector() {
                       key={surah.id}
                       value={`${surah.name_simple} ${surah.name_arabic} ${surah.id}`}
                       onSelect={() => handleSelect(surah)}
-                      className="group flex items-center gap-3 py-2.5 data-[selected=true]:bg-emerald-500/10"
+                      className="group flex items-center gap-3 rounded-[6px] py-2 data-[selected=true]:bg-subtle"
                     >
                       <span
                         className={cn(
-                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold tabular-nums transition-colors',
+                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[11px] font-semibold tabular-nums transition-colors',
                           isSelected
-                            ? 'bg-emerald-500/20 text-emerald-700'
-                            : 'bg-zinc-100 text-zinc-500 group-data-[selected=true]:bg-emerald-500/15 group-data-[selected=true]:text-emerald-700',
+                            ? 'bg-accent-soft text-accent-primary'
+                            : 'bg-subtle text-ink-tertiary group-data-[selected=true]:bg-accent-soft group-data-[selected=true]:text-accent-primary',
                         )}
                       >
                         {surah.id}
                       </span>
                       <div className="flex flex-1 flex-col leading-tight">
-                        <span className="text-sm text-zinc-900">{surah.name_simple}</span>
+                        <span className="text-[14px] text-ink-primary">
+                          {surah.name_simple}
+                        </span>
                         <span
-                          className="font-arabic text-[13px] text-zinc-500"
+                          className="font-arabic-ui text-[13px] text-ink-tertiary"
                           style={{ direction: 'rtl' }}
                         >
                           {surah.name_arabic}
                         </span>
                       </div>
-                      <span className="text-[10px] text-zinc-400">
+                      <span className="text-[11px] text-ink-tertiary tabular-nums">
                         {surah.verses_count} vs
                       </span>
                       {isSelected && (
-                        <Check className="h-4 w-4 text-emerald-600" />
+                        <Check className="h-4 w-4 text-accent-primary" />
                       )}
                     </CommandItem>
                   )

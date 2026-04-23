@@ -27,16 +27,15 @@ export function TranslationSettings() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white px-3 py-2.5">
-        <div>
-          <p className="text-sm font-medium text-zinc-800">Show translation</p>
-          <p className="text-[10px] text-zinc-500">Render under Arabic verse</p>
+      <div className="flex items-center justify-between rounded-[10px] border border-border-subtle bg-surface px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-ink-primary">Show translation</p>
+          <p className="mt-0.5 text-[11px] text-ink-tertiary">Render under Arabic verse</p>
         </div>
         <Switch
           id="translation-toggle"
           checked={config.showTranslation}
           onCheckedChange={handleToggle}
-          className="data-[state=checked]:bg-emerald-600"
         />
       </div>
 
@@ -45,31 +44,27 @@ export function TranslationSettings() {
           value={config.translationId?.toString() || ''}
           onValueChange={handleTranslationChange}
         >
-          <SelectTrigger className="h-10 w-full rounded-lg border-zinc-200 bg-white text-sm text-zinc-900 hover:bg-zinc-50 focus:ring-emerald-500/30">
+          <SelectTrigger className="w-full">
             <SelectValue placeholder="Select translation">
               {selectedTranslation && (
                 <span className="truncate">
                   {selectedTranslation.name}{' '}
-                  <span className="text-zinc-500">({selectedTranslation.language})</span>
+                  <span className="text-ink-tertiary">({selectedTranslation.language})</span>
                 </span>
               )}
             </SelectValue>
           </SelectTrigger>
-          <SelectContent className="border-zinc-200 bg-white text-zinc-900">
+          <SelectContent>
             {languages.map((lang) => {
               const translations = TRANSLATION_RESOURCES.filter((t) => t.language === lang)
               if (translations.length === 0) return null
               return (
                 <SelectGroup key={lang}>
-                  <SelectLabel className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  <SelectLabel className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-tertiary">
                     {lang}
                   </SelectLabel>
                   {translations.map((translation) => (
-                    <SelectItem
-                      key={translation.id}
-                      value={translation.id.toString()}
-                      className="focus:bg-emerald-500/10 focus:text-emerald-700"
-                    >
+                    <SelectItem key={translation.id} value={translation.id.toString()}>
                       {translation.name}
                     </SelectItem>
                   ))}

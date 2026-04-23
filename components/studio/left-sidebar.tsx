@@ -2,12 +2,12 @@
 
 import type { ReactNode } from 'react'
 import {
-  BookMarked,
+  BookOpen,
   Image as ImageIcon,
   Languages,
   LayoutTemplate,
   Mic,
-  Tag,
+  AtSign,
 } from 'lucide-react'
 import { SurahSelector } from '@/components/quran/surah-selector'
 import { VerseSelector } from '@/components/quran/verse-selector'
@@ -26,17 +26,17 @@ interface SidebarSectionProps {
 
 function SidebarSection({ title, icon, description, children }: SidebarSectionProps) {
   return (
-    <section className="border-b border-zinc-200 px-4 py-5 last:border-b-0">
-      <header className="mb-4 flex items-center gap-2">
-        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600">
+    <section className="px-5 py-5">
+      <header className="mb-4 flex items-start gap-3">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-subtle text-ink-tertiary">
           {icon}
         </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.15em] text-zinc-700">
-            {title}
-          </h2>
+        <div className="min-w-0 flex-1 pt-0.5">
+          <h2 className="text-caption text-ink-primary">{title}</h2>
           {description && (
-            <p className="mt-0.5 text-[10px] text-zinc-500">{description}</p>
+            <p className="mt-0.5 text-[12px] leading-tight text-ink-tertiary">
+              {description}
+            </p>
           )}
         </div>
       </header>
@@ -45,64 +45,90 @@ function SidebarSection({ title, icon, description, children }: SidebarSectionPr
   )
 }
 
+function OrnamentDivider() {
+  return (
+    <div className="flex items-center gap-3 px-5" aria-hidden="true">
+      <div className="h-px flex-1 bg-border-subtle" />
+      <span className="text-[12px] leading-none text-gold">۞</span>
+      <div className="h-px flex-1 bg-border-subtle" />
+    </div>
+  )
+}
+
+function Hairline() {
+  return <div className="mx-5 h-px bg-border-subtle" aria-hidden="true" />
+}
+
 export function LeftSidebar() {
   return (
-    <aside className="flex w-full min-h-0 shrink-0 flex-col border-b border-zinc-200 bg-white lg:w-[350px] lg:border-b-0 lg:border-r">
-      <div className="shrink-0 border-b border-zinc-200 px-4 py-3">
-        <h1 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
-          Studio Controls
-        </h1>
-        <p className="mt-0.5 text-[10px] text-zinc-400">
+    <aside className="flex w-full min-h-0 shrink-0 flex-col border-b border-border-subtle bg-surface lg:w-[340px] lg:border-b-0 lg:border-r">
+      {/* ── Sidebar heading ─────────────────────────────────── */}
+      <div className="shrink-0 px-5 pt-5 pb-4">
+        <h1 className="text-caption text-ink-primary">Studio Controls</h1>
+        <p className="mt-1 text-[13px] leading-snug text-ink-tertiary">
           Configure, preview &amp; export your Quran reel
         </p>
       </div>
+      <OrnamentDivider />
 
-      {/* Independent scroll. Extra bottom padding on mobile to clear the sticky action bar. */}
-      <div className="sidebar-scroll flex-1 overflow-y-auto pb-24 lg:pb-6">
+      {/* ── Scrollable sections ─────────────────────────────── */}
+      <div className="sidebar-scroll flex-1 overflow-y-auto pb-24 lg:pb-4">
         <SidebarSection
           title="Source"
-          icon={<BookMarked className="h-3.5 w-3.5" strokeWidth={2.25} />}
+          icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />}
           description="Select Surah & verse range"
         >
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             <SurahSelector />
             <VerseSelector />
           </div>
         </SidebarSection>
 
+        <Hairline />
+
         <SidebarSection
           title="Reciter"
-          icon={<Mic className="h-3.5 w-3.5" strokeWidth={2.25} />}
+          icon={<Mic className="h-4 w-4" strokeWidth={1.75} />}
           description="Pick a voice"
         >
           <ReciterSelector />
         </SidebarSection>
 
+        <OrnamentDivider />
+
         <SidebarSection
           title="Background"
-          icon={<ImageIcon className="h-3.5 w-3.5" strokeWidth={2.25} />}
+          icon={<ImageIcon className="h-4 w-4" strokeWidth={1.75} />}
           description="Upload or choose a preset"
         >
           <BackgroundSelector />
         </SidebarSection>
 
+        <Hairline />
+
         <SidebarSection
           title="Translation"
-          icon={<Languages className="h-3.5 w-3.5" strokeWidth={2.25} />}
+          icon={<Languages className="h-4 w-4" strokeWidth={1.75} />}
+          description="Show translation under the verse"
         >
           <TranslationSettings />
         </SidebarSection>
 
+        <Hairline />
+
         <SidebarSection
           title="Display"
-          icon={<LayoutTemplate className="h-3.5 w-3.5" strokeWidth={2.25} />}
+          icon={<LayoutTemplate className="h-4 w-4" strokeWidth={1.75} />}
+          description="Choose a layout style"
         >
           <DisplayModeSelector />
         </SidebarSection>
 
+        <OrnamentDivider />
+
         <SidebarSection
           title="Watermark"
-          icon={<Tag className="h-3.5 w-3.5" strokeWidth={2.25} />}
+          icon={<AtSign className="h-4 w-4" strokeWidth={1.75} />}
           description="Add your handle to the preview"
         >
           <WatermarkInput />

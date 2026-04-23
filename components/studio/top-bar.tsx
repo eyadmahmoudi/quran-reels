@@ -4,6 +4,7 @@ import { Download, Loader2, X } from 'lucide-react'
 import { useReel } from '@/lib/reel-context'
 import { useGenerator } from './generator-context'
 import { cn } from '@/lib/utils'
+import { MobileSidebarSheet } from './mobile-sidebar-sheet'
 
 function StarMark({ className }: { className?: string }) {
   return (
@@ -67,6 +68,7 @@ export function TopBar() {
 
       {/* ── Right actions ──────────────────────────────────────── */}
       <div className="flex items-center gap-2">
+        <MobileSidebarSheet />
         {isGenerating ? (
           <div className="hidden items-center gap-2 lg:flex">
             <div className="relative h-10 w-60 overflow-hidden rounded-[10px] border border-border-subtle bg-surface">

@@ -11,16 +11,13 @@ export default function QuranReelsStudio() {
   return (
     <ReelProvider>
       <GeneratorProvider>
-        <div className="flex min-h-screen flex-1 flex-col bg-background text-foreground lg:h-full lg:min-h-0">
+        <div className="flex min-h-screen flex-1 flex-col bg-canvas text-ink-primary lg:h-full lg:min-h-0">
           <TopBar />
-          {/* Stack vertically on mobile, horizontal on desktop.
-              MainStage is first in the DOM (so mobile users see the preview above the controls)
-              but reordered to the right on desktop via `order` so the sidebar sits on the left. */}
           <div className="flex flex-1 flex-col lg:min-h-0 lg:overflow-hidden lg:flex-row">
-            <div className="order-1 min-h-0 lg:order-2 lg:flex-1">
+            <div className="min-h-0 flex-1 lg:order-2">
               <MainStage />
             </div>
-            <div className="order-2 flex min-h-0 flex-1 lg:order-1 lg:flex-none">
+            <div className="hidden min-h-0 lg:order-1 lg:flex lg:flex-none">
               <LeftSidebar />
             </div>
           </div>

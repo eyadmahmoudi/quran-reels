@@ -97,6 +97,8 @@ export function SurahSelector() {
         <PopoverContent
           className="w-[320px] rounded-[10px] border border-border-subtle bg-surface p-0 text-ink-primary shadow-lg"
           align="start"
+          onWheel={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
         >
           <Command className="bg-surface">
             <CommandInput placeholder="Search surah…" className="h-10" />

@@ -8,7 +8,6 @@ import type { Surah } from "@/lib/quran-types";
 import { fetchSurahs } from "@/lib/quran-api";
 import {
   CommandDialog,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -24,12 +23,10 @@ export function AyahSearch() {
 
   const { setConfig } = useReel();
 
-  // Load surahs in the background so we can match the search result to the full Surah object
   useEffect(() => {
     fetchSurahs().then(setSurahs);
   }, []);
 
-  // Debounce the search so we don't spam the API on every single keystroke
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (query.trim().length > 2) {
@@ -40,26 +37,23 @@ export function AyahSearch() {
       } else {
         setResults([]);
       }
-    }, 500); // wait 500ms after typing stops
+    }, 500);
 
     return () => clearTimeout(delayDebounceFn);
   }, [query]);
 
   const handleSelect = (verseKey: string) => {
-    // verseKey looks like "2:255" (Surah 2, Verse 255)
     const [surahIdStr, verseIdStr] = verseKey.split(":");
     const surahId = parseInt(surahIdStr, 10);
     const verseId = parseInt(verseIdStr, 10);
 
-    // Find the matching Surah object
     const selectedSurah = surahs.find((s) => s.id === surahId);
 
     if (selectedSurah) {
-      // Magic happens here: Auto-fill the config!
       setConfig({
         surah: selectedSurah,
         startVerse: verseId,
-        endVerse: verseId, // Default to just this one verse
+        endVerse: verseId,
       });
       setOpen(false);
       setQuery("");
@@ -89,38 +83,37 @@ export function AyahSearch() {
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           )}
+          
           {!loading && query.length > 2 && results.length === 0 && (
-            <CommandEmpty>No verses found for "{query}"</CommandEmpty>
+            <div className="py-6 text-center text-[13px] text-ink-tertiary">
+              No verses found for "{query}"
+            </div>
           )}
-
+          
           {!loading && results.length > 0 && (
-            <CommandGroup heading="Search Results">
+            <CommandGroup heading="Search Results" forceMount>
               {results.map((result) => {
-                const [surahId, verseId] = result.verse_key.split(":");
-                const surahName =
-                  surahs.find((s) => s.id === parseInt(surahId))?.name_arabic ||
-                  `Surah ${surahId}`;
+                const [surahId, verseId] = result.verse_key.split(':')
+                const surahName = surahs.find(s => s.id === parseInt(surahId))?.name_arabic || `Surah ${surahId}`
 
                 return (
                   <CommandItem
                     key={result.verse_key}
-                    // This is the silver bullet. By putting 'query' in the value, the UI filter
-                    // sees a 100% perfect match every single time and allows the verse to show!
-                    value={`${query} ${result.verse_key}`}
+                    value={result.verse_key}
+                    forceMount 
                     onSelect={() => handleSelect(result.verse_key)}
                     className="flex cursor-pointer flex-col items-end gap-1 border-b border-border-subtle/50 px-4 py-3 last:border-0"
                   >
-                    <span
+                    <span 
                       className="font-arabic-ui text-right text-[16px] leading-relaxed text-ink-primary"
                       dir="rtl"
-                      // The API returns HTML tags <b> around the matched word, so we render it safely
                       dangerouslySetInnerHTML={{ __html: result.text }}
                     />
                     <span className="text-[12px] text-ink-tertiary">
                       {surahName} • Ayah {verseId}
                     </span>
                   </CommandItem>
-                );
+                )
               })}
             </CommandGroup>
           )}

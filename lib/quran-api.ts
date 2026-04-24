@@ -178,32 +178,19 @@ export function calculateTotalDuration(
 
 export async function searchAyahs(query: string) {
   if (!query || query.trim() === '') return [];
-
   try {
-    const cleanQuery = query.trim();
-    if (cleanQuery.length === 0) return [];
-
-    // DO NOT strip diacritics - send Arabic as-is, the API handles it
     const res = await fetch(
-      `https://api.quran.com/api/v4/search?q=${encodeURIComponent(cleanQuery)}&size=20&language=ar`,
-      {
-        headers: {
-          'Accept': 'application/json',
-        }
-      }
+      `https://api.alquran.cloud/v1/search/${encodeURIComponent(query.trim())}/all/ar`
     );
-
-    if (!res.ok) throw new Error(`Search failed: ${res.status}`);
+    if (!res.ok) throw new Error('Search failed');
     const data = await res.json();
-
-    if (!data.search?.results) return [];
-
-    return data.search.results.map((result: any) => ({
-      verse_key: result.verse_key,
-      text: result.text,
+    const matches = data?.data?.matches || [];
+    return matches.map((r: any) => ({
+      verse_key: `${r.surah.number}:${r.numberInSurah}`,
+      text: r.text,
     }));
-  } catch (error) {
-    console.error('Error searching ayahs:', error);
+  } catch (err) {
+    console.error('Search error:', err);
     return [];
   }
 }

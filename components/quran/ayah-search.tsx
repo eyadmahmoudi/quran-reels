@@ -1,11 +1,11 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { Search, Loader2 } from 'lucide-react'
-import { useReel } from '@/lib/reel-context'
-import { searchAyahs } from '@/lib/quran-api'
-import type { Surah } from '@/lib/quran-types'
-import { fetchSurahs } from '@/lib/quran-api'
+import { useState, useEffect } from "react";
+import { Search, Loader2 } from "lucide-react";
+import { useReel } from "@/lib/reel-context";
+import { searchAyahs } from "@/lib/quran-api";
+import type { Surah } from "@/lib/quran-types";
+import { fetchSurahs } from "@/lib/quran-api";
 import {
   CommandDialog,
   CommandEmpty,
@@ -13,58 +13,58 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@/components/ui/command'
+} from "@/components/ui/command";
 
 export function AyahSearch() {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const [surahs, setSurahs] = useState<Surah[]>([])
-  
-  const { setConfig } = useReel()
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [surahs, setSurahs] = useState<Surah[]>([]);
+
+  const { setConfig } = useReel();
 
   // Load surahs in the background so we can match the search result to the full Surah object
   useEffect(() => {
-    fetchSurahs().then(setSurahs)
-  }, [])
+    fetchSurahs().then(setSurahs);
+  }, []);
 
   // Debounce the search so we don't spam the API on every single keystroke
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (query.trim().length > 2) {
-        setLoading(true)
-        const searchResults = await searchAyahs(query)
-        setResults(searchResults)
-        setLoading(false)
+        setLoading(true);
+        const searchResults = await searchAyahs(query);
+        setResults(searchResults);
+        setLoading(false);
       } else {
-        setResults([])
+        setResults([]);
       }
-    }, 500) // wait 500ms after typing stops
+    }, 500); // wait 500ms after typing stops
 
-    return () => clearTimeout(delayDebounceFn)
-  }, [query])
+    return () => clearTimeout(delayDebounceFn);
+  }, [query]);
 
   const handleSelect = (verseKey: string) => {
     // verseKey looks like "2:255" (Surah 2, Verse 255)
-    const [surahIdStr, verseIdStr] = verseKey.split(':')
-    const surahId = parseInt(surahIdStr, 10)
-    const verseId = parseInt(verseIdStr, 10)
+    const [surahIdStr, verseIdStr] = verseKey.split(":");
+    const surahId = parseInt(surahIdStr, 10);
+    const verseId = parseInt(verseIdStr, 10);
 
     // Find the matching Surah object
-    const selectedSurah = surahs.find(s => s.id === surahId)
-    
+    const selectedSurah = surahs.find((s) => s.id === surahId);
+
     if (selectedSurah) {
       // Magic happens here: Auto-fill the config!
       setConfig({
         surah: selectedSurah,
         startVerse: verseId,
         endVerse: verseId, // Default to just this one verse
-      })
-      setOpen(false)
-      setQuery('')
+      });
+      setOpen(false);
+      setQuery("");
     }
-  }
+  };
 
   return (
     <>
@@ -76,12 +76,12 @@ export function AyahSearch() {
         <span>Search ayah by Arabic text...</span>
       </button>
 
-      <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput 
-          placeholder="ابحث عن آية..." 
+      <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
+        <CommandInput
+          placeholder="ابحث عن آية..."
           value={query}
           onValueChange={setQuery}
-          style={{ direction: 'rtl' }}
+          style={{ direction: "rtl" }}
         />
         <CommandList className="max-h-[400px] overflow-y-auto overscroll-contain touch-pan-y">
           {loading && (
@@ -92,12 +92,14 @@ export function AyahSearch() {
           {!loading && query.length > 2 && results.length === 0 && (
             <CommandEmpty>No verses found for "{query}"</CommandEmpty>
           )}
-          
+
           {!loading && results.length > 0 && (
             <CommandGroup heading="Search Results">
               {results.map((result) => {
-                const [surahId, verseId] = result.verse_key.split(':')
-                const surahName = surahs.find(s => s.id === parseInt(surahId))?.name_arabic || `Surah ${surahId}`
+                const [surahId, verseId] = result.verse_key.split(":");
+                const surahName =
+                  surahs.find((s) => s.id === parseInt(surahId))?.name_arabic ||
+                  `Surah ${surahId}`;
 
                 return (
                   <CommandItem
@@ -106,7 +108,7 @@ export function AyahSearch() {
                     onSelect={() => handleSelect(result.verse_key)}
                     className="flex cursor-pointer flex-col items-end gap-1 border-b border-border-subtle/50 px-4 py-3 last:border-0"
                   >
-                    <span 
+                    <span
                       className="font-arabic-ui text-right text-[16px] leading-relaxed text-ink-primary"
                       dir="rtl"
                       // The API returns HTML tags <b> around the matched word, so we render it safely
@@ -116,12 +118,12 @@ export function AyahSearch() {
                       {surahName} • Ayah {verseId}
                     </span>
                   </CommandItem>
-                )
+                );
               })}
             </CommandGroup>
           )}
         </CommandList>
       </CommandDialog>
     </>
-  )
+  );
 }

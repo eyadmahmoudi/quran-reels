@@ -28,6 +28,7 @@ const defaultConfig: ReelConfig = {
   translationId: 20,
   displayMode: 'minimal',
   watermark: '',
+  includeIstiadha: true,
 }
 
 const ReelContext = createContext<ReelContextType | null>(null)

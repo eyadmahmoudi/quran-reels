@@ -17,6 +17,7 @@ interface VideoGeneratorOptions {
   startVerse: number
   endVerse: number
   displayMode?: 'minimal' | 'classic'
+  includeIstiadha?: boolean
 }
 
 interface UseVideoGeneratorReturn {
@@ -778,7 +779,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
       const {
         verses, background, showTranslation, surahName, qdcRecitationId,
         reciterFolder, surahId, startVerse, endVerse,
-        displayMode = 'minimal'
+        displayMode = 'minimal', includeIstiadha = true,
       } = options
 
       if (verses.length === 0) { setError('No verses to generate video from'); return }
@@ -806,10 +807,12 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           : []
 
         let taawudhBuffer: AudioBuffer | null = null
-        try {
-          const resp = await fetch('/audio/taawwudh.mp3')
-          if (resp.ok) { taawudhBuffer = await audioCtx.decodeAudioData(await resp.arrayBuffer()) }
-        } catch { }
+        if (includeIstiadha) {
+          try {
+            const resp = await fetch('/audio/taawwudh.mp3')
+            if (resp.ok) { taawudhBuffer = await audioCtx.decodeAudioData(await resp.arrayBuffer()) }
+          } catch { }
+        }
 
         const needsBismillah = startVerse === 1 && surahId !== 1 && surahId !== 9
         let bismillahBuffer: AudioBuffer | null = null

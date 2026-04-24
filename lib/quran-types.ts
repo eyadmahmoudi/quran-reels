@@ -134,6 +134,7 @@ export interface ReelConfig {
   translationId: number | null
   displayMode: 'minimal' | 'classic'  // minimal = no header/footer chrome
   watermark: string                    // optional creator handle shown on preview
+  includeIstiadha: boolean             // prepend A'udhu billah... before the recitation
 }
 
 export interface BackgroundOption {
@@ -269,6 +270,91 @@ export const PRESET_BACKGROUNDS: BackgroundOption[] = [
     value: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=1080&q=80',
     thumbnail: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=200&q=60',
   },
+  // ── Islamic / Sacred scenes (Unsplash) ─────────────────────────────────
+  {
+    id: 'scene-kaaba',
+    name: 'The Kaaba',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1565019011521-b0575cbb57c8?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1565019011521-b0575cbb57c8?w=200&q=60',
+  },
+  {
+    id: 'scene-haram',
+    name: 'Masjid al-Haram',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=200&q=60',
+  },
+  {
+    id: 'scene-madinah',
+    name: 'Masjid an-Nabawi',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1591604021695-0c69b7c05981?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1591604021695-0c69b7c05981?w=200&q=60',
+  },
+  {
+    id: 'scene-mosque-night',
+    name: 'Mosque at Night',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=200&q=60',
+  },
+  {
+    id: 'scene-mosque-interior',
+    name: 'Mosque Interior',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1564769625392-651b32a064b1?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1564769625392-651b32a064b1?w=200&q=60',
+  },
+  {
+    id: 'scene-minaret',
+    name: 'Minaret Sky',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1584720484099-2f3dc9e3f3fb?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1584720484099-2f3dc9e3f3fb?w=200&q=60',
+  },
+  {
+    id: 'scene-domes',
+    name: 'Golden Domes',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1604999333679-b86d54738315?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1604999333679-b86d54738315?w=200&q=60',
+  },
+  {
+    id: 'scene-calligraphy',
+    name: 'Calligraphy',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=200&q=60',
+  },
+  {
+    id: 'scene-geometric-tile',
+    name: 'Islamic Tile',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1591825729269-caeb344f6df2?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1591825729269-caeb344f6df2?w=200&q=60',
+  },
+  {
+    id: 'scene-quran',
+    name: 'The Quran',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1609599006485-41b4b2cf68a0?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1609599006485-41b4b2cf68a0?w=200&q=60',
+  },
+  {
+    id: 'scene-mihrab',
+    name: 'Mihrab Arch',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=200&q=60',
+  },
+  {
+    id: 'scene-desert-mosque',
+    name: 'Desert Mosque',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1519817914152-22d216bb9170?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1519817914152-22d216bb9170?w=200&q=60',
+  },
 ]
 
 // ── Animated canvas backgrounds (procedurally generated, no external deps) ───
@@ -287,6 +373,12 @@ export const ANIMATED_BACKGROUNDS: BackgroundOption[] = [
   { id: 'anim-water',     name: 'Water Ripple',  type: 'animated', value: 'water',      thumbnail: 'https://images.unsplash.com/photo-1505118380757-91f5f5632de0?w=200&q=60' },
   { id: 'anim-mountains', name: 'Mountains',     type: 'animated', value: 'mountains',  thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200&q=60' },
   { id: 'anim-hills',     name: 'Green Hills',   type: 'animated', value: 'hills',      thumbnail: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=200&q=60' },
+  // ── Islamic-themed animations ──────────────────────────────────────────
+  { id: 'anim-crescent',  name: 'Crescent Moon',  type: 'animated', value: 'crescent',  thumbnail: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=200&q=60' },
+  { id: 'anim-mosque',    name: 'Mosque at Night',type: 'animated', value: 'mosque',    thumbnail: 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=200&q=60' },
+  { id: 'anim-dunes',     name: 'Desert Dunes',   type: 'animated', value: 'dunes',     thumbnail: 'https://images.unsplash.com/photo-1509316785289-025f5b846b35?w=200&q=60' },
+  { id: 'anim-geometric', name: 'Khatam Pattern', type: 'animated', value: 'geometric', thumbnail: 'https://images.unsplash.com/photo-1591825729269-caeb344f6df2?w=200&q=60' },
+  { id: 'anim-dhikr',     name: 'Dhikr Drift',    type: 'animated', value: 'dhikr',     thumbnail: 'https://images.unsplash.com/photo-1604999333679-b86d54738315?w=200&q=60' },
 ]
 
 export interface ReciterOption {

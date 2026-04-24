@@ -691,6 +691,318 @@ export function drawGreenHills(ctx: CanvasRenderingContext2D, w: number, h: numb
   }
 }
 
+// ── 15. Crescent Moon ──────────────────────────────────────────────────────
+// Deep night sky, large crescent rising in the upper-third, slowly twinkling stars.
+export function drawCrescent(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
+  // Sky gradient — deep indigo at top, warm horizon hint at bottom
+  const sky = ctx.createLinearGradient(0, 0, 0, h)
+  sky.addColorStop(0, '#060820')
+  sky.addColorStop(0.6, '#0d1438')
+  sky.addColorStop(1, '#1a1028')
+  ctx.fillStyle = sky
+  ctx.fillRect(0, 0, w, h)
+
+  // Stars
+  for (let i = 0; i < 220; i++) {
+    const x = rng(i * 2.9) * w
+    const y = rng(i * 6.3) * h * 0.9
+    const base = rng(i * 1.7) * 1.6 + 0.3
+    const tw = 0.3 + 0.7 * Math.abs(Math.sin(t * 0.0009 + i * 1.3))
+    ctx.fillStyle = `rgba(${Math.floor(lerp(200, 255, tw))},${Math.floor(lerp(210, 250, tw))},255,${tw * 0.9})`
+    ctx.beginPath(); ctx.arc(x, y, safeR(base * tw), 0, Math.PI * 2); ctx.fill()
+  }
+
+  // Crescent — very slight vertical drift
+  const cx = w * 0.62
+  const cy = h * 0.30 + Math.sin(t * 0.00018) * h * 0.01
+  const r = Math.min(w, h) * 0.14
+
+  // Moon glow halo
+  const halo = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r * 3)
+  halo.addColorStop(0, 'rgba(255,238,200,0.35)')
+  halo.addColorStop(0.4, 'rgba(255,220,160,0.12)')
+  halo.addColorStop(1, 'rgba(255,220,160,0)')
+  ctx.fillStyle = halo
+  ctx.beginPath(); ctx.arc(cx, cy, safeR(r * 3), 0, Math.PI * 2); ctx.fill()
+
+  // Full moon disc (warm ivory)
+  const moonGrad = ctx.createRadialGradient(cx - r * 0.25, cy - r * 0.25, r * 0.2, cx, cy, r)
+  moonGrad.addColorStop(0, '#FFF4D8')
+  moonGrad.addColorStop(0.7, '#F4E4B0')
+  moonGrad.addColorStop(1, '#D9C488')
+  ctx.fillStyle = moonGrad
+  ctx.beginPath(); ctx.arc(cx, cy, safeR(r), 0, Math.PI * 2); ctx.fill()
+
+  // Carve crescent — subtract a slightly offset disc in sky color
+  ctx.save()
+  ctx.globalCompositeOperation = 'destination-out'
+  ctx.beginPath()
+  ctx.arc(cx + r * 0.38, cy - r * 0.08, safeR(r * 0.92), 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+// ── 16. Mosque Silhouette ──────────────────────────────────────────────────
+// Deep warm night sky, twinkling stars, soft silhouette of domes and minarets.
+export function drawMosque(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
+  // Sky
+  const sky = ctx.createLinearGradient(0, 0, 0, h)
+  sky.addColorStop(0, '#0a0a18')
+  sky.addColorStop(0.55, '#1a1124')
+  sky.addColorStop(0.85, '#3b1f1a')
+  sky.addColorStop(1, '#5a2a1a')
+  ctx.fillStyle = sky
+  ctx.fillRect(0, 0, w, h)
+
+  // Stars in upper half
+  for (let i = 0; i < 140; i++) {
+    const x = rng(i * 3.1) * w
+    const y = rng(i * 7.3) * h * 0.55
+    const size = 0.4 + rng(i * 1.9) * 1.2
+    const tw = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.0007 + i * 0.9))
+    ctx.fillStyle = `rgba(255,236,200,${tw * 0.85})`
+    ctx.beginPath(); ctx.arc(x, y, safeR(size * tw), 0, Math.PI * 2); ctx.fill()
+  }
+
+  // Small drifting crescent in upper-left
+  const cmx = w * 0.18
+  const cmy = h * 0.18
+  const cmr = Math.min(w, h) * 0.045
+  ctx.fillStyle = 'rgba(255,230,170,0.95)'
+  ctx.beginPath(); ctx.arc(cmx, cmy, safeR(cmr), 0, Math.PI * 2); ctx.fill()
+  ctx.save()
+  ctx.globalCompositeOperation = 'destination-out'
+  ctx.beginPath(); ctx.arc(cmx + cmr * 0.35, cmy - cmr * 0.1, safeR(cmr * 0.9), 0, Math.PI * 2); ctx.fill()
+  ctx.restore()
+
+  // Silhouette ground
+  const horizonY = h * 0.78
+  ctx.fillStyle = '#050608'
+  ctx.fillRect(0, horizonY, w, h - horizonY)
+
+  // Helper: dome
+  const drawDome = (x: number, domeR: number, baseY: number, height: number) => {
+    ctx.beginPath()
+    ctx.moveTo(x - domeR, baseY)
+    ctx.bezierCurveTo(x - domeR, baseY - height, x + domeR, baseY - height, x + domeR, baseY)
+    ctx.closePath()
+    ctx.fill()
+    // finial
+    ctx.beginPath()
+    ctx.moveTo(x, baseY - height)
+    ctx.lineTo(x - 2, baseY - height - domeR * 0.25)
+    ctx.lineTo(x + 2, baseY - height - domeR * 0.25)
+    ctx.closePath()
+    ctx.fill()
+    // crescent on dome
+    ctx.save()
+    ctx.fillStyle = 'rgba(255,220,160,0.85)'
+    const finialTop = baseY - height - domeR * 0.25
+    ctx.beginPath(); ctx.arc(x, finialTop - domeR * 0.18, safeR(domeR * 0.1), 0, Math.PI * 2); ctx.fill()
+    ctx.globalCompositeOperation = 'destination-out'
+    ctx.beginPath(); ctx.arc(x + domeR * 0.04, finialTop - domeR * 0.2, safeR(domeR * 0.09), 0, Math.PI * 2); ctx.fill()
+    ctx.restore()
+    ctx.fillStyle = '#050608'
+  }
+
+  // Helper: minaret
+  const drawMinaret = (x: number, baseY: number, height: number, width: number) => {
+    ctx.fillRect(x - width / 2, baseY - height, width, height)
+    // cap dome
+    ctx.beginPath()
+    ctx.moveTo(x - width * 0.9, baseY - height)
+    ctx.bezierCurveTo(x - width * 0.9, baseY - height - width * 1.3, x + width * 0.9, baseY - height - width * 1.3, x + width * 0.9, baseY - height)
+    ctx.closePath()
+    ctx.fill()
+    // spire
+    ctx.beginPath()
+    ctx.moveTo(x, baseY - height - width * 1.3)
+    ctx.lineTo(x - width * 0.15, baseY - height - width * 1.9)
+    ctx.lineTo(x + width * 0.15, baseY - height - width * 1.9)
+    ctx.closePath()
+    ctx.fill()
+  }
+
+  ctx.fillStyle = '#050608'
+  // Main mosque cluster (center)
+  const mainCx = w * 0.5
+  const mainDomeR = w * 0.13
+  drawDome(mainCx, mainDomeR, horizonY, w * 0.14)
+  // Side domes
+  drawDome(mainCx - mainDomeR * 1.7, mainDomeR * 0.62, horizonY, w * 0.075)
+  drawDome(mainCx + mainDomeR * 1.7, mainDomeR * 0.62, horizonY, w * 0.075)
+  // Minarets flanking
+  drawMinaret(mainCx - w * 0.28, horizonY, w * 0.28, w * 0.022)
+  drawMinaret(mainCx + w * 0.28, horizonY, w * 0.28, w * 0.022)
+  // Distant minaret
+  drawMinaret(w * 0.08, horizonY, w * 0.17, w * 0.014)
+  drawMinaret(w * 0.92, horizonY, w * 0.17, w * 0.014)
+}
+
+// ── 17. Desert Dunes (Night) ───────────────────────────────────────────────
+// Soft rolling dunes silhouette against starry violet sky.
+export function drawDunes(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
+  // Sky
+  const sky = ctx.createLinearGradient(0, 0, 0, h)
+  sky.addColorStop(0, '#0c0520')
+  sky.addColorStop(0.5, '#25103a')
+  sky.addColorStop(1, '#5a2540')
+  ctx.fillStyle = sky
+  ctx.fillRect(0, 0, w, h)
+
+  // Moon
+  const mx = w * 0.25
+  const my = h * 0.28
+  const mr = Math.min(w, h) * 0.09
+  const moonGlow = ctx.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 3.5)
+  moonGlow.addColorStop(0, 'rgba(255,240,210,0.3)')
+  moonGlow.addColorStop(1, 'rgba(255,240,210,0)')
+  ctx.fillStyle = moonGlow
+  ctx.beginPath(); ctx.arc(mx, my, safeR(mr * 3.5), 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = '#FFEED0'
+  ctx.beginPath(); ctx.arc(mx, my, safeR(mr), 0, Math.PI * 2); ctx.fill()
+
+  // Stars
+  for (let i = 0; i < 160; i++) {
+    const x = rng(i * 2.4) * w
+    const y = rng(i * 5.7) * h * 0.6
+    const size = 0.3 + rng(i * 1.3) * 1.1
+    const tw = 0.3 + 0.7 * Math.abs(Math.sin(t * 0.0008 + i * 1.1))
+    ctx.fillStyle = `rgba(240,230,255,${tw * 0.85})`
+    ctx.beginPath(); ctx.arc(x, y, safeR(size * tw), 0, Math.PI * 2); ctx.fill()
+  }
+
+  // Three layered dune silhouettes, slight horizontal drift
+  const layers = [
+    { y: 0.72, amp: 0.04, color: '#3a1a2a', speed: 0.00003, freq: 3.2 },
+    { y: 0.80, amp: 0.05, color: '#261022', speed: 0.00005, freq: 2.5 },
+    { y: 0.90, amp: 0.06, color: '#110a1a', speed: 0.00008, freq: 1.8 },
+  ]
+  for (const L of layers) {
+    ctx.fillStyle = L.color
+    ctx.beginPath()
+    ctx.moveTo(0, h)
+    const step = Math.max(4, w / 200)
+    const drift = t * L.speed
+    for (let x = 0; x <= w; x += step) {
+      const theta = (x / w) * Math.PI * L.freq + drift
+      const y = h * L.y - Math.sin(theta) * h * L.amp - Math.sin(theta * 2.1 + 1.2) * h * L.amp * 0.35
+      ctx.lineTo(x, y)
+    }
+    ctx.lineTo(w, h); ctx.closePath(); ctx.fill()
+  }
+}
+
+// ── 18. Geometric Pattern ──────────────────────────────────────────────────
+// Slowly rotating 8-point Islamic khatam pattern in gold on deep sapphire.
+export function drawGeometric(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
+  // Background radial
+  const bg = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.8)
+  bg.addColorStop(0, '#0d1a3a')
+  bg.addColorStop(0.6, '#081028')
+  bg.addColorStop(1, '#030614')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+
+  // Rotating khatam tiles
+  const tile = Math.min(w, h) * 0.28
+  const rot = (t * 0.00006) % (Math.PI * 2)
+
+  const drawStar = (cx: number, cy: number, r: number, rotation: number, alpha: number) => {
+    ctx.save()
+    ctx.translate(cx, cy)
+    ctx.rotate(rotation)
+    ctx.strokeStyle = `rgba(212,175,55,${alpha})`
+    ctx.lineWidth = Math.max(0.8, Math.min(w, h) * 0.0025)
+    ctx.beginPath()
+    // 8-point star (two overlapping squares rotated 45°)
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI * 2) / 8
+      const outer = r
+      const inner = r * 0.5
+      const ox = Math.cos(a) * outer
+      const oy = Math.sin(a) * outer
+      const na = ((i + 1) * Math.PI * 2) / 8
+      const inBetweenAngle = (a + na) / 2
+      const ix = Math.cos(inBetweenAngle) * inner
+      const iy = Math.sin(inBetweenAngle) * inner
+      if (i === 0) ctx.moveTo(ox, oy)
+      else ctx.lineTo(ox, oy)
+      ctx.lineTo(ix, iy)
+    }
+    ctx.closePath()
+    ctx.stroke()
+    // Inner small circle
+    ctx.beginPath()
+    ctx.arc(0, 0, safeR(r * 0.12), 0, Math.PI * 2)
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  // Grid of stars
+  const cols = Math.ceil(w / tile) + 2
+  const rows = Math.ceil(h / tile) + 2
+  const offsetX = (w - cols * tile) / 2
+  const offsetY = (h - rows * tile) / 2
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const cx = offsetX + c * tile + tile / 2
+      const cy = offsetY + r * tile + tile / 2
+      const stagger = ((c + r) % 2 === 0) ? 0 : Math.PI / 8
+      // Distance-based fade from center for depth
+      const dx = cx - w / 2
+      const dy = cy - h / 2
+      const dist = Math.sqrt(dx * dx + dy * dy) / Math.max(w, h)
+      const alpha = Math.max(0.08, 0.55 - dist * 0.8)
+      drawStar(cx, cy, tile * 0.42, rot + stagger, alpha)
+    }
+  }
+
+  // Subtle central glow (gold breath)
+  const breath = 0.5 + 0.5 * Math.sin(t * 0.0004)
+  const centerGlow = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.min(w, h) * 0.5)
+  centerGlow.addColorStop(0, `rgba(212,175,55,${0.08 + breath * 0.08})`)
+  centerGlow.addColorStop(1, 'rgba(212,175,55,0)')
+  ctx.fillStyle = centerGlow
+  ctx.fillRect(0, 0, w, h)
+}
+
+// ── 19. Dhikr (slow-drifting names of Allah as distant points) ─────────────
+// Calm cosmic drift — soft particles moving in gentle circular flow.
+export function drawDhikr(ctx: CanvasRenderingContext2D, w: number, h: number, t: number) {
+  const bg = ctx.createLinearGradient(0, 0, 0, h)
+  bg.addColorStop(0, '#04101a')
+  bg.addColorStop(0.5, '#0a1a30')
+  bg.addColorStop(1, '#081624')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, w, h)
+
+  const PARTICLES = 200
+  for (let i = 0; i < PARTICLES; i++) {
+    const baseX = rng(i * 1.7) * w
+    const baseY = rng(i * 4.1) * h
+    const driftR = 12 + rng(i * 7.9) * 40
+    const speed = 0.00015 + rng(i * 2.3) * 0.0003
+    const phase = rng(i * 5.1) * Math.PI * 2
+    const angle = t * speed + phase
+    const x = baseX + Math.cos(angle) * driftR
+    const y = baseY + Math.sin(angle * 0.7) * driftR * 0.6
+    const size = 0.6 + rng(i * 3.7) * 1.4
+    const alpha = 0.3 + 0.6 * Math.abs(Math.sin(t * 0.001 + i * 0.5))
+    // warm gold tint
+    ctx.fillStyle = `rgba(232,200,130,${alpha * 0.8})`
+    ctx.beginPath(); ctx.arc(x, y, safeR(size), 0, Math.PI * 2); ctx.fill()
+  }
+
+  // Soft central radial bloom
+  const bloom = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.min(w, h) * 0.55)
+  bloom.addColorStop(0, 'rgba(180,140,70,0.12)')
+  bloom.addColorStop(1, 'rgba(180,140,70,0)')
+  ctx.fillStyle = bloom
+  ctx.fillRect(0, 0, w, h)
+}
+
 // ── Main dispatcher ───────────────────────────────────────────────────────
 export function drawAnimatedBackground(
   ctx: CanvasRenderingContext2D,
@@ -714,6 +1026,11 @@ export function drawAnimatedBackground(
     case 'water':       return drawWaterRipple(ctx, w, h, t)
     case 'mountains':   return drawMountains(ctx, w, h, t)
     case 'hills':       return drawGreenHills(ctx, w, h, t)
+    case 'crescent':    return drawCrescent(ctx, w, h, t)
+    case 'mosque':      return drawMosque(ctx, w, h, t)
+    case 'dunes':       return drawDunes(ctx, w, h, t)
+    case 'geometric':   return drawGeometric(ctx, w, h, t)
+    case 'dhikr':       return drawDhikr(ctx, w, h, t)
     default:
       ctx.fillStyle = '#0a0d18'; ctx.fillRect(0, 0, w, h)
   }

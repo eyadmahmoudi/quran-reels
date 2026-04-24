@@ -8,6 +8,7 @@ import {
   LayoutTemplate,
   Mic,
   AtSign,
+  ShieldCheck,
 } from 'lucide-react'
 import { SurahSelector } from '@/components/quran/surah-selector'
 import { VerseSelector } from '@/components/quran/verse-selector'
@@ -15,6 +16,7 @@ import { ReciterSelector } from '@/components/quran/reciter-selector'
 import { BackgroundSelector } from '@/components/quran/background-selector'
 import { TranslationSettings } from '@/components/quran/translation-settings'
 import { DisplayModeSelector } from '@/components/quran/display-mode-selector'
+import { IstiadhaToggle } from '@/components/quran/istiadha-toggle'
 import { WatermarkInput } from './watermark-input'
 
 interface SidebarSectionProps {
@@ -92,6 +94,16 @@ export function LeftSidebar() {
           description="Pick a voice"
         >
           <ReciterSelector />
+        </SidebarSection>
+
+        <Hairline />
+
+        <SidebarSection
+          title="Isti‘ādha"
+          icon={<ShieldCheck className="h-4 w-4" strokeWidth={1.75} />}
+          description="Protective phrase before recitation"
+        >
+          <IstiadhaToggle />
         </SidebarSection>
 
         <OrnamentDivider />

@@ -42,6 +42,7 @@ export function TopBar() {
       startVerse: config.startVerse,
       endVerse: config.endVerse,
       displayMode: config.displayMode ?? 'minimal',
+      includeIstiadha: config.includeIstiadha,
     })
   }
 

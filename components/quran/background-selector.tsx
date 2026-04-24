@@ -8,15 +8,15 @@ import { PRESET_BACKGROUNDS, ANIMATED_BACKGROUNDS, type BackgroundOption } from 
 import { drawAnimatedBackground } from '@/lib/animations'
 
 const gradients = PRESET_BACKGROUNDS.filter((b) => b.type === 'gradient')
-const naturePhotos = PRESET_BACKGROUNDS.filter((b) => b.type === 'preset')
+const scenePhotos = PRESET_BACKGROUNDS.filter((b) => b.type === 'preset')
 
 const INITIAL_COUNT = 6
 
-type Category = 'animated' | 'nature' | 'gradients'
+type Category = 'animated' | 'scenes' | 'gradients'
 
 const CATEGORIES: { key: Category; label: string }[] = [
   { key: 'animated', label: 'Animated' },
-  { key: 'nature', label: 'Nature' },
+  { key: 'scenes', label: 'Scenes' },
   { key: 'gradients', label: 'Gradients' },
 ]
 
@@ -111,7 +111,7 @@ export function BackgroundSelector() {
 
   const allItems =
     activeCategory === 'animated' ? ANIMATED_BACKGROUNDS :
-    activeCategory === 'nature' ? naturePhotos :
+    activeCategory === 'scenes' ? scenePhotos :
     gradients
 
   const visibleItems = expanded ? allItems : allItems.slice(0, INITIAL_COUNT)

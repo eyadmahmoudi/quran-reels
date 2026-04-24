@@ -4,14 +4,19 @@ export async function GET(req: NextRequest) {
   const query = req.nextUrl.searchParams.get('q')
   if (!query) return NextResponse.json({ results: [] })
 
+  const encoded = encodeURIComponent(query.trim())
+  const apiUrl = `https://api.alquran.cloud/v1/search/${encoded}/all/quran-simple`
+
   try {
-    const encoded = encodeURIComponent(query)
-    const res = await fetch(
-      `https://api.alquran.cloud/v1/search/${encoded}/quran-simple/ar`
-    )
-    
-    if (!res.ok) throw new Error(`API error: ${res.status}`)
-    
+    const res = await fetch(apiUrl, {
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store',
+    })
+
+    if (!res.ok) {
+      return NextResponse.json({ results: [], error: `API error: ${res.status}` }, { status: 200 })
+    }
+
     const data = await res.json()
     const matches = data?.data?.matches || []
 
@@ -22,7 +27,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ results })
   } catch (err) {
-    console.error('Search proxy error:', err)
-    return NextResponse.json({ results: [], error: String(err) }, { status: 500 })
+    return NextResponse.json({ results: [], error: String(err) }, { status: 200 })
   }
 }

@@ -1,8 +1,8 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { Check, ChevronsUpDown, Book } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { useState, useEffect } from "react";
+import { Check, ChevronsUpDown, Book } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Command,
   CommandEmpty,
@@ -10,44 +10,44 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@/components/ui/command'
+} from "@/components/ui/command";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover'
-import { fetchSurahs } from '@/lib/quran-api'
-import type { Surah } from '@/lib/quran-types'
-import { useReel } from '@/lib/reel-context'
+} from "@/components/ui/popover";
+import { fetchSurahs } from "@/lib/quran-api";
+import type { Surah } from "@/lib/quran-types";
+import { useReel } from "@/lib/reel-context";
 
 export function SurahSelector() {
-  const [open, setOpen] = useState(false)
-  const [surahs, setSurahs] = useState<Surah[]>([])
-  const [loading, setLoading] = useState(true)
-  const { config, setConfig } = useReel()
+  const [open, setOpen] = useState(false);
+  const [surahs, setSurahs] = useState<Surah[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { config, setConfig } = useReel();
 
   useEffect(() => {
     async function loadSurahs() {
       try {
-        const data = await fetchSurahs()
-        setSurahs(data)
+        const data = await fetchSurahs();
+        setSurahs(data);
       } catch (error) {
-        console.error('Failed to load surahs:', error)
+        console.error("Failed to load surahs:", error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
     }
-    loadSurahs()
-  }, [])
+    loadSurahs();
+  }, []);
 
   const handleSelect = (surah: Surah) => {
     setConfig({
       surah,
       startVerse: 1,
       endVerse: Math.min(5, surah.verses_count),
-    })
-    setOpen(false)
-  }
+    });
+    setOpen(false);
+  };
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -60,10 +60,10 @@ export function SurahSelector() {
             aria-expanded={open}
             disabled={loading}
             className={cn(
-              'group relative flex h-10 w-full items-center justify-between gap-2 rounded-[10px] border border-border-subtle bg-surface px-3 text-left text-[14px] transition-all duration-150 ease-out',
-              'hover:border-border-default',
-              'focus-visible:border-accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ring)]',
-              'disabled:cursor-not-allowed disabled:opacity-60',
+              "group relative flex h-10 w-full items-center justify-between gap-2 rounded-[10px] border border-border-subtle bg-surface px-3 text-left text-[14px] transition-all duration-150 ease-out",
+              "hover:border-border-default",
+              "focus-visible:border-accent-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ring)]",
+              "disabled:cursor-not-allowed disabled:opacity-60",
             )}
           >
             {loading ? (
@@ -80,7 +80,7 @@ export function SurahSelector() {
                 </span>
                 <span
                   className="font-arabic-ui text-[13px] text-gold"
-                  style={{ direction: 'rtl' }}
+                  style={{ direction: "rtl" }}
                 >
                   {config.surah.name_arabic}
                 </span>
@@ -100,13 +100,13 @@ export function SurahSelector() {
         >
           <Command className="bg-surface">
             <CommandInput placeholder="Search surah…" className="h-10" />
-            <CommandList className="bg-surface">
+            <CommandList className="bg-surface max-h-[300px] overflow-y-auto overscroll-contain touch-pan-y">
               <CommandEmpty className="py-6 text-center text-[13px] text-ink-tertiary">
                 No surah found.
               </CommandEmpty>
-              <CommandGroup className="max-h-[300px] overflow-y-auto">
+              <CommandGroup>
                 {surahs.map((surah) => {
-                  const isSelected = config.surah?.id === surah.id
+                  const isSelected = config.surah?.id === surah.id;
                   return (
                     <CommandItem
                       key={surah.id}
@@ -116,10 +116,10 @@ export function SurahSelector() {
                     >
                       <span
                         className={cn(
-                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[11px] font-semibold tabular-nums transition-colors',
+                          "flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] text-[11px] font-semibold tabular-nums transition-colors",
                           isSelected
-                            ? 'bg-accent-soft text-accent-primary'
-                            : 'bg-subtle text-ink-tertiary group-data-[selected=true]:bg-accent-soft group-data-[selected=true]:text-accent-primary',
+                            ? "bg-accent-soft text-accent-primary"
+                            : "bg-subtle text-ink-tertiary group-data-[selected=true]:bg-accent-soft group-data-[selected=true]:text-accent-primary",
                         )}
                       >
                         {surah.id}
@@ -130,7 +130,7 @@ export function SurahSelector() {
                         </span>
                         <span
                           className="font-arabic-ui text-[13px] text-ink-tertiary"
-                          style={{ direction: 'rtl' }}
+                          style={{ direction: "rtl" }}
                         >
                           {surah.name_arabic}
                         </span>
@@ -142,7 +142,7 @@ export function SurahSelector() {
                         <Check className="h-4 w-4 text-accent-primary" />
                       )}
                     </CommandItem>
-                  )
+                  );
                 })}
               </CommandGroup>
             </CommandList>
@@ -150,5 +150,5 @@ export function SurahSelector() {
         </PopoverContent>
       </Popover>
     </div>
-  )
+  );
 }

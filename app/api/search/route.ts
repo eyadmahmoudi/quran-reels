@@ -4,12 +4,16 @@ export async function GET(req: NextRequest) {
   const query = req.nextUrl.searchParams.get('q')
   if (!query) return NextResponse.json({ results: [] })
 
-  const encoded = encodeURIComponent(query.trim())
-  const apiUrl = `https://api.alquran.cloud/v1/search/${encoded}/all/quran-simple`
+  const apiUrl = `https://api.quran.com/api/v4/search?q=${encodeURIComponent(query.trim())}&size=20&language=ar`
 
   try {
     const res = await fetch(apiUrl, {
-      headers: { 'Accept': 'application/json' },
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Origin': 'https://quran.com',
+        'Referer': 'https://quran.com/',
+      },
       cache: 'no-store',
     })
 
@@ -18,10 +22,10 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await res.json()
-    const matches = data?.data?.matches || []
+    const matches = data?.search?.results || []
 
     const results = matches.map((r: any) => ({
-      verse_key: `${r.surah.number}:${r.numberInSurah}`,
+      verse_key: r.verse_key,
       text: r.text,
     }))
 

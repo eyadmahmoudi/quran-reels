@@ -180,12 +180,12 @@ export async function searchAyahs(query: string) {
   if (!query || query.trim() === '') return [];
   
   try {
-    // 1. The Magic Shield: Strip ALL Arabic diacritics (Tashkeel) from the user's input
-    // This regex removes Fatha, Damma, Kasra, Shadda, Sukun, and Superscript Alif.
+    // 1. Strip all Arabic diacritics from the keyboard input
     const cleanQuery = query.replace(/[\u064B-\u065F\u0670]/g, '');
 
-    // 2. Send the stripped, plain-text query to the API
-    const res = await fetch(`https://api.alquran.cloud/v1/search/${encodeURIComponent(cleanQuery)}/all/ar`);
+    // 2. We swapped "all/ar" for "quran-simple-clean" so it ONLY searches the bare Quran text.
+    // This makes the response lightning fast (milliseconds instead of crashing).
+    const res = await fetch(`https://api.alquran.cloud/v1/search/${encodeURIComponent(cleanQuery)}/quran-simple-clean`);
     if (!res.ok) throw new Error('Search failed');
     const response = await res.json();
     

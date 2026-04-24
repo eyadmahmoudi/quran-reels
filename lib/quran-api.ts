@@ -180,13 +180,21 @@ export async function searchAyahs(query: string) {
   if (!query || query.trim() === '') return [];
   
   try {
-    // We use the official Quran.com search API, asking for Arabic results
-    const res = await fetch(`https://api.quran.com/api/v4/search?q=${encodeURIComponent(query)}&size=20&language=ar`);
+    // 1. The Magic Shield: Strip ALL Arabic diacritics (Tashkeel) from the user's input
+    // This regex removes Fatha, Damma, Kasra, Shadda, Sukun, and Superscript Alif.
+    const cleanQuery = query.replace(/[\u064B-\u065F\u0670]/g, '');
+
+    // 2. Send the stripped, plain-text query to the API
+    const res = await fetch(`https://api.alquran.cloud/v1/search/${encodeURIComponent(cleanQuery)}/all/ar`);
     if (!res.ok) throw new Error('Search failed');
-    const data = await res.json();
+    const response = await res.json();
     
-    // The API returns an array inside data.search.results
-    return data.search.results || [];
+    if (!response.data || !response.data.matches) return [];
+
+    return response.data.matches.map((match: any) => ({
+      verse_key: `${match.surah.number}:${match.numberInSurah}`,
+      text: match.text, 
+    }));
   } catch (error) {
     console.error('Error searching ayahs:', error);
     return [];

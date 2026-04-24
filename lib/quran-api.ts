@@ -180,36 +180,30 @@ export async function searchAyahs(query: string) {
   if (!query || query.trim() === '') return [];
 
   try {
-    // Try multiple strategies in order
-    const results = await searchWithQuranCom(query.trim());
-    if (results.length > 0) return results;
+    const cleanQuery = query.trim();
+    if (cleanQuery.length === 0) return [];
 
-    // Fallback: try with normalized Arabic (remove tatweel + extra spaces)
-    const normalized = query
-      .trim()
-      .replace(/ـ/g, '')           // remove tatweel
-      .replace(/\s+/g, ' ');       // normalize spaces
-    return await searchWithQuranCom(normalized);
+    // DO NOT strip diacritics - send Arabic as-is, the API handles it
+    const res = await fetch(
+      `https://api.quran.com/api/v4/search?q=${encodeURIComponent(cleanQuery)}&size=20&language=ar`,
+      {
+        headers: {
+          'Accept': 'application/json',
+        }
+      }
+    );
+
+    if (!res.ok) throw new Error(`Search failed: ${res.status}`);
+    const data = await res.json();
+
+    if (!data.search?.results) return [];
+
+    return data.search.results.map((result: any) => ({
+      verse_key: result.verse_key,
+      text: result.text,
+    }));
   } catch (error) {
     console.error('Error searching ayahs:', error);
     return [];
   }
-}
-
-async function searchWithQuranCom(query: string) {
-  // Use language=ar so Quran.com returns Arabic results
-  // Do NOT strip diacritics — the API handles diacritics fine
-  const url = `https://api.quran.com/api/v4/search?q=${encodeURIComponent(query)}&size=20&language=ar`;
-  
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = await res.json();
-
-  if (!data.search?.results?.length) return [];
-
-  return data.search.results.map((result: any) => ({
-    verse_key: result.verse_key,
-    text: result.text,        // Uthmani text with <b> highlights
-    words: result.words || [],
-  }));
 }

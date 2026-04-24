@@ -1,6 +1,12 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-
+input::-webkit-search-cancel-button,
+input::-webkit-search-decoration,
+input::-webkit-search-results-button,
+input::-webkit-search-results-decoration {
+  display: none !important;
+  -webkit-appearance: none !important;
+}
 @font-face {
   font-family: 'Nabi';
   src: url('/fonts/Nabi.ttf') format('truetype');

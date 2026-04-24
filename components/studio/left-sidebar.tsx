@@ -61,7 +61,7 @@ function Hairline() {
 
 export function LeftSidebar() {
   return (
-    <aside className="flex w-full min-h-0 shrink-0 flex-col bg-surface lg:w-[300px] lg:border-r lg:border-border-subtle xl:w-[340px]">
+    <aside className="flex h-full w-full min-h-0 flex-col bg-surface lg:w-[300px] lg:shrink-0 lg:border-r lg:border-border-subtle xl:w-[340px]">
       {/* ── Sidebar heading ─────────────────────────────────── */}
       <div className="shrink-0 px-5 pt-5 pb-4">
         <h1 className="text-caption text-ink-primary">Studio Controls</h1>

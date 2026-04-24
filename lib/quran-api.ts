@@ -180,16 +180,22 @@ export async function searchAyahs(query: string) {
   if (!query || query.trim() === '') return [];
   
   try {
-    // 1. Strip all Arabic diacritics from the keyboard input
-    const cleanQuery = query.replace(/[\u064B-\u065F\u0670]/g, '');
+    // 1. Advanced Normalizer: Strips basic vowels PLUS extended Tajweed stop marks
+    const cleanQuery = query.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '').trim();
+    
+    if (cleanQuery.length === 0) return [];
 
-    // 2. We swapped "all/ar" for "quran-simple-clean" so it ONLY searches the bare Quran text.
-    // This makes the response lightning fast (milliseconds instead of crashing).
-    const res = await fetch(`https://api.alquran.cloud/v1/search/${encodeURIComponent(cleanQuery)}/quran-simple-clean`);
-    if (!res.ok) throw new Error('Search failed');
+    // 2. THE FIX: Notice the "/all/" right before "quran-simple-clean"
+    const url = `https://api.alquran.cloud/v1/search/${encodeURIComponent(cleanQuery)}/all/quran-simple-clean`;
+    
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const response = await res.json();
     
-    if (!response.data || !response.data.matches) return [];
+    // 3. Catch empty results safely
+    if (response.code !== 200 || !response.data || !response.data.matches) {
+      return [];
+    }
 
     return response.data.matches.map((match: any) => ({
       verse_key: `${match.surah.number}:${match.numberInSurah}`,

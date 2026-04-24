@@ -99,10 +99,11 @@ export function SurahSelector() {
           align="start"
           onWheel={(e) => e.stopPropagation()}
           onTouchMove={(e) => e.stopPropagation()}
+          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <Command className="bg-surface">
             <CommandInput placeholder="Search surah…" className="h-10" />
-            <CommandList className="bg-surface max-h-[300px] overflow-y-auto overscroll-contain touch-pan-y">
+            <CommandList className="bg-surface max-h-[200px] lg:max-h-[300px] overflow-y-auto">
               <CommandEmpty className="py-6 text-center text-[13px] text-ink-tertiary">
                 No surah found.
               </CommandEmpty>

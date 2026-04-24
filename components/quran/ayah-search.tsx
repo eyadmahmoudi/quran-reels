@@ -99,7 +99,7 @@ export function AyahSearch() {
                 return (
                   <CommandItem
                     key={result.verse_key}
-                    value={result.verse_key}
+                    value={`${query} ${result.verse_key}`}
                     forceMount 
                     onSelect={() => handleSelect(result.verse_key)}
                     className="flex cursor-pointer flex-col items-end gap-1 border-b border-border-subtle/50 px-4 py-3 last:border-0"

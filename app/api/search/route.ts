@@ -13,11 +13,23 @@ async function getQuran() {
 }
 
 function stripDiacritics(text: string) {
-  return text
-    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '') // remove harakat
-    .replace(/[ٱإأآا]/g, 'ا')                            // normalize alef
-    .replace(/ى/g, 'ي')                                   // normalize ya
-    .replace(/ة/g, 'ه')                                   // normalize ta marbuta
+   return text
+    // 1. Remove all diacritics/tashkeel
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '')
+    // 2. Uthmani: وة → اة  (صلوة→صلاة, زكوة→زكاة, حيوة→حياة)
+    .replace(/وة/g, 'اه')
+    // 3. Normalize all alef forms to bare alef
+    .replace(/[أإآٱا]/g, 'ا')
+    // 4. Normalize hamza seats → alef
+    .replace(/[ئؤء]/g, 'ا')
+    // 5. Collapse consecutive alefs (ملاا → ملا)
+    .replace(/ا{2,}/g, 'ا')
+    // 6. Strip interior alef (رحمان↔رحمن, إبراهيم↔إبرهيم, إسماعيل↔إسمعيل)
+    .replace(/(?<=[\u0600-\u06FF])ا(?=[\u0600-\u06FF])/g, '')
+    // 7. Normalize ى → ي everywhere
+    .replace(/ى/g, 'ي')
+    // 8. Normalize ta marbuta
+    .replace(/ة/g, 'ه')
     .trim()
 }
 

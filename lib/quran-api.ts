@@ -177,22 +177,14 @@ export function calculateTotalDuration(
 }
 
 export async function searchAyahs(query: string) {
-  if (!query || query.trim() === '') return [];
+  if (!query || query.trim() === '') return []
   try {
-    // Use 'quran-simple' edition — returns only the actual verse text
-    const res = await fetch(
-      `https://api.alquran.cloud/v1/search/${encodeURIComponent(query.trim())}/quran-simple/ar`
-    );
-    if (!res.ok) throw new Error('Search failed');
-    const data = await res.json();
-    const matches = data?.data?.matches || [];
-    
-    return matches.map((r: any) => ({
-      verse_key: `${r.surah.number}:${r.numberInSurah}`,
-      text: r.text,
-    }));
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`)
+    if (!res.ok) throw new Error('Search failed')
+    const data = await res.json()
+    return data.results || []
   } catch (err) {
-    console.error('Search error:', err);
-    return [];
+    console.error('Search error:', err)
+    return []
   }
 }

@@ -27,7 +27,7 @@ export function AyahSearch() {
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
-      if (query.trim().length > 4) {
+      if (query.trim().length > 1) {
         setLoading(true);
         const searchResults = await searchAyahs(query);
         setResults(searchResults);

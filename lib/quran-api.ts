@@ -178,27 +178,38 @@ export function calculateTotalDuration(
 
 export async function searchAyahs(query: string) {
   if (!query || query.trim() === '') return [];
-  
+
   try {
-    // 1. Strip the diacritics from the user's input so the search engine never fails
-    const cleanQuery = query.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '').trim();
-    if (cleanQuery.length === 0) return [];
+    // Try multiple strategies in order
+    const results = await searchWithQuranCom(query.trim());
+    if (results.length > 0) return results;
 
-    // 2. Go back to Quran.com! Because we cleaned the query, it won't crash anymore.
-    // AND it returns beautiful Uthmani script by default.
-    const res = await fetch(`https://api.quran.com/api/v4/search?q=${encodeURIComponent(cleanQuery)}&size=20&language=ar`);
-    if (!res.ok) throw new Error('Search failed');
-    const data = await res.json();
-    
-    if (!data.search || !data.search.results) return [];
-
-    return data.search.results.map((result: any) => ({
-      verse_key: result.verse_key,
-      // The API returns Uthmani text with HTML <b> tags around the matched words!
-      text: result.text, 
-    }));
+    // Fallback: try with normalized Arabic (remove tatweel + extra spaces)
+    const normalized = query
+      .trim()
+      .replace(/ـ/g, '')           // remove tatweel
+      .replace(/\s+/g, ' ');       // normalize spaces
+    return await searchWithQuranCom(normalized);
   } catch (error) {
     console.error('Error searching ayahs:', error);
     return [];
   }
+}
+
+async function searchWithQuranCom(query: string) {
+  // Use language=ar so Quran.com returns Arabic results
+  // Do NOT strip diacritics — the API handles diacritics fine
+  const url = `https://api.quran.com/api/v4/search?q=${encodeURIComponent(query)}&size=20&language=ar`;
+  
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+
+  if (!data.search?.results?.length) return [];
+
+  return data.search.results.map((result: any) => ({
+    verse_key: result.verse_key,
+    text: result.text,        // Uthmani text with <b> highlights
+    words: result.words || [],
+  }));
 }

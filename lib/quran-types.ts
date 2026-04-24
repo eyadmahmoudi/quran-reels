@@ -270,90 +270,94 @@ export const PRESET_BACKGROUNDS: BackgroundOption[] = [
     value: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=1080&q=80',
     thumbnail: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=200&q=60',
   },
-  // ── Islamic / Sacred scenes (Unsplash) ─────────────────────────────────
+  // ── Islamic / Sacred scenes (Unsplash — each URL verified 200) ─────────
+  // Kaaba, Makkah — by Haidan (KbtfseYfgaE)
   {
     id: 'scene-kaaba',
     name: 'The Kaaba',
     type: 'preset',
-    value: 'https://images.unsplash.com/photo-1565019011521-b0575cbb57c8?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1565019011521-b0575cbb57c8?w=200&q=60',
+    value: 'https://images.unsplash.com/photo-1565330770968-0240c0046ce3?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1565330770968-0240c0046ce3?w=200&q=60',
   },
+  // Pilgrims circling the Kaaba — by Haidan (sOctm8gwAqQ)
   {
-    id: 'scene-haram',
-    name: 'Masjid al-Haram',
+    id: 'scene-kaaba-pilgrims',
+    name: 'Pilgrims at the Kaaba',
     type: 'preset',
-    value: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=200&q=60',
+    value: 'https://images.unsplash.com/photo-1554794470-42d3cd193ecc?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1554794470-42d3cd193ecc?w=200&q=60',
   },
+  // Masjid an-Nabawi, Madinah — by djonk creative (AdZ68iA9X08)
   {
     id: 'scene-madinah',
     name: 'Masjid an-Nabawi',
     type: 'preset',
-    value: 'https://images.unsplash.com/photo-1591604021695-0c69b7c05981?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1591604021695-0c69b7c05981?w=200&q=60',
+    value: 'https://images.unsplash.com/photo-1667454872134-c25973237138?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1667454872134-c25973237138?w=200&q=60',
   },
+  // Sheikh Zayed Grand Mosque — intricate arches (LiGnI_CfsZE)
   {
-    id: 'scene-mosque-night',
-    name: 'Mosque at Night',
+    id: 'scene-grand-mosque',
+    name: 'Grand Mosque',
     type: 'preset',
-    value: 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=200&q=60',
+    value: 'https://images.unsplash.com/photo-1769428197774-2dfdffe4a723?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1769428197774-2dfdffe4a723?w=200&q=60',
   },
+  // Sheikh Zayed — interior columns & arches (fVawry7WP2g)
   {
     id: 'scene-mosque-interior',
     name: 'Mosque Interior',
     type: 'preset',
-    value: 'https://images.unsplash.com/photo-1564769625392-651b32a064b1?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1564769625392-651b32a064b1?w=200&q=60',
+    value: 'https://images.unsplash.com/photo-1736425620502-8386e8e7de1b?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1736425620502-8386e8e7de1b?w=200&q=60',
   },
+  // Sheikh Zayed — white tower with gold top (MtDp7EhKcnw)
   {
     id: 'scene-minaret',
     name: 'Minaret Sky',
     type: 'preset',
-    value: 'https://images.unsplash.com/photo-1584720484099-2f3dc9e3f3fb?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1584720484099-2f3dc9e3f3fb?w=200&q=60',
+    value: 'https://images.unsplash.com/photo-1737007211071-bfef823e3c70?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1737007211071-bfef823e3c70?w=200&q=60',
   },
-  {
-    id: 'scene-domes',
-    name: 'Golden Domes',
-    type: 'preset',
-    value: 'https://images.unsplash.com/photo-1604999333679-b86d54738315?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1604999333679-b86d54738315?w=200&q=60',
-  },
+  // Arabic calligraphy on mosque dome (wnP7-xQu0uI)
   {
     id: 'scene-calligraphy',
     name: 'Calligraphy',
     type: 'preset',
-    value: 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=200&q=60',
+    value: 'https://images.unsplash.com/photo-1761639935382-43452f278898?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1761639935382-43452f278898?w=200&q=60',
   },
-  {
-    id: 'scene-geometric-tile',
-    name: 'Islamic Tile',
-    type: 'preset',
-    value: 'https://images.unsplash.com/photo-1591825729269-caeb344f6df2?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1591825729269-caeb344f6df2?w=200&q=60',
-  },
+  // Open Quran (2d1-OSHkHXM)
   {
     id: 'scene-quran',
-    name: 'The Quran',
+    name: 'The Holy Quran',
     type: 'preset',
-    value: 'https://images.unsplash.com/photo-1609599006485-41b4b2cf68a0?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1609599006485-41b4b2cf68a0?w=200&q=60',
+    value: 'https://images.unsplash.com/photo-1574545640323-59dc7a2b4a6d?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1574545640323-59dc7a2b4a6d?w=200&q=60',
   },
+  // Geometric jali pattern from Qutb Minar complex (OEeO0FqYzTU)
   {
-    id: 'scene-mihrab',
-    name: 'Mihrab Arch',
+    id: 'scene-geometric',
+    name: 'Geometric Pattern',
     type: 'preset',
-    value: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?w=200&q=60',
+    value: 'https://images.unsplash.com/photo-1763295491819-b09598d122d8?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1763295491819-b09598d122d8?w=200&q=60',
   },
+  // Mosque at night with light trails (XG9HkZWBXq8)
   {
-    id: 'scene-desert-mosque',
-    name: 'Desert Mosque',
+    id: 'scene-mosque-night',
+    name: 'Mosque at Night',
     type: 'preset',
-    value: 'https://images.unsplash.com/photo-1519817914152-22d216bb9170?w=1080&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1519817914152-22d216bb9170?w=200&q=60',
+    value: 'https://images.unsplash.com/photo-1740872383935-e57d320d61ea?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1740872383935-e57d320d61ea?w=200&q=60',
+  },
+  // Minaret against sunset sky (LwNNVgOmm84)
+  {
+    id: 'scene-minaret-sunset',
+    name: 'Minaret Sunset',
+    type: 'preset',
+    value: 'https://images.unsplash.com/photo-1742148534796-70b39f29bff6?w=1080&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1742148534796-70b39f29bff6?w=200&q=60',
   },
 ]
 

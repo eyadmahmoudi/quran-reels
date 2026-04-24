@@ -8,9 +8,7 @@ import type { Surah } from "@/lib/quran-types";
 import { fetchSurahs } from "@/lib/quran-api";
 import {
   CommandDialog,
-  CommandGroup,
   CommandInput,
-  CommandItem,
   CommandList,
 } from "@/components/ui/command";
 
@@ -90,32 +88,37 @@ export function AyahSearch() {
             </div>
           )}
           
+          {/* THE NUCLEAR BYPASS: We use native HTML so shadcn CANNOT filter it out */}
           {!loading && results.length > 0 && (
-            <CommandGroup heading="Search Results" forceMount>
-              {results.map((result) => {
-                const [surahId, verseId] = result.verse_key.split(':')
-                const surahName = surahs.find(s => s.id === parseInt(surahId))?.name_arabic || `Surah ${surahId}`
+            <div className="p-2">
+              <div className="px-2 py-1.5 text-xs font-medium text-ink-tertiary">
+                Search Results
+              </div>
+              <div className="flex flex-col gap-1 mt-1">
+                {results.map((result) => {
+                  const [surahId, verseId] = result.verse_key.split(':')
+                  const surahName = surahs.find(s => s.id === parseInt(surahId))?.name_arabic || `Surah ${surahId}`
 
-                return (
-                  <CommandItem
-                    key={result.verse_key}
-                    value={`${query} ${result.verse_key}`}
-                    forceMount 
-                    onSelect={() => handleSelect(result.verse_key)}
-                    className="flex cursor-pointer flex-col items-end gap-1 border-b border-border-subtle/50 px-4 py-3 last:border-0"
-                  >
-                    <span 
-                      className="font-arabic-ui text-right text-[16px] leading-relaxed text-ink-primary"
-                      dir="rtl"
-                      dangerouslySetInnerHTML={{ __html: result.text }}
-                    />
-                    <span className="text-[12px] text-ink-tertiary">
-                      {surahName} • Ayah {verseId}
-                    </span>
-                  </CommandItem>
-                )
-              })}
-            </CommandGroup>
+                  return (
+                    <button
+                      key={result.verse_key}
+                      type="button"
+                      onClick={() => handleSelect(result.verse_key)}
+                      className="flex w-full cursor-pointer flex-col items-end gap-1 rounded-[6px] px-3 py-3 text-left transition-colors hover:bg-subtle active:bg-border-subtle"
+                    >
+                      <span 
+                        className="font-arabic-ui text-right text-[16px] leading-relaxed text-ink-primary"
+                        dir="rtl"
+                        dangerouslySetInnerHTML={{ __html: result.text }}
+                      />
+                      <span className="text-[12px] text-ink-tertiary">
+                        {surahName} • Ayah {verseId}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           )}
         </CommandList>
       </CommandDialog>

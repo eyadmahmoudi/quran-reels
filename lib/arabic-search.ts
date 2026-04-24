@@ -85,14 +85,33 @@ export function normalizeBase(text: string): string {
 }
 
 /**
- * Loose normalization — strips alefs and spaces.
- * Used as a fallback so that "الرحمن" matches text written with an
- * explicit alef ("الرحمان"), and "الحمدلله" matches "الحمد لله".
+ * Alef-insensitive normalization. Keeps word boundaries (spaces). Used as
+ * the second match tier so "الرحمن" matches Uthmani "الرحمٰن" (written
+ * with an explicit alef) without eating real waws/yehs elsewhere.
+ *
+ * Spaces are preserved here so "اموال" cannot fake-match across a word
+ * boundary in "... المغضوب عليهم ولا ..." (that would be "عليهم ول" →
+ * concatenated "عليهمول" contains the query loose form "مول").
+ */
+export function normalizeAlefFuzzy(text: string): string {
+  return normalizeBase(text).replace(/\u0627/g, '')
+}
+
+/**
+ * Concatenated normalization — alefs AND spaces stripped. Third match
+ * tier, used only when the earlier tiers return nothing, to handle
+ * queries typed without spaces like "بسمالله" or "الحمدلله".
+ */
+export function normalizeConcat(text: string): string {
+  return normalizeAlefFuzzy(text).replace(/\s+/g, '')
+}
+
+/**
+ * @deprecated kept for backwards compatibility; use normalizeAlefFuzzy /
+ * normalizeConcat. Returns the concatenated (alef-and-space stripped) form.
  */
 export function normalizeLoose(text: string): string {
-  return normalizeBase(text)
-    .replace(/\u0627/g, '') // drop all alefs
-    .replace(/\s+/g, '')    // drop spaces
+  return normalizeConcat(text)
 }
 
 /** A lightweight "Arabic-ish" detector — returns true if query has any letters. */

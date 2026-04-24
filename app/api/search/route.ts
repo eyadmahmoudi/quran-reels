@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { normalizeBase, normalizeLoose, buildIndexMap } from '@/lib/arabic-search'
+import {
+  normalizeBase,
+  normalizeAlefFuzzy,
+  normalizeConcat,
+  buildIndexMap,
+} from '@/lib/arabic-search'
 
 // ────────────────────────────────────────────────────────────────────────
 // Pre-built, normalized Quran index
@@ -9,8 +14,9 @@ interface IndexedVerse {
   surahId: number
   verseId: number
   text: string          // original Uthmani
-  base: string          // strict normalization
-  loose: string         // loose normalization (alefs + spaces stripped)
+  base: string          // strict normalization (tier 1)
+  fuzzy: string         // alef-stripped, spaces preserved (tier 2)
+  concat: string        // alef- + space-stripped (tier 3, last resort)
   baseMap: number[]     // position map: base[i] came from text[baseMap[i]]
 }
 
@@ -36,7 +42,8 @@ async function getIndex(): Promise<IndexedVerse[]> {
             verseId: verse.id,
             text: verse.text,
             base,
-            loose: normalizeLoose(verse.text),
+            fuzzy: normalizeAlefFuzzy(verse.text),
+            concat: normalizeConcat(verse.text),
             baseMap: map,
           })
         }
@@ -101,28 +108,24 @@ export async function GET(req: NextRequest) {
   try {
     const index = await getIndex()
     const qBase = normalizeBase(raw)
-    const qLoose = normalizeLoose(raw)
-    if (qBase.length < 2 && qLoose.length < 2) {
+    const qFuzzy = normalizeAlefFuzzy(raw)
+    const qConcat = normalizeConcat(raw)
+    if (qBase.length < 2 && qFuzzy.length < 2 && qConcat.length < 2) {
       return NextResponse.json({ results: [] })
     }
 
-    const seen = new Set<string>()
+    // ── Tier 1: strict substring match on base-normalized text (with highlight) ──
     const strictHits: Array<{
       verse_key: string
       text: string
       strict: true
     }> = []
-
-    // ── Pass 1: strict substring match on base-normalized text ──
     if (qBase.length >= 2) {
       for (const entry of index) {
         const idx = entry.base.indexOf(qBase)
         if (idx === -1) continue
-        const key = `${entry.surahId}:${entry.verseId}`
-        if (seen.has(key)) continue
-        seen.add(key)
         strictHits.push({
-          verse_key: key,
+          verse_key: `${entry.surahId}:${entry.verseId}`,
           text: highlight(entry.text, entry.baseMap, idx, idx + qBase.length),
           strict: true,
         })
@@ -130,25 +133,41 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── Pass 2: loose match (alef- and space-insensitive) ──
-    const looseHits: Array<{ verse_key: string; text: string; strict: false }> = []
-    if (strictHits.length < MAX_RESULTS && qLoose.length >= 2) {
+    // ── Tier 2: alef-insensitive, spaces preserved. Only if tier 1 is empty. ──
+    //    Mirrors Ayah app: fallback tiers don't mix with strict results.
+    const fuzzyHits: Array<{ verse_key: string; text: string; strict: false }> = []
+    if (strictHits.length === 0 && qFuzzy.length >= 2) {
       for (const entry of index) {
-        if (!entry.loose.includes(qLoose)) continue
-        const key = `${entry.surahId}:${entry.verseId}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        // Loose match can't be precisely highlighted on the original, so
-        // we fall back to returning the unmodified Uthmani text.
-        looseHits.push({ verse_key: key, text: entry.text, strict: false })
-        if (strictHits.length + looseHits.length >= MAX_RESULTS) break
+        if (!entry.fuzzy.includes(qFuzzy)) continue
+        // Can't be precisely highlighted (alef positions differ); return original.
+        fuzzyHits.push({
+          verse_key: `${entry.surahId}:${entry.verseId}`,
+          text: entry.text,
+          strict: false,
+        })
+        if (fuzzyHits.length >= MAX_RESULTS) break
+      }
+    }
+
+    // ── Tier 3: alef- AND space-insensitive. Only if tiers 1+2 empty. ──
+    //    Catches no-space queries like "بسمالله" or "الحمدلله".
+    const concatHits: Array<{ verse_key: string; text: string; strict: false }> = []
+    if (strictHits.length === 0 && fuzzyHits.length === 0 && qConcat.length >= 2) {
+      for (const entry of index) {
+        if (!entry.concat.includes(qConcat)) continue
+        concatHits.push({
+          verse_key: `${entry.surahId}:${entry.verseId}`,
+          text: entry.text,
+          strict: false,
+        })
+        if (concatHits.length >= MAX_RESULTS) break
       }
     }
 
     return NextResponse.json({
-      results: [...strictHits, ...looseHits],
+      results: [...strictHits, ...fuzzyHits, ...concatHits],
       strict_count: strictHits.length,
-      loose_count: looseHits.length,
+      loose_count: fuzzyHits.length + concatHits.length,
     })
   } catch (err) {
     console.error('[search] error:', err)

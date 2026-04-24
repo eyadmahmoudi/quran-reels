@@ -5,10 +5,13 @@ export async function GET(req: NextRequest) {
   if (!query) return NextResponse.json({ results: [] })
 
   try {
+    const encoded = encodeURIComponent(query)
     const res = await fetch(
-      `https://api.alquran.cloud/v1/search/${encodeURIComponent(query)}/quran-simple/ar`,
-      { headers: { 'Accept': 'application/json' } }
+      `https://api.alquran.cloud/v1/search/${encoded}/quran-simple/ar`
     )
+    
+    if (!res.ok) throw new Error(`API error: ${res.status}`)
+    
     const data = await res.json()
     const matches = data?.data?.matches || []
 
@@ -19,6 +22,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ results })
   } catch (err) {
-    return NextResponse.json({ results: [] }, { status: 500 })
+    console.error('Search proxy error:', err)
+    return NextResponse.json({ results: [], error: String(err) }, { status: 500 })
   }
 }

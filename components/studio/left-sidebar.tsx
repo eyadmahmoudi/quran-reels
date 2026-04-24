@@ -10,6 +10,7 @@ import {
   AtSign,
   ShieldCheck,
 } from 'lucide-react'
+import { AyahSearch } from '@/components/quran/ayah-search'
 import { SurahSelector } from '@/components/quran/surah-selector'
 import { VerseSelector } from '@/components/quran/verse-selector'
 import { ReciterSelector } from '@/components/quran/reciter-selector'
@@ -81,6 +82,8 @@ export function LeftSidebar() {
           description="Select Surah & verse range"
         >
           <div className="flex flex-col gap-3">
+            {/* HERE IS THE NEW SEARCH BAR */}
+            <AyahSearch />
             <SurahSelector />
             <VerseSelector />
           </div>

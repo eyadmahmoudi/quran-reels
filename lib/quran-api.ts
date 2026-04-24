@@ -175,3 +175,20 @@ export function calculateTotalDuration(
   const first = timings[0]
   return last.timestamp_to - first.timestamp_from
 }
+
+export async function searchAyahs(query: string) {
+  if (!query || query.trim() === '') return [];
+  
+  try {
+    // We use the official Quran.com search API, asking for Arabic results
+    const res = await fetch(`https://api.quran.com/api/v4/search?q=${encodeURIComponent(query)}&size=20&language=ar`);
+    if (!res.ok) throw new Error('Search failed');
+    const data = await res.json();
+    
+    // The API returns an array inside data.search.results
+    return data.search.results || [];
+  } catch (error) {
+    console.error('Error searching ayahs:', error);
+    return [];
+  }
+}

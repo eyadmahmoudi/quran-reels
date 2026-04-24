@@ -180,26 +180,22 @@ export async function searchAyahs(query: string) {
   if (!query || query.trim() === '') return [];
   
   try {
-    // 1. Advanced Normalizer: Strips basic vowels PLUS extended Tajweed stop marks
+    // 1. Strip the diacritics from the user's input so the search engine never fails
     const cleanQuery = query.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '').trim();
-    
     if (cleanQuery.length === 0) return [];
 
-    // 2. THE FIX: Notice the "/all/" right before "quran-simple-clean"
-    const url = `https://api.alquran.cloud/v1/search/${encodeURIComponent(cleanQuery)}/all/quran-simple-clean`;
+    // 2. Go back to Quran.com! Because we cleaned the query, it won't crash anymore.
+    // AND it returns beautiful Uthmani script by default.
+    const res = await fetch(`https://api.quran.com/api/v4/search?q=${encodeURIComponent(cleanQuery)}&size=20&language=ar`);
+    if (!res.ok) throw new Error('Search failed');
+    const data = await res.json();
     
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    const response = await res.json();
-    
-    // 3. Catch empty results safely
-    if (response.code !== 200 || !response.data || !response.data.matches) {
-      return [];
-    }
+    if (!data.search || !data.search.results) return [];
 
-    return response.data.matches.map((match: any) => ({
-      verse_key: `${match.surah.number}:${match.numberInSurah}`,
-      text: match.text, 
+    return data.search.results.map((result: any) => ({
+      verse_key: result.verse_key,
+      // The API returns Uthmani text with HTML <b> tags around the matched words!
+      text: result.text, 
     }));
   } catch (error) {
     console.error('Error searching ayahs:', error);

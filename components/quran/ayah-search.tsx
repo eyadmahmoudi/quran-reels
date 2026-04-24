@@ -76,7 +76,7 @@ export function AyahSearch() {
         <span>Search ayah by Arabic text...</span>
       </button>
 
-      <CommandDialog open={open} onOpenChange={setOpen} shouldFilter={false}>
+      <CommandDialog open={open} onOpenChange={setOpen}>
         <CommandInput
           placeholder="ابحث عن آية..."
           value={query}
@@ -104,7 +104,9 @@ export function AyahSearch() {
                 return (
                   <CommandItem
                     key={result.verse_key}
-                    value={result.text + result.verse_key}
+                    // This is the silver bullet. By putting 'query' in the value, the UI filter
+                    // sees a 100% perfect match every single time and allows the verse to show!
+                    value={`${query} ${result.verse_key}`}
                     onSelect={() => handleSelect(result.verse_key)}
                     className="flex cursor-pointer flex-col items-end gap-1 border-b border-border-subtle/50 px-4 py-3 last:border-0"
                   >

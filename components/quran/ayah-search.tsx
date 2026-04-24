@@ -69,25 +69,30 @@ export function AyahSearch() {
       </button>
 
       <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput
-          placeholder="ابحث عن آية..."
-          value={query}
-          onValueChange={setQuery}
-          style={{ direction: "rtl" }}
-        />
+        <div className="flex items-center border-b px-3 h-12">
+          <input
+            type="text"
+            placeholder="ابحث عن آية..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            dir="rtl"
+            autoFocus
+            className="flex h-10 w-full bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          />
+        </div>
         <CommandList className="max-h-[400px] overflow-y-auto overscroll-contain touch-pan-y">
           {loading && (
             <div className="flex items-center justify-center py-6 text-ink-tertiary">
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           )}
-          
+
           {!loading && query.length > 2 && results.length === 0 && (
             <div className="py-6 text-center text-[13px] text-ink-tertiary">
               No verses found for "{query}"
             </div>
           )}
-          
+
           {/* THE NUCLEAR BYPASS: We use native HTML so shadcn CANNOT filter it out */}
           {!loading && results.length > 0 && (
             <div className="p-2">
@@ -96,8 +101,10 @@ export function AyahSearch() {
               </div>
               <div className="flex flex-col gap-1 mt-1">
                 {results.map((result) => {
-                  const [surahId, verseId] = result.verse_key.split(':')
-                  const surahName = surahs.find(s => s.id === parseInt(surahId))?.name_arabic || `Surah ${surahId}`
+                  const [surahId, verseId] = result.verse_key.split(":");
+                  const surahName =
+                    surahs.find((s) => s.id === parseInt(surahId))
+                      ?.name_arabic || `Surah ${surahId}`;
 
                   return (
                     <button
@@ -106,7 +113,7 @@ export function AyahSearch() {
                       onClick={() => handleSelect(result.verse_key)}
                       className="flex w-full cursor-pointer flex-col items-end gap-1 rounded-[6px] px-3 py-3 text-left transition-colors hover:bg-subtle active:bg-border-subtle"
                     >
-                      <span 
+                      <span
                         className="font-arabic-ui text-right text-[16px] leading-relaxed text-ink-primary"
                         dir="rtl"
                         dangerouslySetInnerHTML={{ __html: result.text }}
@@ -115,7 +122,7 @@ export function AyahSearch() {
                         {surahName} • Ayah {verseId}
                       </span>
                     </button>
-                  )
+                  );
                 })}
               </div>
             </div>

@@ -670,9 +670,24 @@ function buildDisplaySegments(
         }
       }
 
-      const effectiveBoundaries = selectedBoundaries.map((b, idx) =>
-        b && chunks[idx].endsWithWaqf ? b : null
-      )
+      // For chunks ending in a waqf mark, the screen MUST advance at that
+      // boundary even if pause-detection missed the audio gap. Reciters like
+      // Mohamed Ayoub have short waqf pauses (~150ms) that fall below
+      // findInternalPauses' 250ms threshold, which previously caused the
+      // boundary to be dropped and the next chunk to be merged into the
+      // current display group — making the screen lag one chunk behind the
+      // audio. When that happens, fall back to a text-proportional transition.
+      const SYNTHETIC_PAUSE_HALF_WIDTH_MS = 80
+      const effectiveBoundaries = selectedBoundaries.map((b, idx) => {
+        if (!chunks[idx].endsWithWaqf) return null
+        if (b !== null) return b
+        const propTimeMs = timing.startMs + textBoundaries[idx] * verseDuration
+        console.log(`[sync] V${verseArrayIdx} boundary ${idx} (text@${(textBoundaries[idx]*100).toFixed(1)}%): no pause detected, using proportional time ${(propTimeMs/1000).toFixed(2)}s`)
+        return {
+          startMs: propTimeMs - SYNTHETIC_PAUSE_HALF_WIDTH_MS,
+          endMs: propTimeMs + SYNTHETIC_PAUSE_HALF_WIDTH_MS,
+        }
+      })
 
       type DisplayGroup = {
         chunkIndices: number[]

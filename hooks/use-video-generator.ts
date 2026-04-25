@@ -531,6 +531,12 @@ function buildGroupTranslationText(
   return wbw || proportionalFallback
 }
 
+interface QDCVerseInfo {
+  segments: number[][]
+  timestamp_from: number
+  timestamp_to: number
+}
+
 function buildDisplaySegments(
   verseTimings: Array<{ startMs: number; endMs: number }>,
   verses: Verse[],
@@ -543,7 +549,8 @@ function buildDisplaySegments(
   showTranslation: boolean,
   perBufferPauses: Array<Array<{ startMs: number; endMs: number }>>,
   rawTimings: Array<{ startMs: number; endMs: number }>,
-  qdcSegmentsByDisplayIndex: Array<number[][] | null>
+  qdcInfoByDisplayIndex: Array<QDCVerseInfo | null>,
+  bufferRecitationDurations: number[]
 ): DisplaySegment[] {
   const segments: DisplaySegment[] = []
   const WAQF_BONUS_CHARS = 11
@@ -598,7 +605,161 @@ function buildDisplaySegments(
 
     const bufferPauses = perBufferPauses[i] ?? []
     const rawStart = rawTimings[i].startMs
-    const qdcSegments = qdcSegmentsByDisplayIndex[i] ?? null
+    const qdcInfo = qdcInfoByDisplayIndex[i] ?? null
+
+    // ── QDC WORD-TIMING PATH ──
+    // When QDC per-word segments exist, use them to derive exact chunk
+    // boundaries. This is the YouTube-subtitle-style behaviour: each chunk's
+    // boundary is set to the moment its last word ends in the recitation.
+    // Falls back to pause heuristic when QDC data is absent (e.g., Mohamed
+    // Ayoub) or when scaling is sanity-check-failing.
+    if (qdcInfo && qdcInfo.segments.length > 0 && numBoundaries > 0) {
+      // Build word-position → {startMs, endMs} (last occurrence wins; for
+      // repeated recitations like Mishari, span over all occurrences).
+      const qdcSegMap = new Map<number, { startMs: number; endMs: number }>()
+      for (const seg of qdcInfo.segments) {
+        if (!Array.isArray(seg) || seg.length < 3) continue
+        const [pos, sMs, eMs] = seg
+        const existing = qdcSegMap.get(pos)
+        if (!existing) {
+          qdcSegMap.set(pos, { startMs: sMs, endMs: eMs })
+        } else {
+          qdcSegMap.set(pos, {
+            startMs: Math.min(existing.startMs, sMs),
+            endMs: Math.max(existing.endMs, eMs),
+          })
+        }
+      }
+
+      // QDC recitation span (use first/last actual segment, not timestamp_from/to,
+      // to avoid any leading/trailing silence baked into chapter timestamps).
+      const segPositions = [...qdcSegMap.keys()].sort((a, b) => a - b)
+      const firstPos = segPositions[0]
+      const lastPos = segPositions[segPositions.length - 1]
+      const qdcRecStart = qdcSegMap.get(firstPos)!.startMs
+      const qdcRecEnd = qdcSegMap.get(lastPos)!.endMs
+      const qdcRecDur = qdcRecEnd - qdcRecStart
+
+      // verseTimings[i].startMs is post-leading-silence; bufferRecitationDurations[i]
+      // is the active recitation length (excludes both leading and trailing silence).
+      const bufRecStart = verseTimings[i].startMs
+      const bufRecDur = bufferRecitationDurations[i] ?? 0
+      const scale = qdcRecDur > 0 && bufRecDur > 0 ? bufRecDur / qdcRecDur : 0
+
+      // Sanity check: same recording across CDNs should be within ±20% tempo.
+      const scaleOk = scale > 0.7 && scale < 1.3
+
+      if (scaleOk) {
+        // Compute cumulative word position at end of each chunk.
+        const chunkEndWordPos: number[] = []
+        let cum = 0
+        for (const c of chunks) {
+          cum += c.wordCount
+          chunkEndWordPos.push(cum)
+        }
+
+        const qdcBoundaries: Array<{ startMs: number; endMs: number } | null> = []
+        const FALLBACK_HALF_WIDTH_MS = 60
+        let allFound = true
+        for (let k = 0; k < numBoundaries; k++) {
+          const wordPos = chunkEndWordPos[k]
+          // Look up exact word position; if missing (rare QDC indexing gap),
+          // walk back up to 2 positions to recover.
+          let entry = qdcSegMap.get(wordPos)
+          let foundPos = wordPos
+          for (let back = 1; back <= 2 && !entry; back++) {
+            entry = qdcSegMap.get(wordPos - back)
+            foundPos = wordPos - back
+          }
+          if (!entry) {
+            qdcBoundaries.push(null)
+            allFound = false
+            continue
+          }
+          const relativeQdcMs = entry.endMs - qdcRecStart
+          const bufferMs = bufRecStart + relativeQdcMs * scale
+          qdcBoundaries.push({
+            startMs: bufferMs - FALLBACK_HALF_WIDTH_MS,
+            endMs: bufferMs + FALLBACK_HALF_WIDTH_MS,
+          })
+          if (foundPos !== wordPos) {
+            console.log(`[sync] V${verseArrayIdx} QDC: boundary ${k} word ${wordPos} missing, used word ${foundPos}`)
+          }
+        }
+
+        console.log(`[sync] V${verseArrayIdx} QDC word-timing: scale=${scale.toFixed(3)}, ${qdcBoundaries.filter(b => b).length}/${numBoundaries} boundaries derived${allFound ? '' : ' (some fallbacks needed)'}`)
+
+        // Build display groups directly: each chunk is its own group when
+        // we have a boundary; merge orphans into next chunk if a boundary
+        // is missing.
+        type DisplayGroup = {
+          chunkIndices: number[]
+          text: string
+          isLast: boolean
+          translationText: string
+        }
+
+        const displayGroups: DisplayGroup[] = []
+        const activeBoundaries: Array<{ startMs: number; endMs: number }> = []
+        let currentGroupIndices: number[] = [0]
+
+        for (let b = 0; b < numBoundaries; b++) {
+          if (qdcBoundaries[b] !== null) {
+            const groupText = currentGroupIndices.map(ci => chunks[ci].text).join(' ')
+            const groupTranslation = buildGroupTranslationText(
+              verse, groupText, currentGroupIndices, chunks, translationChunks
+            )
+            displayGroups.push({
+              chunkIndices: [...currentGroupIndices],
+              text: groupText,
+              isLast: false,
+              translationText: groupTranslation,
+            })
+            activeBoundaries.push(qdcBoundaries[b]!)
+            currentGroupIndices = [b + 1]
+          } else {
+            currentGroupIndices.push(b + 1)
+          }
+        }
+
+        const finalGroupText = currentGroupIndices.map(ci => chunks[ci].text).join(' ')
+        const finalGroupTranslation = buildGroupTranslationText(
+          verse, finalGroupText, currentGroupIndices, chunks, translationChunks
+        )
+        displayGroups.push({
+          chunkIndices: [...currentGroupIndices],
+          text: finalGroupText,
+          isLast: true,
+          translationText: finalGroupTranslation,
+        })
+
+        for (let g = 0; g < displayGroups.length; g++) {
+          const group = displayGroups[g]
+          const startMs = g === 0
+            ? timing.startMs
+            : (activeBoundaries[g - 1].startMs + activeBoundaries[g - 1].endMs) / 2
+          const endMs = g === displayGroups.length - 1
+            ? timing.endMs
+            : (activeBoundaries[g].startMs + activeBoundaries[g].endMs) / 2
+          const isFullVerse = group.chunkIndices.length === chunks.length
+
+          segments.push({
+            type: 'verse-chunk',
+            verseIndex: verseArrayIdx,
+            chunkText: isFullVerse ? undefined : group.text,
+            showMarker: group.isLast,
+            showTranslationForChunk: showTranslation,
+            translationChunkText: isFullVerse ? undefined : group.translationText,
+            startMs: Math.max(startMs, timing.startMs),
+            endMs: Math.min(endMs, timing.endMs),
+          })
+        }
+
+        continue
+      } else {
+        console.warn(`[sync] V${verseArrayIdx} QDC scale=${scale.toFixed(3)} out of [0.7, 1.3]; falling back to pause heuristic`)
+      }
+    }
 
     const pauseProportions = bufferPauses.map(p => {
       const midMs = (p.startMs + p.endMs) / 2
@@ -873,6 +1034,12 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
 
         // ── Audio analysis ──
         const leadingSilences = decodedBuffers.map(buf => findLeadingSilenceMs(buf))
+        const trailingSilences = decodedBuffers.map(buf => findTrailingSilenceMs(buf))
+        const sampleRateMs = sampleRate / 1000
+        const bufferRecitationDurations = decodedBuffers.map((buf, i) => {
+          const totalMs = (buf.length / sampleRateMs)
+          return Math.max(0, totalMs - leadingSilences[i] - trailingSilences[i])
+        })
         const displayTimings = rawTimings.map((raw, i) => ({
           startMs: raw.startMs + leadingSilences[i],
           endMs: i < rawTimings.length - 1
@@ -914,8 +1081,17 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         const taawudhIdx = taawudhBuffer ? 0 : -1
         const bismillahIdx = bismillahBuffer ? (taawudhBuffer ? 1 : 0) : -1
         const introOffset = (taawudhBuffer ? 1 : 0) + (bismillahBuffer ? 1 : 0)
-        const qdcByVerseKey = new Map(qdcVerseTimings.map((v) => [v.verse_key, v.segments || []] as const))
-        const qdcSegmentsByDisplayIndex = displayTimings.map((_, i) => {
+        const qdcByVerseKey = new Map(
+          qdcVerseTimings.map((v) => [
+            v.verse_key,
+            {
+              segments: v.segments || [],
+              timestamp_from: v.timestamp_from,
+              timestamp_to: v.timestamp_to,
+            },
+          ] as const)
+        )
+        const qdcInfoByDisplayIndex = displayTimings.map((_, i) => {
           const verseArrayIdx = i - introOffset
           if (verseArrayIdx < 0 || verseArrayIdx >= verses.length) return null
           const verseKey = verses[verseArrayIdx]?.verse_key
@@ -925,7 +1101,8 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         const displaySegments = buildDisplaySegments(
           displayTimings, verses, introOffset, taawudhIdx, bismillahIdx,
           taawudhText, BISMILLAH_TEXT, displayMode, showTranslation,
-          perBufferPauses, rawTimings, qdcSegmentsByDisplayIndex
+          perBufferPauses, rawTimings, qdcInfoByDisplayIndex,
+          bufferRecitationDurations
         )
 
         console.log('[sync] Display segments:')

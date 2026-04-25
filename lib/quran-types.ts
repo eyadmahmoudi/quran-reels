@@ -407,7 +407,7 @@ export const POPULAR_RECITERS: ReciterOption[] = [
   { id: 10, name: 'Muhammad Ayyoub',              arabicName: 'محمد أيوب',            folder: 'Muhammad_Ayyoub_128kbps',        qdcRecitationId: null },
   { id: 11, name: 'Nasser Al-Qatami',             arabicName: 'ناصر القطامي',         folder: 'Nasser_Alqatami_128kbps',        qdcRecitationId: null },
   { id: 12, name: 'Saad Al-Ghamdi',               arabicName: 'سعد الغامدي',          folder: 'Ghamadi_40kbps',                 qdcRecitationId: null },
-  { id: 13, name: 'Yasser Al-Dosari',             arabicName: 'ياسر الدوسري',         folder: 'Yasser_Ad-Dussary_128kbps',      qdcRecitationId: 97 },
+  { id: 13, name: 'Yasser Al-Dosari',             arabicName: 'ياسر الدوسري',         folder: 'Yasser_Ad-Dussary_128kbps',      qdcRecitationId: null },
 ]
 
 export const TRANSLATION_RESOURCES = [

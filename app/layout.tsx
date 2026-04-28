@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Fraunces, Inter, Amiri, Reem_Kufi, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import Script from 'next/script'
 import './globals.css'
 
 const fraunces = Fraunces({
@@ -64,7 +65,21 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${fraunces.variable} ${inter.variable} ${amiri.variable} ${reemKufi.variable} ${jetbrainsMono.variable} lg:h-[100dvh] lg:overflow-hidden`}
     >
-      <head />
+      <head>
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-8T7SK384HE"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-8T7SK384HE');
+          `}
+        </Script>
+      </head>
       <body className="min-h-screen bg-canvas font-sans text-ink-primary antialiased lg:h-full lg:min-h-0 lg:overflow-hidden">
         <div className="flex min-h-screen flex-col lg:h-full lg:min-h-0">
           <div className="flex flex-1 flex-col lg:min-h-0">{children}</div>

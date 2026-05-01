@@ -696,31 +696,71 @@ function buildDisplaySegments(
 
         const qdcBoundaries: Array<{ startMs: number; endMs: number } | null> = []
         const FALLBACK_HALF_WIDTH_MS = 60
+        // Cross-fade is centered on the boundary, so the new chunk only
+        // reaches full alpha HALF_FADE *after* the boundary timestamp.
+        // To avoid this perceptual lag in connected recitation (no real
+        // pause between two chunks), we lead the boundary by HALF_FADE so
+        // the cross-fade COMPLETES right when the next word becomes
+        // audible. When there IS a real wa9f pause, we keep anchoring to
+        // the pause start (current behavior, user-confirmed perfect).
+        const HALF_FADE_QDC = FADE_DURATION_MS / 2
+        const REAL_PAUSE_GAP_MS = 150
         let allFound = true
         for (let k = 0; k < numBoundaries; k++) {
-          const wordPos = chunkEndWordPos[k]
-          // Look up exact word position; if missing (rare QDC indexing gap),
-          // walk back up to 2 positions to recover.
-          let entry = qdcSegMap.get(wordPos)
-          let foundPos = wordPos
-          for (let back = 1; back <= 2 && !entry; back++) {
-            entry = qdcSegMap.get(wordPos - back)
-            foundPos = wordPos - back
+          const lastWordPos = chunkEndWordPos[k]
+          const nextWordPos = lastWordPos + 1
+
+          // Look up the last word of the current chunk; walk back if missing.
+          let curEntry = qdcSegMap.get(lastWordPos)
+          let foundPos = lastWordPos
+          for (let back = 1; back <= 2 && !curEntry; back++) {
+            curEntry = qdcSegMap.get(lastWordPos - back)
+            foundPos = lastWordPos - back
           }
-          if (!entry) {
+          // Look up the first word of the next chunk (used for lead).
+          const nextEntry = qdcSegMap.get(nextWordPos)
+
+          let qdcEventMs: number | null = null
+          let mode: 'pause' | 'connected' | 'curr-only' | 'next-only' | 'miss'
+
+          if (curEntry && nextEntry) {
+            const gap = nextEntry.startMs - curEntry.endMs
+            if (gap > REAL_PAUSE_GAP_MS) {
+              // Real wa9f pause — anchor at the start of the silence.
+              qdcEventMs = curEntry.endMs
+              mode = 'pause'
+            } else {
+              // Connected (or near-connected) — lead so cross-fade
+              // completes right when the next word arrives.
+              qdcEventMs = nextEntry.startMs - HALF_FADE_QDC / scale
+              mode = 'connected'
+            }
+          } else if (nextEntry) {
+            qdcEventMs = nextEntry.startMs - HALF_FADE_QDC / scale
+            mode = 'next-only'
+          } else if (curEntry) {
+            qdcEventMs = curEntry.endMs
+            mode = 'curr-only'
+          } else {
+            mode = 'miss'
+          }
+
+          if (qdcEventMs === null) {
             qdcBoundaries.push(null)
             allFound = false
             continue
           }
-          const relativeQdcMs = entry.endMs - qdcRecStart
+
+          const relativeQdcMs = qdcEventMs - qdcRecStart
           const bufferMs = bufRecStart + relativeQdcMs * scale
           qdcBoundaries.push({
             startMs: bufferMs - FALLBACK_HALF_WIDTH_MS,
             endMs: bufferMs + FALLBACK_HALF_WIDTH_MS,
           })
-          if (foundPos !== wordPos) {
-            console.log(`[sync] V${verseArrayIdx} QDC: boundary ${k} word ${wordPos} missing, used word ${foundPos}`)
+          if (foundPos !== lastWordPos) {
+            console.log(`[sync] V${verseArrayIdx} QDC: boundary ${k} word ${lastWordPos} missing, used word ${foundPos}`)
           }
+          console.log(`[sync] V${verseArrayIdx} boundary ${k} mode=${mode} @ ${(bufferMs/1000).toFixed(2)}s`)
         }
 
         console.log(`[sync] V${verseArrayIdx} QDC word-timing: scale=${scale.toFixed(3)}, ${qdcBoundaries.filter(b => b).length}/${numBoundaries} boundaries derived${allFound ? '' : ' (some fallbacks needed)'}`)

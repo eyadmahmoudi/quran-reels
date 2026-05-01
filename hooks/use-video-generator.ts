@@ -696,19 +696,27 @@ function buildDisplaySegments(
 
         const qdcBoundaries: Array<{ startMs: number; endMs: number } | null> = []
         const FALLBACK_HALF_WIDTH_MS = 60
-        // Cross-fade is centered on the boundary, so the new chunk only
-        // reaches full alpha HALF_FADE *after* the boundary timestamp.
-        // To avoid this perceptual lag in connected recitation (no real
-        // pause between two chunks), we lead the boundary by HALF_FADE so
-        // the cross-fade COMPLETES right when the next word becomes
-        // audible. When there IS a real wa9f pause, we keep anchoring to
-        // the pause start (current behavior, user-confirmed perfect).
+        // Cross-fade is centered on each boundary. To avoid perceptual lag
+        // in connected recitation we lead the boundary by HALF_FADE so the
+        // cross-fade COMPLETES right when the next word becomes audible.
+        //
+        // For fast reciters who read THROUGH a wa9f mark without stopping
+        // (e.g. Sudais on Ayat al-Kursi), the audio gap is essentially
+        // zero. Showing a transition there feels wrong because there is no
+        // audio cue to anchor it to. So we MERGE such chunks instead —
+        // emit no boundary at that point, letting the chunk on the left
+        // absorb the chunk on the right, capped at MAX_MERGED_CHARS so we
+        // don't run off the screen.
         const HALF_FADE_QDC = FADE_DURATION_MS / 2
-        const REAL_PAUSE_GAP_MS = 150
+        const MERGE_GAP_MS = 250        // gap below this → merge, no transition
+        const REAL_PAUSE_GAP_MS = 600   // gap above this → anchor at start of silence
+        const MAX_MERGED_CHARS = Math.floor(maxChars * 1.5)
         let allFound = true
+        let runningCharsInGroup = chunks[0].charCount
         for (let k = 0; k < numBoundaries; k++) {
           const lastWordPos = chunkEndWordPos[k]
           const nextWordPos = lastWordPos + 1
+          const nextChunkChars = chunks[k + 1].charCount
 
           // Look up the last word of the current chunk; walk back if missing.
           let curEntry = qdcSegMap.get(lastWordPos)
@@ -721,23 +729,32 @@ function buildDisplaySegments(
           const nextEntry = qdcSegMap.get(nextWordPos)
 
           let qdcEventMs: number | null = null
-          let mode: 'pause' | 'connected' | 'curr-only' | 'next-only' | 'miss'
+          let mode: 'pause' | 'connected' | 'merged' | 'merged-forced' | 'curr-only' | 'next-only' | 'miss'
 
-          if (curEntry && nextEntry) {
-            const gap = nextEntry.startMs - curEntry.endMs
-            if (gap > REAL_PAUSE_GAP_MS) {
-              // Real wa9f pause — anchor at the start of the silence.
-              qdcEventMs = curEntry.endMs
-              mode = 'pause'
-            } else {
-              // Connected (or near-connected) — lead so cross-fade
-              // completes right when the next word arrives.
-              qdcEventMs = nextEntry.startMs - HALF_FADE_QDC / scale
-              mode = 'connected'
-            }
-          } else if (nextEntry) {
+          const gap = curEntry && nextEntry
+            ? nextEntry.startMs - curEntry.endMs
+            : Number.POSITIVE_INFINITY
+          const wouldExceedCap = runningCharsInGroup + nextChunkChars > MAX_MERGED_CHARS
+
+          if (curEntry && nextEntry && gap < MERGE_GAP_MS && !wouldExceedCap) {
+            // Reciter read through this wa9f — merge chunks (no transition).
+            mode = 'merged'
+            qdcEventMs = null
+          } else if (curEntry && nextEntry && gap < MERGE_GAP_MS && wouldExceedCap) {
+            // Want to merge but combined chunk would be too long → force a
+            // transition with lead so we don't overflow the display.
             qdcEventMs = nextEntry.startMs - HALF_FADE_QDC / scale
-            mode = 'next-only'
+            mode = 'merged-forced'
+          } else if (curEntry && gap > REAL_PAUSE_GAP_MS) {
+            // Long real pause — anchor at start of silence so the new chunk
+            // becomes visible early in the pause (gives reading time).
+            qdcEventMs = curEntry.endMs
+            mode = 'pause'
+          } else if (nextEntry) {
+            // Brief pause / connected — lead so cross-fade completes when
+            // next word becomes audible.
+            qdcEventMs = nextEntry.startMs - HALF_FADE_QDC / scale
+            mode = 'connected'
           } else if (curEntry) {
             qdcEventMs = curEntry.endMs
             mode = 'curr-only'
@@ -746,8 +763,13 @@ function buildDisplaySegments(
           }
 
           if (qdcEventMs === null) {
+            // Either intentional merge or QDC miss — both render as a null
+            // boundary, which causes the next chunk to be absorbed into
+            // the current display group.
             qdcBoundaries.push(null)
-            allFound = false
+            runningCharsInGroup += nextChunkChars
+            if (mode === 'miss') allFound = false
+            console.log(`[sync] V${verseArrayIdx} boundary ${k} mode=${mode} (gap=${gap.toFixed(0)}ms, group=${runningCharsInGroup}c)`)
             continue
           }
 
@@ -757,10 +779,11 @@ function buildDisplaySegments(
             startMs: bufferMs - FALLBACK_HALF_WIDTH_MS,
             endMs: bufferMs + FALLBACK_HALF_WIDTH_MS,
           })
+          runningCharsInGroup = nextChunkChars  // reset for new group
           if (foundPos !== lastWordPos) {
             console.log(`[sync] V${verseArrayIdx} QDC: boundary ${k} word ${lastWordPos} missing, used word ${foundPos}`)
           }
-          console.log(`[sync] V${verseArrayIdx} boundary ${k} mode=${mode} @ ${(bufferMs/1000).toFixed(2)}s`)
+          console.log(`[sync] V${verseArrayIdx} boundary ${k} mode=${mode} (gap=${gap === Number.POSITIVE_INFINITY ? 'n/a' : gap.toFixed(0)+'ms'}) @ ${(bufferMs/1000).toFixed(2)}s`)
         }
 
         console.log(`[sync] V${verseArrayIdx} QDC word-timing: scale=${scale.toFixed(3)}, ${qdcBoundaries.filter(b => b).length}/${numBoundaries} boundaries derived${allFound ? '' : ' (some fallbacks needed)'}`)
@@ -992,6 +1015,41 @@ function buildDisplaySegments(
         })
       }
 
+    } else if (numBoundaries > 0) {
+      // ── PROPORTIONAL FALLBACK ──
+      // No QDC data AND no internal pauses detected — but the verse text
+      // is long enough to need multiple chunks. Without this branch we
+      // would degrade to "show full verse" (the previous Nasser Al-Qatami
+      // behavior). Instead, distribute boundaries proportionally across
+      // the verse using the same character-weighted positions the pause
+      // assignment uses.
+      const FALLBACK_HALF_WIDTH_MS = 60
+      const proportionalBoundaries = textBoundaries.map(p => {
+        const ms = timing.startMs + p * verseDuration
+        return { startMs: ms - FALLBACK_HALF_WIDTH_MS, endMs: ms + FALLBACK_HALF_WIDTH_MS }
+      })
+
+      console.log(`[sync] V${verseArrayIdx} no pauses detected; using proportional fallback for ${chunks.length} chunks`)
+
+      for (let g = 0; g < chunks.length; g++) {
+        const startMs = g === 0
+          ? timing.startMs
+          : (proportionalBoundaries[g - 1].startMs + proportionalBoundaries[g - 1].endMs) / 2
+        const endMs = g === chunks.length - 1
+          ? timing.endMs
+          : (proportionalBoundaries[g].startMs + proportionalBoundaries[g].endMs) / 2
+
+        segments.push({
+          type: 'verse-chunk',
+          verseIndex: verseArrayIdx,
+          chunkText: chunks[g].text,
+          showMarker: g === chunks.length - 1,
+          showTranslationForChunk: showTranslation,
+          translationChunkText: translationChunks[g] || '',
+          startMs: Math.max(startMs, timing.startMs),
+          endMs: Math.min(endMs, timing.endMs),
+        })
+      }
     } else {
       segments.push({
         type: 'verse-chunk',

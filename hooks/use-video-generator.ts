@@ -101,28 +101,37 @@ function findTrailingSilenceMs(buffer: AudioBuffer, threshold = 0.01): number {
 /**
  * Detects INTERNAL silence pauses within a verse's AudioBuffer.
  *
- * FIX v3 — Three critical changes from v2:
+ * v4 — Tuning notes:
  *
- * 1. RAISED minGapMs from 120 → 250ms
- *    120ms caught breathing pauses (120–200ms) that aren't real waqf
- *    transitions. Real waqf pauses from EveryAyah reciters are 300–600ms.
- *    250ms catches the shorter end while filtering most breathing.
+ * 1. minGapMs = 130
+ *    Reciters like Nasser Al-Qatami have brief wa9f pauses (~150–250ms)
+ *    that the previous v3 threshold (250ms) missed entirely, leaving the
+ *    pipeline with zero data and dropping it into proportional fallback.
+ *    Lowered to 130ms to catch those. False-positive "breath" pauses
+ *    that don't fall near a text-derived chunk boundary are rejected
+ *    downstream by the MAX_PAUSE_TO_BOUNDARY_DIST = 0.13 filter, so
+ *    catching too many pauses here is safe.
  *
- * 2. MERGE close pauses (within 1.5s of each other)
- *    A reciter sometimes double-pauses near a waqf mark: a brief stop,
- *    a quick breath, then a longer stop. The old code treated these as
- *    TWO separate boundaries, creating an ultra-short segment (~0.8s)
- *    that caused blank frames during fade transitions. Merging them into
- *    one boundary eliminates this.
+ * 2. RMS threshold = 0.025
+ *    Some everyayah MP3s have a residual noise floor in their silences
+ *    (compression artifact / mic hiss) that sat above the previous
+ *    0.015 threshold, causing pause windows to never trigger. 0.025 is
+ *    permissive enough to catch those while still being below typical
+ *    speech RMS (~0.05–0.20).
  *
- * 3. Returns the MIDPOINT of merged pauses as the boundary timestamp
- *    instead of the raw start/end. This centers the text transition
- *    in the middle of the silence, which looks more natural.
+ * 3. Cluster-merge window = 800ms (was 2000ms)
+ *    The old 2-second window was over-aggressive — it would collapse two
+ *    real wa9f pauses 1.5s apart into one boundary, losing a chunk
+ *    transition. 800ms still merges true double-pauses (brief stop +
+ *    breath + longer stop) without conflating distinct phrase breaks.
+ *
+ * 4. Merged pauses return their midpoint, so the visual transition is
+ *    centered in the silence.
  */
 function findInternalPauses(
   buffer: AudioBuffer,
-  threshold = 0.015,
-  minGapMs = 250           // ← raised from 120
+  threshold = 0.025,       // ← raised from 0.015
+  minGapMs = 130           // ← lowered from 250
 ): Array<{ startMs: number; endMs: number }> {
   const sr = buffer.sampleRate
   const ch0 = buffer.getChannelData(0)
@@ -176,7 +185,7 @@ function findInternalPauses(
     const curr = filtered[i]
     const gap = curr.startMs - prev.endMs
 
-    if (gap < 2000) {
+    if (gap < 800) {
       const prevDur = prev.endMs - prev.startMs
       const currDur = curr.endMs - curr.startMs
       if (prevDur <= currDur) {
@@ -696,63 +705,43 @@ function buildDisplaySegments(
 
         const qdcBoundaries: Array<{ startMs: number; endMs: number } | null> = []
         const FALLBACK_HALF_WIDTH_MS = 60
-        // Cross-fade is centered on each boundary. To avoid perceptual lag
-        // in connected recitation we lead the boundary by HALF_FADE so the
-        // cross-fade COMPLETES right when the next word becomes audible.
+        // Always honor every wa9f boundary — never merge. For each boundary
+        // we choose between two timing strategies based on the inter-word
+        // gap reported by QDC:
         //
-        // For fast reciters who read THROUGH a wa9f mark without stopping
-        // (e.g. Sudais on Ayat al-Kursi), the audio gap is essentially
-        // zero. Showing a transition there feels wrong because there is no
-        // audio cue to anchor it to. So we MERGE such chunks instead —
-        // emit no boundary at that point, letting the chunk on the left
-        // absorb the chunk on the right, capped at MAX_MERGED_CHARS so we
-        // don't run off the screen.
+        //   - gap > REAL_PAUSE_GAP_MS  → "pause" mode: anchor at the start
+        //     of the silence. The new chunk becomes visible early in the
+        //     pause, giving the viewer reading time.
+        //
+        //   - otherwise                → "connected" mode: lead the
+        //     boundary by HALF_FADE so the cross-fade COMPLETES right when
+        //     the next word becomes audible (covers both brief wa9fs and
+        //     truly read-through phrases).
         const HALF_FADE_QDC = FADE_DURATION_MS / 2
-        const MERGE_GAP_MS = 250        // gap below this → merge, no transition
-        const REAL_PAUSE_GAP_MS = 600   // gap above this → anchor at start of silence
-        const MAX_MERGED_CHARS = Math.floor(maxChars * 1.5)
+        const REAL_PAUSE_GAP_MS = 400
         let allFound = true
-        let runningCharsInGroup = chunks[0].charCount
         for (let k = 0; k < numBoundaries; k++) {
           const lastWordPos = chunkEndWordPos[k]
           const nextWordPos = lastWordPos + 1
-          const nextChunkChars = chunks[k + 1].charCount
 
-          // Look up the last word of the current chunk; walk back if missing.
           let curEntry = qdcSegMap.get(lastWordPos)
           let foundPos = lastWordPos
           for (let back = 1; back <= 2 && !curEntry; back++) {
             curEntry = qdcSegMap.get(lastWordPos - back)
             foundPos = lastWordPos - back
           }
-          // Look up the first word of the next chunk (used for lead).
           const nextEntry = qdcSegMap.get(nextWordPos)
 
           let qdcEventMs: number | null = null
-          let mode: 'pause' | 'connected' | 'merged' | 'merged-forced' | 'curr-only' | 'next-only' | 'miss'
-
+          let mode: 'pause' | 'connected' | 'curr-only' | 'next-only' | 'miss'
           const gap = curEntry && nextEntry
             ? nextEntry.startMs - curEntry.endMs
             : Number.POSITIVE_INFINITY
-          const wouldExceedCap = runningCharsInGroup + nextChunkChars > MAX_MERGED_CHARS
 
-          if (curEntry && nextEntry && gap < MERGE_GAP_MS && !wouldExceedCap) {
-            // Reciter read through this wa9f — merge chunks (no transition).
-            mode = 'merged'
-            qdcEventMs = null
-          } else if (curEntry && nextEntry && gap < MERGE_GAP_MS && wouldExceedCap) {
-            // Want to merge but combined chunk would be too long → force a
-            // transition with lead so we don't overflow the display.
-            qdcEventMs = nextEntry.startMs - HALF_FADE_QDC / scale
-            mode = 'merged-forced'
-          } else if (curEntry && gap > REAL_PAUSE_GAP_MS) {
-            // Long real pause — anchor at start of silence so the new chunk
-            // becomes visible early in the pause (gives reading time).
+          if (curEntry && nextEntry && gap > REAL_PAUSE_GAP_MS) {
             qdcEventMs = curEntry.endMs
             mode = 'pause'
           } else if (nextEntry) {
-            // Brief pause / connected — lead so cross-fade completes when
-            // next word becomes audible.
             qdcEventMs = nextEntry.startMs - HALF_FADE_QDC / scale
             mode = 'connected'
           } else if (curEntry) {
@@ -763,13 +752,9 @@ function buildDisplaySegments(
           }
 
           if (qdcEventMs === null) {
-            // Either intentional merge or QDC miss — both render as a null
-            // boundary, which causes the next chunk to be absorbed into
-            // the current display group.
             qdcBoundaries.push(null)
-            runningCharsInGroup += nextChunkChars
-            if (mode === 'miss') allFound = false
-            console.log(`[sync] V${verseArrayIdx} boundary ${k} mode=${mode} (gap=${gap.toFixed(0)}ms, group=${runningCharsInGroup}c)`)
+            allFound = false
+            console.log(`[sync] V${verseArrayIdx} boundary ${k} mode=${mode}`)
             continue
           }
 
@@ -779,7 +764,6 @@ function buildDisplaySegments(
             startMs: bufferMs - FALLBACK_HALF_WIDTH_MS,
             endMs: bufferMs + FALLBACK_HALF_WIDTH_MS,
           })
-          runningCharsInGroup = nextChunkChars  // reset for new group
           if (foundPos !== lastWordPos) {
             console.log(`[sync] V${verseArrayIdx} QDC: boundary ${k} word ${lastWordPos} missing, used word ${foundPos}`)
           }

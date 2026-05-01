@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import type { Verse, Word, BackgroundOption, ReelConfig } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
 import { splitVerseByWordTimings, splitTranslation } from '@/lib/verse-chunking'
-import { fetchAudioSegments } from '@/lib/quran-api'
+import { fetchAudioSegments, fetchQDCVerseAudioUrls } from '@/lib/quran-api'
 
 interface VideoGeneratorOptions {
   verses: Verse[]
@@ -1100,9 +1100,24 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
 
         const taawudhText = 'أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ'
         const BISMILLAH_TEXT = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ'
-        const qdcVerseTimings = qdcRecitationId
-          ? await fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => [])
-          : []
+        // QDC segments + matching per-verse audio URLs are fetched in
+        // parallel for QDC-supported reciters. Using QDC's own audio
+        // (verses.quran.com) instead of everyayah is critical when QDC
+        // word timings are in play — those timings are derived from this
+        // exact recording, so substituting everyayah causes the kind of
+        // progressive drift seen with Sudais on Ayat al-Kursi.
+        let qdcVerseTimings: Awaited<ReturnType<typeof fetchAudioSegments>> = []
+        let qdcVerseAudioUrls = new Map<string, string>()
+        if (qdcRecitationId) {
+          const [timings, urls] = await Promise.all([
+            fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => []),
+            fetchQDCVerseAudioUrls(qdcRecitationId, surahId, startVerse, endVerse).catch(
+              () => new Map<string, string>()
+            ),
+          ])
+          qdcVerseTimings = timings
+          qdcVerseAudioUrls = urls
+        }
 
         let taawudhBuffer: AudioBuffer | null = null
         if (includeIstiadha) {
@@ -1124,8 +1139,19 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
 
         for (let i = startVerse; i <= endVerse; i++) {
           if (cancelledRef.current) { audioCtx.close(); return }
-          const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
-          const originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
+          const verseKey = `${surahId}:${i}`
+          // Prefer QDC's own per-verse audio when available — guarantees
+          // the audio matches the QDC segment timestamps exactly. Fall
+          // back to everyayah for non-QDC reciters or if QDC's API is
+          // missing this verse.
+          const qdcUrl = qdcVerseAudioUrls.get(verseKey)
+          let originalUrl: string
+          if (qdcUrl) {
+            originalUrl = qdcUrl
+          } else {
+            const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
+            originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
+          }
           const resp = await fetch(`/api/audio?url=${encodeURIComponent(originalUrl)}`)
           if (!resp.ok) throw new Error(`Failed to fetch audio for verse ${i}`)
           decodedBuffers.push(await audioCtx.decodeAudioData(await resp.arrayBuffer()))

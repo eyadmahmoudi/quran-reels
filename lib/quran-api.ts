@@ -119,6 +119,46 @@ export async function fetchTranslations(): Promise<TranslationResource[]> {
   return data.translations
 }
 
+/**
+ * Fetch QDC's per-verse audio URLs for a chapter range.
+ *
+ * QDC's `/recitations/{id}/by_chapter/{surah}` endpoint returns relative
+ * paths like "Sudais/mp3/002255.mp3"; the full URL is hosted on
+ * `verses.quran.com` (already on the audio-proxy allowlist). The audio
+ * at these URLs is the same recording as QDC's chapter MP3, sliced per
+ * verse — so it matches the QDC segment timestamps exactly. This is
+ * critical for sync precision: everyayah.com files for the same reciter
+ * are often a DIFFERENT recording with different pacing, which causes
+ * progressive drift when their audio is paired with QDC word timings.
+ */
+export async function fetchQDCVerseAudioUrls(
+  recitationId: number,
+  surahId: number,
+  verseStart: number,
+  verseEnd: number,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  try {
+    const res = await fetch(
+      `${API_BASE}/recitations/${recitationId}/by_chapter/${surahId}?per_page=300`
+    )
+    if (!res.ok) return map
+    const data = await res.json()
+    for (const af of (data.audio_files || []) as Array<{ verse_key?: string; url?: string }>) {
+      if (!af.verse_key || !af.url) continue
+      const verseNum = parseInt(af.verse_key.split(':')[1])
+      if (verseNum < verseStart || verseNum > verseEnd) continue
+      const fullUrl = af.url.startsWith('http')
+        ? af.url
+        : `https://verses.quran.com/${af.url}`
+      map.set(af.verse_key, fullUrl)
+    }
+  } catch (err) {
+    console.warn('fetchQDCVerseAudioUrls failed:', err)
+  }
+  return map
+}
+
 // Helper to get verse audio segments for timing
 export async function fetchAudioSegments(
   recitationId: number,

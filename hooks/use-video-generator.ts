@@ -210,93 +210,41 @@ function drawRasterBackground(
   ctx.drawImage(el, x, y, w * scale, h * scale)
 }
 
-function drawFrame(
+// ── CONTENT LAYER HELPERS (extracted so cross-fade can overlay them) ──
+
+function drawIntroContentLayer(
   ctx: CanvasRenderingContext2D, width: number, height: number,
-  backgroundImage: HTMLImageElement | null,
-  background: BackgroundOption,
-  surahName: string, verse: Verse | undefined, showTranslation: boolean,
-  displayMode: 'minimal' | 'classic', taawudhText?: string, animTimeMs?: number,
-  chunkText?: string, showMarker: boolean = true, showTranslationOverride: boolean = true,
-  fadeOpacity: number = 1, translationChunkText?: string,
-  videoProgress?: number,
+  taawudhText: string, fadeOpacity: number,
 ) {
-  let translationBottomForBar: number | undefined
   const uiScale = width / 1080
   const s = (n: number) => n * uiScale
-  const bgValue = typeof background.value === 'string' ? background.value : (background.value[0] ?? '')
+  ctx.save()
+  ctx.globalAlpha = fadeOpacity
+  ctx.fillStyle = 'white'
+  ctx.font = `${Math.round(s(52))}px "Nabi", sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.shadowColor = 'rgba(0,0,0,0.9)'
+  ctx.shadowBlur = s(18)
+  ctx.direction = 'rtl'
+  ctx.fillText(taawudhText, width / 2, height * 0.44)
+  ctx.restore()
+}
 
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = 'high'
-
-  if (background.type === 'animated') {
-    if (typeof background.value === 'string') {
-      drawAnimatedBackground(ctx, width, height, animTimeMs ?? 0, background.value)
-    }
-  } else if (backgroundImage) {
-    drawRasterBackground(ctx, width, height, backgroundImage)
-  } else {
-    const gradient = ctx.createLinearGradient(0, 0, 0, height)
-    if (bgValue.includes('emerald')) {
-      gradient.addColorStop(0, '#0a1a14'); gradient.addColorStop(0.5, '#0d2818'); gradient.addColorStop(1, '#0a1a14')
-    } else if (bgValue.includes('royal') || bgValue.includes('blue')) {
-      gradient.addColorStop(0, '#0a0f1a'); gradient.addColorStop(0.5, '#1a2a4a'); gradient.addColorStop(1, '#0a0f1a')
-    } else if (bgValue.includes('golden')) {
-      gradient.addColorStop(0, '#1a1510'); gradient.addColorStop(0.5, '#2a2015'); gradient.addColorStop(1, '#1a1510')
-    } else if (bgValue.includes('purple')) {
-      gradient.addColorStop(0, '#0f0a1a'); gradient.addColorStop(0.5, '#1e1040'); gradient.addColorStop(1, '#0f0a1a')
-    } else {
-      gradient.addColorStop(0, '#0c1220'); gradient.addColorStop(0.5, '#1a2744'); gradient.addColorStop(1, '#0c1220')
-    }
-    ctx.fillStyle = gradient
-    ctx.fillRect(0, 0, width, height)
-  }
-
-  const hasRichBg = background.type === 'animated' || !!backgroundImage
-  if (displayMode === 'minimal') {
-    ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.20)'
-  } else {
-    ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.25)'
-  }
-  ctx.fillRect(0, 0, width, height)
-
-  if (taawudhText && !verse) {
-    ctx.save()
-    ctx.fillStyle = 'white'
-    ctx.font = `${Math.round(s(52))}px "Nabi", sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.shadowColor = 'rgba(0,0,0,0.9)'
-    ctx.shadowBlur = s(18)
-    ctx.direction = 'rtl'
-    ctx.fillText(taawudhText, width / 2, height * 0.44)
-    ctx.restore()
-    if (displayMode === 'classic' && videoProgress !== undefined) {
-      const barX = Math.round(s(40))
-      const barW = Math.round(width - barX * 2)
-      const barH = Math.max(2, Math.round(s(6)))
-      const trackTop = Math.round(height - s(30))
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
-      ctx.fillRect(barX, trackTop, barW, barH)
-      ctx.fillStyle = 'rgba(212,175,55,0.9)'
-      ctx.fillRect(barX, trackTop, barW * videoProgress, barH)
-    }
-    return
-  }
-
-  if (displayMode === 'classic') {
-    ctx.save()
-    ctx.fillStyle = 'rgba(0,0,0,0.45)'
-    roundRect(ctx, width / 2 - s(160), s(90), s(320), s(56), s(28))
-    ctx.fill()
-    ctx.fillStyle = 'rgba(212,175,55,0.9)'
-    ctx.font = `${Math.round(s(30))}px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(surahName, width / 2, s(118))
-    ctx.restore()
-  }
-
-  if (!verse) return
+/**
+ * Draws verse text + (optional) translation. Returns the bottom Y of the
+ * translation block when present (used by classic-mode progress-bar layout).
+ */
+function drawVerseContentLayer(
+  ctx: CanvasRenderingContext2D, width: number, height: number,
+  verse: Verse, displayMode: 'minimal' | 'classic',
+  showTranslation: boolean, chunkText: string | undefined,
+  showMarker: boolean, translationChunkText: string | undefined,
+  fadeOpacity: number,
+): number | undefined {
+  const uiScale = width / 1080
+  const s = (n: number) => n * uiScale
+  let translationBottomForBar: number | undefined
 
   ctx.save()
   ctx.globalAlpha = fadeOpacity
@@ -312,7 +260,7 @@ function drawFrame(
 
   const verseText = chunkText || verse.text_uthmani || verse.words?.map(w => w.text_uthmani).join(' ') || ''
   const verseNumber = parseInt(verse.verse_key.split(':')[1])
-  const markerChar = `\u06DD${toArabicNumerals(verseNumber)}`
+  const markerChar = `۝${toArabicNumerals(verseNumber)}`
 
   ctx.font = uthmanicFont
   const markerWidth = ctx.measureText(markerChar).width
@@ -343,7 +291,7 @@ function drawFrame(
 
   const lineHeight = arabicFontSize * 2.0
   const totalTextHeight = lines.length * lineHeight
-  const shouldShowTranslation = showTranslation && showTranslationOverride
+  const shouldShowTranslation = showTranslation
   const textCenterY = displayMode === 'minimal' ? height * 0.44 : height / 2 - (shouldShowTranslation ? s(80) : 0)
   const textStartY = textCenterY - totalTextHeight / 2
 
@@ -401,6 +349,94 @@ function drawFrame(
     }
   }
   ctx.restore()
+
+  return translationBottomForBar
+}
+
+function drawFrame(
+  ctx: CanvasRenderingContext2D, width: number, height: number,
+  backgroundImage: HTMLImageElement | null,
+  background: BackgroundOption,
+  surahName: string, verse: Verse | undefined, showTranslation: boolean,
+  displayMode: 'minimal' | 'classic', taawudhText?: string, animTimeMs?: number,
+  chunkText?: string, showMarker: boolean = true, showTranslationOverride: boolean = true,
+  fadeOpacity: number = 1, translationChunkText?: string,
+  videoProgress?: number,
+) {
+  let translationBottomForBar: number | undefined
+  const uiScale = width / 1080
+  const s = (n: number) => n * uiScale
+  const bgValue = typeof background.value === 'string' ? background.value : (background.value[0] ?? '')
+
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+
+  if (background.type === 'animated') {
+    if (typeof background.value === 'string') {
+      drawAnimatedBackground(ctx, width, height, animTimeMs ?? 0, background.value)
+    }
+  } else if (backgroundImage) {
+    drawRasterBackground(ctx, width, height, backgroundImage)
+  } else {
+    const gradient = ctx.createLinearGradient(0, 0, 0, height)
+    if (bgValue.includes('emerald')) {
+      gradient.addColorStop(0, '#0a1a14'); gradient.addColorStop(0.5, '#0d2818'); gradient.addColorStop(1, '#0a1a14')
+    } else if (bgValue.includes('royal') || bgValue.includes('blue')) {
+      gradient.addColorStop(0, '#0a0f1a'); gradient.addColorStop(0.5, '#1a2a4a'); gradient.addColorStop(1, '#0a0f1a')
+    } else if (bgValue.includes('golden')) {
+      gradient.addColorStop(0, '#1a1510'); gradient.addColorStop(0.5, '#2a2015'); gradient.addColorStop(1, '#1a1510')
+    } else if (bgValue.includes('purple')) {
+      gradient.addColorStop(0, '#0f0a1a'); gradient.addColorStop(0.5, '#1e1040'); gradient.addColorStop(1, '#0f0a1a')
+    } else {
+      gradient.addColorStop(0, '#0c1220'); gradient.addColorStop(0.5, '#1a2744'); gradient.addColorStop(1, '#0c1220')
+    }
+    ctx.fillStyle = gradient
+    ctx.fillRect(0, 0, width, height)
+  }
+
+  const hasRichBg = background.type === 'animated' || !!backgroundImage
+  if (displayMode === 'minimal') {
+    ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.20)'
+  } else {
+    ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.25)'
+  }
+  ctx.fillRect(0, 0, width, height)
+
+  if (taawudhText && !verse) {
+    drawIntroContentLayer(ctx, width, height, taawudhText, fadeOpacity)
+    if (displayMode === 'classic' && videoProgress !== undefined) {
+      const barX = Math.round(s(40))
+      const barW = Math.round(width - barX * 2)
+      const barH = Math.max(2, Math.round(s(6)))
+      const trackTop = Math.round(height - s(30))
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
+      ctx.fillRect(barX, trackTop, barW, barH)
+      ctx.fillStyle = 'rgba(212,175,55,0.9)'
+      ctx.fillRect(barX, trackTop, barW * videoProgress, barH)
+    }
+    return
+  }
+
+  if (displayMode === 'classic') {
+    ctx.save()
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'
+    roundRect(ctx, width / 2 - s(160), s(90), s(320), s(56), s(28))
+    ctx.fill()
+    ctx.fillStyle = 'rgba(212,175,55,0.9)'
+    ctx.font = `${Math.round(s(30))}px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(surahName, width / 2, s(118))
+    ctx.restore()
+  }
+
+  if (!verse) return
+
+  translationBottomForBar = drawVerseContentLayer(
+    ctx, width, height, verse, displayMode,
+    showTranslation && showTranslationOverride,
+    chunkText, showMarker, translationChunkText, fadeOpacity,
+  )
 
   if (displayMode === 'classic' && videoProgress !== undefined) {
     const barX = Math.round(s(40))
@@ -938,7 +974,11 @@ function buildDisplaySegments(
 // MAIN HOOK
 // ═══════════════════════════════════════════════════════════════════════
 
-const FADE_DURATION_MS = 150
+// Cross-fade transition window centered on each segment boundary.
+// Total transition time = FADE_DURATION_MS. Total brightness stays at 1.0
+// throughout (no "blink") because outgoing/incoming alphas are cos²/sin²
+// pair that always sums to 1.
+const FADE_DURATION_MS = 220
 
 export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
   const [isGenerating, setIsGenerating] = useState(false)
@@ -1188,6 +1228,42 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           const timerUrl = URL.createObjectURL(timerBlob)
           const timerWorker = new Worker(timerUrl)
 
+          const HALF_FADE = FADE_DURATION_MS / 2
+
+          const drawSegment = (
+            seg: DisplaySegment, alpha: number, animTime: number,
+            videoProg: number, fullFrame: boolean,
+          ) => {
+            if (seg.type === 'intro') {
+              if (fullFrame) {
+                drawFrame(
+                  ctx, width, height, backgroundImage, background, surahName,
+                  undefined, showTranslation, displayMode, seg.introText,
+                  animTime, undefined, true, true, alpha, undefined, videoProg,
+                )
+              } else {
+                drawIntroContentLayer(ctx, width, height, seg.introText ?? '', alpha)
+              }
+            } else {
+              const verse = seg.verseIndex !== undefined ? verses[seg.verseIndex] : undefined
+              if (!verse) return
+              if (fullFrame) {
+                drawFrame(
+                  ctx, width, height, backgroundImage, background, surahName,
+                  verse, showTranslation, displayMode, undefined, animTime,
+                  seg.chunkText, seg.showMarker, seg.showTranslationForChunk,
+                  alpha, seg.translationChunkText, videoProg,
+                )
+              } else {
+                drawVerseContentLayer(
+                  ctx, width, height, verse, displayMode,
+                  showTranslation && seg.showTranslationForChunk,
+                  seg.chunkText, seg.showMarker, seg.translationChunkText, alpha,
+                )
+              }
+            }
+          }
+
           const render = () => {
             if (cancelledRef.current || recordingFinished) return
             const elapsedMs = (audioCtx.currentTime - audioStartTime) * 1000
@@ -1202,20 +1278,49 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
             if (!seg) return
 
             const videoProgress = Math.min(elapsedMs / totalDurationMs, 1)
-            let fadeOpacity = 1
             const msIntoSegment = elapsedMs - seg.startMs
             const msBeforeEnd = seg.endMs - elapsedMs
-            if (msIntoSegment < FADE_DURATION_MS) {
-              fadeOpacity = Math.min(1, msIntoSegment / FADE_DURATION_MS)
-            } else if (msBeforeEnd < FADE_DURATION_MS && currentSegmentIndex < displaySegments.length - 1) {
-              fadeOpacity = Math.max(0, msBeforeEnd / FADE_DURATION_MS)
+
+            // ── CROSS-FADE LOGIC ──
+            // Cross-fade window of FADE_DURATION_MS centered on each boundary.
+            // Within [boundary - HALF_FADE, boundary + HALF_FADE] both the
+            // outgoing and incoming segments are drawn with cos²/sin² alphas
+            // that sum to 1 — so total brightness never dips. Outside the
+            // window only the current segment is drawn at full alpha.
+            const next = displaySegments[currentSegmentIndex + 1]
+            const prev = displaySegments[currentSegmentIndex - 1]
+
+            let primaryAlpha = 1
+            let overlaySeg: DisplaySegment | null = null
+            let overlayAlpha = 0
+
+            if (next && msBeforeEnd < HALF_FADE) {
+              // We are in the LEAD-UP to the boundary between seg → next.
+              // u: 0 at the start of the fade window (boundary - HALF_FADE),
+              //    0.5 at the boundary itself.
+              const u = (HALF_FADE - msBeforeEnd) / FADE_DURATION_MS
+              const c = Math.cos((Math.PI / 2) * u)
+              const sn = Math.sin((Math.PI / 2) * u)
+              primaryAlpha = c * c
+              overlayAlpha = sn * sn
+              overlaySeg = next
+            } else if (prev && msIntoSegment < HALF_FADE && prev.endMs >= seg.startMs - 1) {
+              // We are in the AFTER part of the boundary between prev → seg.
+              // u: 0.5 at the boundary itself, 1 at the end of the fade
+              //    window (boundary + HALF_FADE).
+              const u = 0.5 + msIntoSegment / FADE_DURATION_MS
+              const c = Math.cos((Math.PI / 2) * u)
+              const sn = Math.sin((Math.PI / 2) * u)
+              primaryAlpha = sn * sn
+              overlayAlpha = c * c
+              overlaySeg = prev
             }
 
-            if (seg.type === 'intro') {
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, seg.introText, elapsedMs, undefined, true, true, 1, undefined, videoProgress)
-            } else {
-              const verse = seg.verseIndex !== undefined ? verses[seg.verseIndex] : undefined
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, verse, showTranslation, displayMode, undefined, elapsedMs, seg.chunkText, seg.showMarker, seg.showTranslationForChunk, fadeOpacity, seg.translationChunkText, videoProgress)
+            // Primary segment: full frame (background + chrome + content).
+            drawSegment(seg, primaryAlpha, elapsedMs, videoProgress, true)
+            // Overlay segment (if cross-fading): content layer only.
+            if (overlaySeg) {
+              drawSegment(overlaySeg, overlayAlpha, elapsedMs, videoProgress, false)
             }
 
             setProgress(50 + videoProgress * 48)

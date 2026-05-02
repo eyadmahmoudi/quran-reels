@@ -695,13 +695,40 @@ function buildDisplaySegments(
       const scaleOk = scale > 0.7 && scale < 1.3
 
       if (scaleOk) {
-        // Compute cumulative word position at end of each chunk.
+        // Compute cumulative QDC word position at end of each chunk.
+        //
+        // CRITICAL: QDC's word indexing TREATS WA9F MARKS AS PART OF THE
+        // PRECEDING WORD. Their API returns words like "ٱلْقَيُّومُ ۚ" as
+        // a single word entry. But the Uthmani text has the wa9f mark
+        // space-separated, so chunk.wordCount (from text.split(' ')) is
+        // inflated by 1 for every wa9f mark in the chunk. Without this
+        // adjustment, our chunkEndWordPos overshoots QDC's last word
+        // position, producing missing boundaries and 0-duration final
+        // chunks (the Sudais Ayat al-Kursi missing-last-chunk bug).
+        //
+        // We count tokens that are not pure wa9f marks. The wa9f code
+        // points covered: U+06D6..U+06DB (small high marks) and U+06E9
+        // (sajdah). The string is also stripped of zero-width / control
+        // chars before the test in case the API attaches them.
+        const isPureWaqfToken = (t: string): boolean => {
+          const cleaned = t.replace(/[\s‌-‏­؜]/g, '')
+          if (cleaned.length === 0) return false
+          for (const ch of cleaned) {
+            const cp = ch.codePointAt(0)!
+            if (!((cp >= 0x06D6 && cp <= 0x06DB) || cp === 0x06E9)) return false
+          }
+          return true
+        }
+        const countQdcWords = (text: string): number =>
+          text.split(' ').filter(t => t.length > 0 && !isPureWaqfToken(t)).length
+
         const chunkEndWordPos: number[] = []
         let cum = 0
         for (const c of chunks) {
-          cum += c.wordCount
+          cum += countQdcWords(c.text)
           chunkEndWordPos.push(cum)
         }
+        console.log(`[sync] V${verseArrayIdx} QDC word mapping: ${chunks.length} chunks → cum positions ${chunkEndWordPos.join(',')} (last QDC pos in segments: ${lastPos})`)
 
         const qdcBoundaries: Array<{ startMs: number; endMs: number } | null> = []
         const FALLBACK_HALF_WIDTH_MS = 60

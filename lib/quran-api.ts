@@ -159,6 +159,64 @@ export async function fetchQDCVerseAudioUrls(
   return map
 }
 
+/**
+ * Local pre-computed segment data for reciters not in QDC.
+ *
+ * For reciters that QDC does not publish word timings for (e.g. Maher
+ * Al-Muaiqly, Muhammad Ayyoub, Nasser Al-Qatami, Husary Mujawwad), we
+ * generate the same segment data offline using forced alignment
+ * (WhisperX) and ship the JSON files in `public/segments/{folder}/`.
+ *
+ * The JSON shape matches `verse_timings` from the QDC API so the rest
+ * of the rendering pipeline can consume it identically:
+ *
+ *   {
+ *     "verse_timings": [
+ *       {
+ *         "verse_key": "2:255",
+ *         "timestamp_from": 0,           // verse-relative (always 0)
+ *         "timestamp_to": 49893,         // verse-relative duration
+ *         "segments": [[1, 0, 410], [2, 410, 980], ...]
+ *       },
+ *       ...
+ *     ]
+ *   }
+ *
+ * Returns [] when no local file exists, so the caller falls back to the
+ * existing heuristic pause-detection path with no further code change.
+ */
+export async function fetchLocalSegments(
+  reciterFolder: string,
+  surahId: number,
+  verseStart: number,
+  verseEnd: number,
+): Promise<
+  Array<{
+    verse_key: string
+    timestamp_from: number
+    timestamp_to: number
+    segments: number[][]
+  }>
+> {
+  try {
+    const res = await fetch(`/segments/${reciterFolder}/${surahId}.json`)
+    if (!res.ok) return []
+    const data = await res.json()
+    const timings = (data.verse_timings || []) as Array<{
+      verse_key: string
+      timestamp_from: number
+      timestamp_to: number
+      segments: number[][]
+    }>
+    return timings.filter((t) => {
+      const verseNum = parseInt(t.verse_key.split(':')[1])
+      return verseNum >= verseStart && verseNum <= verseEnd
+    })
+  } catch {
+    return []
+  }
+}
+
 // Helper to get verse audio segments for timing
 export async function fetchAudioSegments(
   recitationId: number,

@@ -4,7 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import type { Verse, Word, BackgroundOption, ReelConfig } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
 import { splitVerseByWordTimings, splitTranslation } from '@/lib/verse-chunking'
-import { fetchAudioSegments, fetchQDCVerseAudioUrls } from '@/lib/quran-api'
+import { fetchAudioSegments, fetchQDCVerseAudioUrls, fetchLocalSegments } from '@/lib/quran-api'
 
 interface VideoGeneratorOptions {
   verses: Verse[]
@@ -1186,6 +1186,36 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           }
         } else {
           console.log('[audio-source] qdcRecitationId is null — using everyayah for all verses')
+        }
+
+        // Local pre-computed segments (offline forced alignment) for verses
+        // that QDC doesn't cover. We only consult them for verses where the
+        // QDC timings are missing OR have empty segments — QDC is preferred
+        // when it has data.
+        const verseKeysNeedingLocal: string[] = []
+        for (let v = startVerse; v <= endVerse; v++) {
+          const vk = `${surahId}:${v}`
+          const qdc = qdcVerseTimings.find((t) => t.verse_key === vk)
+          if (!qdc || !qdc.segments || qdc.segments.length === 0) {
+            verseKeysNeedingLocal.push(vk)
+          }
+        }
+        if (verseKeysNeedingLocal.length > 0) {
+          const localTimings = await fetchLocalSegments(reciterFolder, surahId, startVerse, endVerse).catch(() => [])
+          if (localTimings.length > 0) {
+            console.log(`[audio-source] loaded ${localTimings.length} local pre-computed timings from /segments/${reciterFolder}/${surahId}.json`)
+            // Merge: local timings only used where QDC didn't already provide segments.
+            const existing = new Set(qdcVerseTimings.filter(t => t.segments?.length).map(t => t.verse_key))
+            for (const t of localTimings) {
+              if (!existing.has(t.verse_key)) {
+                // Drop verses outside the requested range (already filtered upstream).
+                qdcVerseTimings = qdcVerseTimings.filter(x => x.verse_key !== t.verse_key)
+                qdcVerseTimings.push(t)
+              }
+            }
+          } else {
+            console.log(`[audio-source] no local segments file at /segments/${reciterFolder}/${surahId}.json (would help: ${verseKeysNeedingLocal.join(', ')})`)
+          }
         }
 
         let taawudhBuffer: AudioBuffer | null = null

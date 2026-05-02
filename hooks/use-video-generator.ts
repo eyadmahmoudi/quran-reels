@@ -1109,14 +1109,25 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         let qdcVerseTimings: Awaited<ReturnType<typeof fetchAudioSegments>> = []
         let qdcVerseAudioUrls = new Map<string, string>()
         if (qdcRecitationId) {
+          console.log(`[audio-source] qdcRecitationId=${qdcRecitationId} — fetching QDC timings + URLs`)
           const [timings, urls] = await Promise.all([
-            fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch(() => []),
-            fetchQDCVerseAudioUrls(qdcRecitationId, surahId, startVerse, endVerse).catch(
-              () => new Map<string, string>()
-            ),
+            fetchAudioSegments(qdcRecitationId, surahId, startVerse, endVerse).catch((e) => {
+              console.error('[audio-source] fetchAudioSegments FAILED:', e)
+              return []
+            }),
+            fetchQDCVerseAudioUrls(qdcRecitationId, surahId, startVerse, endVerse).catch((e) => {
+              console.error('[audio-source] fetchQDCVerseAudioUrls FAILED:', e)
+              return new Map<string, string>()
+            }),
           ])
           qdcVerseTimings = timings
           qdcVerseAudioUrls = urls
+          console.log(`[audio-source] got ${timings.length} timings, ${urls.size} QDC URLs`)
+          if (urls.size === 0) {
+            console.warn('[audio-source] QDC URL map is EMPTY — will fall back to everyayah for all verses')
+          }
+        } else {
+          console.log('[audio-source] qdcRecitationId is null — using everyayah for all verses')
         }
 
         let taawudhBuffer: AudioBuffer | null = null
@@ -1146,12 +1157,16 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           // missing this verse.
           const qdcUrl = qdcVerseAudioUrls.get(verseKey)
           let originalUrl: string
+          let source: string
           if (qdcUrl) {
             originalUrl = qdcUrl
+            source = 'QDC'
           } else {
             const filename = `${surahId.toString().padStart(3, '0')}${i.toString().padStart(3, '0')}.mp3`
             originalUrl = `https://everyayah.com/data/${reciterFolder}/${filename}`
+            source = 'everyayah'
           }
+          console.log(`[audio-source] V${verseKey} ← ${source}: ${originalUrl}`)
           const resp = await fetch(`/api/audio?url=${encodeURIComponent(originalUrl)}`)
           if (!resp.ok) throw new Error(`Failed to fetch audio for verse ${i}`)
           decodedBuffers.push(await audioCtx.decodeAudioData(await resp.arrayBuffer()))

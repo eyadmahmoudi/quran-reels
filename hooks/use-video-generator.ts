@@ -871,7 +871,38 @@ function buildDisplaySegments(
       }
     }
 
-    const pauseProportions = bufferPauses.map(p => {
+    // Filter detected pauses for assignment. A real wa9f from any
+    // EveryAyah reciter is at least ~200ms; shorter "pauses" returned
+    // by findInternalPauses are usually noise (mp3 compression
+    // artifacts, brief intra-word gaps, end-of-file decay) and should
+    // not be assigned to text boundaries. Mohamed Ayyoub on Ayat
+    // al-Kursi triggered this: a 142ms artifact at 99% of the verse
+    // got matched to the last boundary, dragging the final chunk swap
+    // to 67.10s and leaving "وَهُوَ ٱلْعَلِىُّ ٱلْعَظِيمُ" only 0.6s of
+    // display time while the audio recited it for ~3s prior.
+    //
+    // We accept a pause if EITHER:
+    //   - duration >= 200ms absolute (Nasser-style brief wa9fs), OR
+    //   - duration >= 40% of the longest pause in this buffer
+    //     (so a reciter with 800ms pauses still keeps a 320ms one)
+    const longestPauseMs = bufferPauses.reduce(
+      (max, p) => Math.max(max, p.endMs - p.startMs), 0
+    )
+    const MIN_PAUSE_ABS_MS = 200
+    const MIN_PAUSE_REL_FACTOR = 0.4
+    const filteredBufferPauses = bufferPauses.filter(p => {
+      const dur = p.endMs - p.startMs
+      return dur >= MIN_PAUSE_ABS_MS || dur >= longestPauseMs * MIN_PAUSE_REL_FACTOR
+    })
+    if (filteredBufferPauses.length !== bufferPauses.length) {
+      const rejected = bufferPauses
+        .filter(p => !filteredBufferPauses.includes(p))
+        .map(p => `${(p.endMs - p.startMs).toFixed(0)}ms`)
+        .join(', ')
+      console.log(`[sync] V${verseArrayIdx} rejected ${bufferPauses.length - filteredBufferPauses.length} short pause(s): ${rejected} (longest=${longestPauseMs.toFixed(0)}ms)`)
+    }
+
+    const pauseProportions = filteredBufferPauses.map(p => {
       const midMs = (p.startMs + p.endMs) / 2
       const relativeMs = (rawStart + midMs) - timing.startMs
       return {

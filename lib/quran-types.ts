@@ -393,26 +393,24 @@ export interface ReciterOption {
   qdcRecitationId: number | null   // QDC API recitation ID for word-level timing segments (null = unavailable)
 }
 
-/** All reciters A–Z by English `name`. IDs are sequential 1…n in this order. */
+/**
+ * All reciters A–Z by English `name`. IDs are sequential 1…n in this
+ * order. Only reciters with verified QDC per-word segment data are
+ * listed here, so every entry uses the precise-sync code path.
+ */
 export const POPULAR_RECITERS: ReciterOption[] = [
   { id: 1,  name: 'Abdul Basit (Mujawwad)',                arabicName: 'عبد الباسط مجوّد',          folder: 'Abdul_Basit_Mujawwad_128kbps',   qdcRecitationId: 1 },
   { id: 2,  name: 'Abdul Basit (Murattal)',                arabicName: 'عبد الباسط عبد الصمد',      folder: 'Abdul_Basit_Murattal_192kbps',   qdcRecitationId: 2 },
   { id: 3,  name: 'Abdurrahman As-Sudais',                 arabicName: 'عبدالرحمن السديس',          folder: 'Abdurrahmaan_As-Sudais_192kbps', qdcRecitationId: 3 },
   { id: 4,  name: 'Abu Bakr Ash-Shaatree',                 arabicName: 'أبو بكر الشاطري',           folder: 'Abu_Bakr_Ash-Shaatree_128kbps',  qdcRecitationId: 4 },
-  { id: 5,  name: 'Al-Husary (Mujawwad)',                  arabicName: 'الحصري مجوّد',              folder: 'Husary_Mujawwad_64kbps',         qdcRecitationId: null },
-  { id: 6,  name: 'Hani Ar-Rifai',                         arabicName: 'هاني الرفاعي',              folder: 'Hani_Rifai_64kbps',              qdcRecitationId: 5 },
-  { id: 7,  name: 'Maher Al-Muaiqly',                      arabicName: 'ماهر المعيقلي',             folder: 'Maher_AlMuaiqly_64kbps',         qdcRecitationId: null },
-  { id: 8,  name: 'Mahmoud Khalil Al-Husary',              arabicName: 'محمود خليل الحصري',         folder: 'Husary_128kbps',                 qdcRecitationId: 6 },
-  { id: 9,  name: 'Mahmoud Khalil Al-Husary (Muallim)',    arabicName: 'محمود خليل الحصري (معلم)',  folder: 'Husary_Muallim_128kbps',         qdcRecitationId: 12 },
-  { id: 10, name: 'Mishari Rashid Al-Afasy',               arabicName: 'مشاري راشد العفاسي',        folder: 'Alafasy_128kbps',                qdcRecitationId: 7 },
-  { id: 11, name: 'Mohamed Al-Tablawi',                    arabicName: 'محمد الطبلاوي',             folder: 'Mohammad_al_Tablaway_128kbps',   qdcRecitationId: 11 },
-  { id: 12, name: 'Mohamed Siddiq Al-Minshawi (Mujawwad)', arabicName: 'محمد صديق المنشاوي مجوّد',  folder: 'Minshawy_Mujawwad_64kbps',       qdcRecitationId: 8 },
-  { id: 13, name: 'Mohamed Siddiq Al-Minshawi (Murattal)', arabicName: 'محمد صديق المنشاوي مرتل',   folder: 'Minshawy_Murattal_128kbps',      qdcRecitationId: 9 },
-  { id: 14, name: 'Muhammad Ayyoub',                       arabicName: 'محمد أيوب',                 folder: 'Muhammad_Ayyoub_128kbps',        qdcRecitationId: null },
-  { id: 15, name: 'Nasser Al-Qatami',                      arabicName: 'ناصر القطامي',              folder: 'Nasser_Alqatami_128kbps',        qdcRecitationId: null },
-  { id: 16, name: 'Saad Al-Ghamdi',                        arabicName: 'سعد الغامدي',               folder: 'Ghamadi_40kbps',                 qdcRecitationId: null },
-  { id: 17, name: "Sa'ud Ash-Shuraym",                     arabicName: 'سعود الشريم',               folder: 'Saood_ash-Shuraym_128kbps',      qdcRecitationId: 10 },
-  { id: 18, name: 'Yasser Al-Dosari',                      arabicName: 'ياسر الدوسري',              folder: 'Yasser_Ad-Dussary_128kbps',      qdcRecitationId: 97 },
+  { id: 5,  name: 'Hani Ar-Rifai',                         arabicName: 'هاني الرفاعي',              folder: 'Hani_Rifai_64kbps',              qdcRecitationId: 5 },
+  { id: 6,  name: 'Mahmoud Khalil Al-Husary',              arabicName: 'محمود خليل الحصري',         folder: 'Husary_128kbps',                 qdcRecitationId: 6 },
+  { id: 7,  name: 'Mahmoud Khalil Al-Husary (Muallim)',    arabicName: 'محمود خليل الحصري (معلم)',  folder: 'Husary_Muallim_128kbps',         qdcRecitationId: 12 },
+  { id: 8,  name: 'Mishari Rashid Al-Afasy',               arabicName: 'مشاري راشد العفاسي',        folder: 'Alafasy_128kbps',                qdcRecitationId: 7 },
+  { id: 9,  name: 'Mohamed Siddiq Al-Minshawi (Mujawwad)', arabicName: 'محمد صديق المنشاوي مجوّد',  folder: 'Minshawy_Mujawwad_64kbps',       qdcRecitationId: 8 },
+  { id: 10, name: 'Mohamed Siddiq Al-Minshawi (Murattal)', arabicName: 'محمد صديق المنشاوي مرتل',   folder: 'Minshawy_Murattal_128kbps',      qdcRecitationId: 9 },
+  { id: 11, name: "Sa'ud Ash-Shuraym",                     arabicName: 'سعود الشريم',               folder: 'Saood_ash-Shuraym_128kbps',      qdcRecitationId: 10 },
+  { id: 12, name: 'Yasser Al-Dosari',                      arabicName: 'ياسر الدوسري',              folder: 'Yasser_Ad-Dussary_128kbps',      qdcRecitationId: 97 },
 ]
 
 export const TRANSLATION_RESOURCES = [

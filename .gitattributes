@@ -1,0 +1,7 @@
+* text=auto
+*.bin binary
+*.mp3 binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+public/embeddings/verses-meta.json -text -diff

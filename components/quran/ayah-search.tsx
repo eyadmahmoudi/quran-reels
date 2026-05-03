@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Search, Loader2, AlertCircle, Sparkles, BookOpen } from "lucide-react";
 import { useReel } from "@/lib/reel-context";
-import { searchAyahs, conceptSearchAyahs, fetchSurahs } from "@/lib/quran-api";
+import { searchAyahs, fetchSurahs } from "@/lib/quran-api";
+import {
+  searchByConcept,
+  preloadConceptSearch,
+  type ConceptSearchStatus,
+  type ConceptSearchResult,
+} from "@/lib/concept-search";
 import type { Surah } from "@/lib/quran-types";
 import {
   CommandDialog,
@@ -19,6 +25,13 @@ interface ResultItem {
   score?: number;
 }
 
+const STATUS_LABEL: Record<ConceptSearchStatus, string> = {
+  "loading-model": "Loading model (one-time, ~100 MB)…",
+  "loading-embeddings": "Loading verse index…",
+  "embedding-query": "Understanding your query…",
+  searching: "Ranking verses…",
+};
+
 export function AyahSearch() {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("exact");
@@ -26,7 +39,11 @@ export function AyahSearch() {
   const [results, setResults] = useState<ResultItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [conceptStatus, setConceptStatus] =
+    useState<ConceptSearchStatus | null>(null);
   const [surahs, setSurahs] = useState<Surah[]>([]);
+  // Bumped on every new search to ignore stale responses.
+  const requestIdRef = useRef(0);
 
   const { setConfig } = useReel();
 
@@ -34,42 +51,59 @@ export function AyahSearch() {
     fetchSurahs().then(setSurahs);
   }, []);
 
-  // Re-run whenever query OR mode changes; debounce 500ms.
+  // Pre-warm the model + embeddings as soon as the user opens the
+  // dialog and switches to (or already is on) the concept tab. This
+  // overlaps the heavy first-time download with the user typing.
+  useEffect(() => {
+    if (open && mode === "concept") preloadConceptSearch();
+  }, [open, mode]);
+
+  // Re-run on query OR mode change with 500 ms debounce.
   useEffect(() => {
     setError(null);
+    const myReqId = ++requestIdRef.current;
     const t = setTimeout(async () => {
       if (query.trim().length < 2) {
         setResults([]);
+        setConceptStatus(null);
         return;
       }
       setLoading(true);
       try {
         if (mode === "exact") {
           const r = await searchAyahs(query);
-          setResults(r);
+          if (myReqId === requestIdRef.current) setResults(r);
         } else {
-          const r = await conceptSearchAyahs(query);
-          if (r.error) {
-            setError(r.error);
-            setResults([]);
-          } else {
-            setResults(r.results);
+          const r: ConceptSearchResult[] = await searchByConcept(
+            query,
+            (s) => {
+              if (myReqId === requestIdRef.current) setConceptStatus(s);
+            },
+          );
+          if (myReqId === requestIdRef.current) {
+            setResults(r);
+            setConceptStatus(null);
           }
         }
+      } catch (e) {
+        if (myReqId === requestIdRef.current) {
+          setError(e instanceof Error ? e.message : String(e));
+          setResults([]);
+          setConceptStatus(null);
+        }
       } finally {
-        setLoading(false);
+        if (myReqId === requestIdRef.current) setLoading(false);
       }
     }, 500);
     return () => clearTimeout(t);
   }, [query, mode]);
 
-  // When the user switches mode, clear stale results immediately so the
-  // old list doesn't flash while the new request is in flight.
   const switchMode = (next: Mode) => {
     if (next === mode) return;
     setMode(next);
     setResults([]);
     setError(null);
+    setConceptStatus(null);
   };
 
   const handleSelect = (verseKey: string) => {
@@ -149,13 +183,17 @@ export function AyahSearch() {
         </div>
 
         <CommandList className="max-h-[440px] overflow-y-auto overscroll-contain touch-pan-y">
-          {/* Subtitle / hint per mode */}
           {!loading && !error && results.length === 0 && query.length < 2 && (
             <div className="py-6 px-4 text-center text-[12px] text-ink-tertiary">
               {isConcept ? (
                 <>
                   Try things like <em>patience</em>, <em>أنا حزين</em>,{" "}
                   <em>guidance after loss</em>, or <em>التوكل على الله</em>.
+                  <br />
+                  <span className="text-[11px] opacity-75">
+                    First use downloads a small model (~100&nbsp;MB) — cached
+                    after that.
+                  </span>
                 </>
               ) : (
                 <>Type at least 2 characters of an ayah to search.</>
@@ -164,8 +202,13 @@ export function AyahSearch() {
           )}
 
           {loading && (
-            <div className="flex items-center justify-center py-6 text-ink-tertiary">
+            <div className="flex flex-col items-center justify-center gap-2 py-6 text-ink-tertiary">
               <Loader2 className="h-4 w-4 animate-spin" />
+              {isConcept && conceptStatus && (
+                <span className="text-[11px]">
+                  {STATUS_LABEL[conceptStatus]}
+                </span>
+              )}
             </div>
           )}
 

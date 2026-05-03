@@ -287,42 +287,7 @@ export async function searchAyahs(query: string) {
   }
 }
 
-/**
- * Concept / semantic search. Sends the query (Arabic or English) to
- * /api/concept-search which embeds it via OpenAI and returns the top
- * verses by cosine similarity against pre-computed verse embeddings.
- *
- * Result shape per item:
- *   { verse_key, text (Arabic Uthmani), translation (English), score }
- *
- * On error returns { results: [], error } so the caller can surface a
- * helpful message to the user (e.g. "OPENAI_API_KEY missing on server").
- */
-export async function conceptSearchAyahs(
-  query: string,
-): Promise<{
-  results: Array<{
-    verse_key: string
-    text: string
-    translation: string
-    score: number
-  }>
-  error?: string
-}> {
-  if (!query || query.trim() === '') return { results: [] }
-  try {
-    const res = await fetch(
-      `/api/concept-search?q=${encodeURIComponent(query.trim())}`,
-    )
-    const data = await res.json()
-    if (!res.ok) {
-      return { results: [], error: data.error || `HTTP ${res.status}` }
-    }
-    return { results: data.results || [] }
-  } catch (err) {
-    return {
-      results: [],
-      error: err instanceof Error ? err.message : String(err),
-    }
-  }
-}
+// Concept / semantic search lives in `lib/concept-search.ts` — it runs
+// entirely in the browser using transformers.js + pre-computed verse
+// embeddings, with no server endpoint and no API key. Import it
+// directly from client components.

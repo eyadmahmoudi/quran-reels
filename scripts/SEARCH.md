@@ -1,7 +1,7 @@
-# Concept / semantic search setup
+# Concept / semantic search
 
 The "By concept / feeling" tab in the search dialog finds verses by
-**meaning**, not by exact text. A user can type:
+**meaning**, not exact text. A user can type:
 
 - A topic in Arabic — `الصبر`, `التوكل على الله`, `بر الوالدين`
 - A topic in English — `patience`, `forgiveness`, `gratitude`
@@ -9,54 +9,58 @@ The "By concept / feeling" tab in the search dialog finds verses by
 
 …and gets the verses that semantically match.
 
-## How it works
+## Architecture (no server, no API, no API keys, no recurring cost)
 
-1. **Pre-computed verse embeddings** (one-time, ~$0.02): every verse of
-   the Quran is embedded using OpenAI's `text-embedding-3-small` model
-   at 512 dimensions. Each verse is embedded as
+The whole search runs **in the user's browser** using
+[transformers.js](https://huggingface.co/docs/transformers.js):
+
+1. **One-time setup** (you, once): `scripts/generate-embeddings.mjs`
+   embeds every verse of the Quran with
+   `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (a 384-dim
+   multilingual sentence-similarity model). Each verse is embedded as
    `Translation: {english} | Arabic: {uthmani}` so a single multilingual
-   vector handles both Arabic and English queries.
+   vector handles both Arabic and English queries. Output:
+       public/embeddings/verses.bin       (~9.5 MB)
+       public/embeddings/verses-meta.json (verse text + translation)
+   These ship as static assets — committed to the repo, served by
+   Vercel's CDN.
 
-2. **At query time**: the user's query is embedded with the same model,
-   then we compute cosine similarity against all 6,236 verse vectors
-   server-side. Top 25 are returned with similarity scores.
+2. **At query time** (every user, every search): the browser
+   - lazy-loads the same model from Hugging Face Hub on the user's
+     first-ever concept search (~100 MB quantized, cached in IndexedDB
+     by transformers.js — so it's a one-time cost per browser),
+   - lazy-loads `verses.bin` + `verses-meta.json` (~10 MB, cached by
+     the browser's HTTP cache),
+   - embeds the query (~50–200 ms),
+   - computes cosine similarity against all 6,236 verse vectors
+     (~5 ms),
+   - returns the top 25.
 
-The math is simple enough (3M float-multiplies per query) that no
-vector DB is needed — a plain Vercel function does the whole search
-sub-millisecond after the embeddings file is loaded.
+After the first search, subsequent searches are sub-100 ms.
 
-## Setup (3 steps)
+There is **no API key**, no `/api/concept-search` route, no Vercel
+function, no per-query cost, no rate limit. Once the user has the model
+cached, the feature works offline.
 
-### 1. Add your OpenAI API key
+## Setup (one command, one time)
 
-Locally — append to `.env.local`:
-
-```
-OPENAI_API_KEY=sk-...
-```
-
-On Vercel — go to your project → Settings → Environment Variables and
-add `OPENAI_API_KEY`. Available on a free OpenAI account; pay-as-you-go
-billing is required but the cost is negligible (cents per *thousands*
-of queries).
-
-### 2. Generate the embeddings (one-time, ~3 min)
+You only need to do this **once**, when you first add the feature:
 
 ```bash
-OPENAI_API_KEY=sk-... node scripts/generate-embeddings.mjs
+node scripts/generate-embeddings.mjs
 ```
 
 This will:
 
-- Fetch all 6,236 verses with English (Saheeh International) translations
-  from quran.com
-- Embed them in batches of 100 with OpenAI
-- Write `public/embeddings/verses.bin` (~12 MB) and
-  `public/embeddings/verses-meta.json` (~1.5 MB)
+- Fetch all 6,236 verses with English (Saheeh International)
+  translations from quran.com
+- Download the embedding model from Hugging Face on first run
+  (~100 MB, cached in `~/.cache/huggingface/`)
+- Embed all verses in batches (CPU is fine; ~5–10 minutes total)
+- Write `public/embeddings/verses.bin` and
+  `public/embeddings/verses-meta.json`
 
-Cost: about 2 cents on OpenAI's billing.
-
-### 3. Commit and deploy
+Then commit the result and push:
 
 ```bash
 git add public/embeddings/verses.bin public/embeddings/verses-meta.json
@@ -64,46 +68,54 @@ git commit -m "data: ship verse embeddings for concept search"
 git push
 ```
 
-Vercel will redeploy. The "By concept / feeling" tab is now live.
+Vercel redeploys, the tab is live.
 
 ## When to re-generate
 
 Only when you change something that affects the embeddings:
 
-- The embedding text template (e.g. include tafsir, use a different
-  translation)
-- The model or dimension count
-- The translation source
+- The embedding text template (e.g. include tafsir, switch translation)
+- The model name or quantization
+- You discover a better model
 
-Otherwise the bin lives in the repo permanently.
+Otherwise the bin + json live in the repo permanently.
 
-## Verifying it works
+## Troubleshooting
 
-After the deploy lands:
-
-1. Open the search bar on the site
-2. Click the "By concept / feeling" tab
-3. Type `patience` (or `الصبر`) — you should see verses like 2:155,
-   3:200, 16:127, 39:10, etc. with relevance percentages
-
-If you see "concept search unavailable: OPENAI_API_KEY missing", the
-env var didn't make it into the running deployment — check Vercel
-settings and redeploy.
-
-If you see "embeddings files not found", the bin / meta JSON didn't
-get committed (or are being filtered by a `.gitignore` rule). Check
+**"verses.bin not found"** in browser console: you didn't commit the
+generated files, or they're being filtered by `.gitignore`. Check
 `git ls-files public/embeddings/`.
 
-## Why server-side, not client-side?
+**First search hangs forever**: the model is downloading from Hugging
+Face Hub (~100 MB). Watch the browser DevTools Network tab — you
+should see requests to `huggingface.co/.../onnx/...` resolving over
+10–30 seconds depending on bandwidth. After the download lands, the
+model is cached in IndexedDB and future searches start instantly.
 
-Two reasons:
+**Out-of-memory during script**: lower `BATCH_SIZE` in the script (the
+default 16 is conservative; 4 also works for low-RAM machines).
 
-1. The embeddings binary is ~12 MB. Shipping that to every page load
-   would tank your Lighthouse score for users who never use concept
-   search. Server-side keeps it in one place.
+**Bad-quality matches**: probably the multilingual model misses some
+nuanced classical-Arabic concept. Quality scales with model size — see
+the script for swappable model names. The current
+`paraphrase-multilingual-MiniLM-L12-v2` is a good balance of size
+(~100 MB) and quality (decent multilingual semantic similarity).
 
-2. Embedding the *query* requires an OpenAI API key. Putting the key in
-   client code would expose it to anyone who opens DevTools.
+## Why this architecture vs. a server endpoint?
 
-The whole pipeline (load + embed + score + sort) runs in ~50 ms on a
-warm Vercel function — fast enough to feel instant.
+A server-side endpoint (Vercel function calling OpenAI) was the
+obvious first choice. It would have meant:
+- Recurring API cost (cents per million queries, not zero)
+- An OpenAI account with billing attached
+- A secret that has to live in env vars
+- Cold-start latency on every search
+
+Client-side instead means:
+- $0 forever
+- No accounts, no keys, no env vars
+- Works offline after the first model download
+- Latency is "model load time on first search, then sub-100 ms forever"
+
+The trade-off is a one-time ~100 MB model download per browser. For an
+optional power-user feature ("find verses that match a feeling") that's
+acceptable — the user only pays the cost when they actually use it.

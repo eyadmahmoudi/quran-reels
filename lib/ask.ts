@@ -16,7 +16,7 @@
  * never has to load the embeddings server-side.
  */
 
-import { retrieveCandidates } from '@/lib/concept-search'
+import { retrieveCandidates, lookupVerseMeta } from '@/lib/concept-search'
 
 export interface AskCitedVerse {
   verse_key: string
@@ -74,8 +74,23 @@ export async function askQuestion(
     }
   }
   onStatus?.('done')
+  // Server may return cited verses without translation (when the
+  // verse came from server-side lexical expansion rather than the
+  // client-supplied semantic batch). Enrich from local meta if we
+  // have it loaded already.
+  const enriched = await Promise.all(
+    (data.cited_verses ?? []).map(async (v) => {
+      if (v.translation && v.text) return v
+      const meta = await lookupVerseMeta(v.verse_key).catch(() => null)
+      return {
+        verse_key: v.verse_key,
+        text: v.text || meta?.ar || '',
+        translation: v.translation || meta?.tr || '',
+      }
+    }),
+  )
   return {
     answer: data.answer ?? '',
-    cited_verses: data.cited_verses ?? [],
+    cited_verses: enriched,
   }
 }

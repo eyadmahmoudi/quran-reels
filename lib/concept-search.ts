@@ -172,6 +172,22 @@ export function preloadConceptSearch() {
 }
 
 /**
+ * Look up a single verse's metadata (Arabic + translation) by its
+ * verse_key. Used by the Ask tab to enrich verses that came back from
+ * server-side lexical expansion without translations attached.
+ *
+ * Triggers the embeddings/meta load if it hasn't happened yet.
+ */
+export async function lookupVerseMeta(verseKey: string): Promise<VerseMeta | null> {
+  try {
+    const data = await getData()
+    return data.byKey.get(verseKey) ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Retrieve the top-N candidate verses for a query using the same
  * hybrid algorithm searchByConcept uses, but returns the full verse
  * meta (verse_key + Arabic + translation) without the result-shape

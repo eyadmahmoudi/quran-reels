@@ -44,7 +44,7 @@ export type ConceptSearchStatus =
   | 'embedding-query'
   | 'searching'
 
-interface VerseMeta { vk: string; ar: string; tr: string }
+export interface VerseMeta { vk: string; ar: string; tr: string }
 
 interface MetaFile {
   model: string
@@ -169,6 +169,70 @@ export function preloadConceptSearch() {
   if (typeof window === 'undefined') return
   getData().catch(() => {})
   getExtractor().catch(() => {})
+}
+
+/**
+ * Retrieve the top-N candidate verses for a query using the same
+ * hybrid algorithm searchByConcept uses, but returns the full verse
+ * meta (verse_key + Arabic + translation) without the result-shape
+ * decoration. Used by lib/ask.ts to build the LLM context.
+ */
+export async function retrieveCandidates(
+  query: string,
+  topK = 30,
+  minScore = 0.30,
+): Promise<VerseMeta[]> {
+  const q = query.trim()
+  if (q.length < 2) return []
+
+  const [extractor, data, lexicalHits] = await Promise.all([
+    getExtractor(),
+    getData(),
+    fetchLexical(q),
+  ])
+
+  const result = (await (extractor as (
+    text: string,
+    opts: { pooling: 'mean'; normalize: boolean },
+  ) => Promise<{ data: Float32Array }>)(q, {
+    pooling: 'mean',
+    normalize: true,
+  }))
+  const queryVec = result.data
+
+  const dim = data.meta.dimensions
+  const verseCount = data.meta.count
+  const scores = new Array<{ idx: number; score: number }>(verseCount)
+  const vectors = data.vectors
+  for (let i = 0; i < verseCount; i++) {
+    let dot = 0
+    const offset = i * dim
+    for (let j = 0; j < dim; j++) {
+      dot += vectors[offset + j] * queryVec[j]
+    }
+    scores[i] = { idx: i, score: dot }
+  }
+  scores.sort((a, b) => b.score - a.score)
+
+  const seen = new Set<string>()
+  const out: VerseMeta[] = []
+  for (const lex of lexicalHits) {
+    if (seen.has(lex.verse_key)) continue
+    const meta = data.byKey.get(lex.verse_key)
+    if (!meta) continue
+    seen.add(lex.verse_key)
+    out.push(meta)
+    if (out.length >= topK) return out
+  }
+  for (const s of scores) {
+    if (out.length >= topK) break
+    if (s.score < minScore) break
+    const v = data.meta.verses[s.idx]
+    if (seen.has(v.vk)) continue
+    seen.add(v.vk)
+    out.push(v)
+  }
+  return out
 }
 
 export async function searchByConcept(

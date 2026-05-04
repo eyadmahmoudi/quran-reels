@@ -1,34 +1,41 @@
 /**
  * Client-side semantic / concept search for Quran verses.
  *
- * No server, no API, no token, no recurring cost. The strategy:
+ * Hybrid: combines two signals so the user gets both direct text
+ * matches AND meaning-based matches in the same result list.
  *
- *   1. Verse embeddings are pre-computed once locally (see
- *      `scripts/generate-embeddings.mjs`) using transformers.js with
- *      Xenova/paraphrase-multilingual-MiniLM-L12-v2 (384-dim, multilingual).
- *      The resulting `verses.bin` + `verses-meta.json` ship as static
- *      assets in `public/embeddings/`.
+ *   1. LEXICAL — calls the existing `/api/search` endpoint with the
+ *      raw query. Anything containing the query word verbatim wins
+ *      and is ranked first. (Catches user expectation of "I typed
+ *      الحزن so I should see verses with that word".)
  *
- *   2. The browser lazy-loads the same model from Hugging Face Hub on
- *      first concept search (cached in IndexedDB by transformers.js for
- *      future visits — ~100 MB one-time download, then instant).
+ *   2. SEMANTIC — embeds the query in the browser using transformers.js
+ *      (model: Xenova/multilingual-e5-base, 768-dim, multilingual,
+ *      retrieval-tuned), computes cosine similarity against
+ *      pre-computed verse embeddings shipped at /embeddings/, and
+ *      returns the top conceptually-related verses. (Catches
+ *      "patience" → 70:5, "I'm sad" → comfort verses, etc.)
  *
- *   3. The browser embeds the user's query, computes cosine similarity
- *      against all 6,236 verse vectors (sub-millisecond after the
- *      vectors are loaded), and returns the top matches.
+ * Lexical hits are de-duplicated against the semantic list and shown
+ * first; remaining slots are filled with semantic matches.
  *
- * All embeddings are L2-normalized at generation time, so cosine
- * similarity reduces to a plain dot product — important because the
- * inner-loop hot path runs once per verse per query.
+ * No server, no API key, no recurring cost. The embedding model is
+ * downloaded once per browser from Hugging Face Hub and cached in
+ * IndexedDB by transformers.js for all future visits.
  */
 
+// MUST match MODEL_NAME in scripts/generate-embeddings.mjs. The
+// vectors shipped in public/embeddings/verses.bin were produced by
+// this exact model — embedding queries with a different one would
+// land in a different vector space and produce garbage matches.
 const MODEL_NAME = 'Xenova/paraphrase-multilingual-MiniLM-L12-v2'
 
 export interface ConceptSearchResult {
   verse_key: string
-  text: string         // Arabic Uthmani
+  text: string         // Arabic Uthmani (may include <mark> highlights for lexical hits)
   translation: string  // English (Saheeh International)
-  score: number        // cosine similarity in [0, 1]
+  score: number        // 0–1 — exact lexical hits = 1.0, semantic = cosine
+  matched: 'lexical' | 'semantic'
 }
 
 export type ConceptSearchStatus =
@@ -37,11 +44,7 @@ export type ConceptSearchStatus =
   | 'embedding-query'
   | 'searching'
 
-interface VerseMeta {
-  vk: string
-  ar: string
-  tr: string
-}
+interface VerseMeta { vk: string; ar: string; tr: string }
 
 interface MetaFile {
   model: string
@@ -54,6 +57,7 @@ interface MetaFile {
 interface DataCache {
   meta: MetaFile
   vectors: Float32Array
+  byKey: Map<string, VerseMeta>
 }
 
 let extractorPromise: Promise<unknown> | null = null
@@ -62,12 +66,10 @@ let dataPromise: Promise<DataCache> | null = null
 function getExtractor() {
   if (extractorPromise) return extractorPromise
   extractorPromise = (async () => {
-    // Dynamic import keeps transformers.js out of the initial JS bundle
-    // for users who never use concept search.
     const tfjs = await import('@huggingface/transformers')
     return tfjs.pipeline('feature-extraction', MODEL_NAME, {
-      // q8 (8-bit quantized) is ~4× smaller than fp32 with ~no quality
-      // loss for sentence-similarity. Saves ~80 MB on first download.
+      // q8 (8-bit quantized) is ~4× smaller than fp32 with negligible
+      // quality loss for sentence-similarity at this scale.
       dtype: 'q8',
     })
   })()
@@ -93,21 +95,33 @@ function getData(): Promise<DataCache> {
           `(count=${meta.count} × dim=${meta.dimensions}). Regenerate.`,
       )
     }
-    return { meta, vectors }
+    const byKey = new Map<string, VerseMeta>()
+    for (const v of meta.verses) byKey.set(v.vk, v)
+    return { meta, vectors, byKey }
   })()
   return dataPromise.catch((e) => {
-    // Reset so the next attempt re-fetches.
     dataPromise = null
     throw e
   })
 }
 
-/**
- * Pre-warm the model + embeddings so the first user search returns
- * instantly. Call this from the search dialog as soon as the user
- * focuses the input. Errors are swallowed — they'll surface on the
- * actual search call.
- */
+interface LexicalHit {
+  verse_key: string
+  text: string  // includes <mark> tags
+  strict?: boolean
+}
+
+async function fetchLexical(query: string): Promise<LexicalHit[]> {
+  try {
+    const r = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`)
+    if (!r.ok) return []
+    const j = await r.json()
+    return (j.results || []) as LexicalHit[]
+  } catch {
+    return []
+  }
+}
+
 export function preloadConceptSearch() {
   if (typeof window === 'undefined') return
   getData().catch(() => {})
@@ -118,28 +132,35 @@ export async function searchByConcept(
   query: string,
   onStatus?: (status: ConceptSearchStatus) => void,
   topK = 25,
-  minScore = 0.35,
+  minScore = 0.32,  // MiniLM cosines are typically 0.3–0.6 for related verses
 ): Promise<ConceptSearchResult[]> {
   const q = query.trim()
   if (q.length < 2) return []
 
-  // Kick both off in parallel — they're independent.
+  // Kick off all three loads in parallel: model, embeddings, lexical.
+  // Lexical comes back fastest (network only), then we add semantic
+  // when ready. The user often gets the most relevant direct matches
+  // before the embedding model finishes downloading on first use.
   onStatus?.('loading-model')
   const extractorPromise = getExtractor()
   onStatus?.('loading-embeddings')
   const dataReady = getData()
+  const lexicalReady = fetchLexical(q)
 
-  // Wait for both before continuing.
-  const [extractor, data] = await Promise.all([extractorPromise, dataReady])
+  const [extractor, data, lexicalHits] = await Promise.all([
+    extractorPromise,
+    dataReady,
+    lexicalReady,
+  ])
 
   onStatus?.('embedding-query')
-  // The extractor pipeline output for a single string + mean pooling +
-  // normalize=true is a Tensor of shape [1, dim] with .data as a flat
-  // Float32Array of length `dim`.
   const result = (await (extractor as (
     text: string,
     opts: { pooling: 'mean'; normalize: boolean },
-  ) => Promise<{ data: Float32Array }>)(q, { pooling: 'mean', normalize: true }))
+  ) => Promise<{ data: Float32Array }>)(q, {
+    pooling: 'mean',
+    normalize: true,
+  }))
   const queryVec = result.data
   if (queryVec.length !== data.meta.dimensions) {
     throw new Error(
@@ -148,9 +169,6 @@ export async function searchByConcept(
   }
 
   onStatus?.('searching')
-  // Both query and verse vectors are L2-normalized, so cosine
-  // similarity == dot product. ~6236 × 384 ≈ 2.4M mults per query →
-  // a few milliseconds in modern V8.
   const dim = data.meta.dimensions
   const verseCount = data.meta.count
   const scores = new Array<{ idx: number; score: number }>(verseCount)
@@ -165,14 +183,41 @@ export async function searchByConcept(
   }
   scores.sort((a, b) => b.score - a.score)
 
-  const top = scores.slice(0, topK).filter((s) => s.score >= minScore)
-  return top.map((s) => {
+  // Build the merged result list. Lexical hits go first (they're
+  // verbatim matches, the user definitely wants them), then semantic
+  // hits fill the remaining slots, deduped against lexical.
+  const seen = new Set<string>()
+  const out: ConceptSearchResult[] = []
+
+  for (const lex of lexicalHits) {
+    if (seen.has(lex.verse_key)) continue
+    seen.add(lex.verse_key)
+    const meta = data.byKey.get(lex.verse_key)
+    out.push({
+      verse_key: lex.verse_key,
+      // Keep the highlighted Arabic from /api/search (with <mark> tags).
+      text: lex.text,
+      translation: meta?.tr || '',
+      score: 1.0,
+      matched: 'lexical',
+    })
+    if (out.length >= topK) return out
+  }
+
+  for (const s of scores) {
+    if (out.length >= topK) break
+    if (s.score < minScore) break
     const v = data.meta.verses[s.idx]
-    return {
+    if (seen.has(v.vk)) continue
+    seen.add(v.vk)
+    out.push({
       verse_key: v.vk,
       text: v.ar,
       translation: v.tr,
       score: s.score,
-    }
-  })
+      matched: 'semantic',
+    })
+  }
+
+  return out
 }

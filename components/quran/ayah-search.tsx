@@ -23,6 +23,7 @@ interface ResultItem {
   text: string;
   translation?: string;
   score?: number;
+  matched?: "lexical" | "semantic";
 }
 
 const STATUS_LABEL: Record<ConceptSearchStatus, string> = {
@@ -265,11 +266,24 @@ export function AyahSearch() {
                         <span>
                           {surahName} • Ayah {verseId}
                         </span>
-                        {isConcept && typeof result.score === "number" && (
-                          <span className="rounded bg-subtle px-1.5 py-0.5 font-mono text-[10px]">
-                            {(result.score * 100).toFixed(0)}%
+                        {isConcept && result.matched === "lexical" && (
+                          <span
+                            className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                            title="Verse contains your search term verbatim"
+                          >
+                            exact match
                           </span>
                         )}
+                        {isConcept &&
+                          result.matched === "semantic" &&
+                          typeof result.score === "number" && (
+                            <span
+                              className="rounded bg-subtle px-1.5 py-0.5 font-mono text-[10px]"
+                              title="Semantic similarity score"
+                            >
+                              {(result.score * 100).toFixed(0)}%
+                            </span>
+                          )}
                       </span>
                     </button>
                   );

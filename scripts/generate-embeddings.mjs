@@ -39,9 +39,12 @@ const OUTPUT_DIR = path.join(__dirname, '..', 'public', 'embeddings')
 
 const QURAN_API = 'https://api.quran.com/api/v4'
 const TRANSLATION_ID = 20  // Saheeh International — widely-used clear English
+// MUST match MODEL_NAME in lib/concept-search.ts. The vectors generated
+// here are read by that module, so they only make sense if both sides
+// embed in the same space.
 const MODEL_NAME = 'Xenova/paraphrase-multilingual-MiniLM-L12-v2'
 const DIMENSIONS = 384
-const BATCH_SIZE = 16  // tune up if you have RAM, down if you OOM
+const BATCH_SIZE = 16
 
 function stripHtml(s) {
   return (s || '').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
@@ -50,7 +53,7 @@ function stripHtml(s) {
 function buildEmbedText(verse) {
   const trans = stripHtml(verse.translations?.[0]?.text || '')
   const ar = (verse.text_uthmani || '').trim()
-  // Bilingual concatenation: a single multilingual vector carries both
+  // Bilingual concatenation: one multilingual vector carries both
   // semantic spaces, so Arabic queries and English queries both match.
   return `Translation: ${trans} | Arabic: ${ar}`
 }

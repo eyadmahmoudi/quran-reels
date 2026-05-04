@@ -27,8 +27,8 @@ interface ResultItem {
 }
 
 const STATUS_LABEL: Record<ConceptSearchStatus, string> = {
-  "loading-model": "Loading model (one-time, ~100 MB)…",
-  "loading-embeddings": "Loading verse index…",
+  "loading-model": "Preparing search…",
+  "loading-embeddings": "Preparing search…",
   "embedding-query": "Understanding your query…",
   searching: "Ranking verses…",
 };
@@ -52,12 +52,29 @@ export function AyahSearch() {
     fetchSurahs().then(setSurahs);
   }, []);
 
-  // Pre-warm the model + embeddings as soon as the user opens the
-  // dialog and switches to (or already is on) the concept tab. This
-  // overlaps the heavy first-time download with the user typing.
+  // Pre-warm the concept-search model + embeddings AS SOON AS THE APP
+  // LOADS, scheduled on idle so it doesn't compete with critical
+  // resources during initial render. By the time the user actually
+  // opens the dialog and types, the download is usually already done
+  // and the search feels instant — no perceptible "first-use lag".
+  // Falls through to a setTimeout on browsers without
+  // requestIdleCallback (Safari).
   useEffect(() => {
-    if (open && mode === "concept") preloadConceptSearch();
-  }, [open, mode]);
+    if (typeof window === "undefined") return;
+    type IdleScheduler = (cb: () => void, opts?: { timeout?: number }) => number;
+    const ric: IdleScheduler =
+      (window as unknown as { requestIdleCallback?: IdleScheduler })
+        .requestIdleCallback ??
+      ((cb) => window.setTimeout(cb, 1500));
+    const handle = ric(() => preloadConceptSearch(), { timeout: 4000 });
+    return () => {
+      const cancel = (
+        window as unknown as { cancelIdleCallback?: (h: number) => void }
+      ).cancelIdleCallback;
+      if (cancel) cancel(handle);
+      else window.clearTimeout(handle);
+    };
+  }, []);
 
   // Re-run on query OR mode change with 500 ms debounce.
   useEffect(() => {
@@ -190,11 +207,6 @@ export function AyahSearch() {
                 <>
                   Try things like <em>patience</em>, <em>أنا حزين</em>,{" "}
                   <em>guidance after loss</em>, or <em>التوكل على الله</em>.
-                  <br />
-                  <span className="text-[11px] opacity-75">
-                    First use downloads a small model (~100&nbsp;MB) — cached
-                    after that.
-                  </span>
                 </>
               ) : (
                 <>Type at least 2 characters of an ayah to search.</>

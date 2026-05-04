@@ -111,15 +111,58 @@ interface LexicalHit {
   strict?: boolean
 }
 
-async function fetchLexical(query: string): Promise<LexicalHit[]> {
-  try {
-    const r = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`)
-    if (!r.ok) return []
-    const j = await r.json()
-    return (j.results || []) as LexicalHit[]
-  } catch {
-    return []
+/**
+ * Build a small set of Arabic morphological variants of the query so
+ * that — for example — typing "الحزن" also finds verses containing
+ * "حزن", "تحزن", "يحزن", "حزين" etc. via the existing /api/search
+ * substring matcher. This is a poor-man's stemmer (no full
+ * morphological analyzer) but covers the most common Arabic clitic
+ * prefixes the user will accidentally include in a query.
+ *
+ * Returns the original query first, then deduped variants.
+ */
+function arabicQueryVariants(q: string): string[] {
+  const out: string[] = [q]
+  // Strip definite article and common conjunction/preposition prefixes
+  // one at a time, in order of how much they shorten the stem. We
+  // bail out once the remainder is too short to be meaningful.
+  const PREFIXES = ['وال', 'فال', 'بال', 'لل', 'ال', 'و', 'ف', 'ب', 'ل', 'ك', 'س']
+  for (const p of PREFIXES) {
+    if (q.startsWith(p) && q.length - p.length >= 3) {
+      const stripped = q.slice(p.length)
+      if (!out.includes(stripped)) out.push(stripped)
+    }
   }
+  return out
+}
+
+async function fetchLexical(query: string): Promise<LexicalHit[]> {
+  const variants = arabicQueryVariants(query.trim())
+  const seen = new Set<string>()
+  const merged: LexicalHit[] = []
+  // Run all variant queries in parallel and merge — original-query
+  // hits keep their natural order at the front (the variants come
+  // from a stripped form, which is broader and noisier).
+  const results = await Promise.all(
+    variants.map(async (v) => {
+      try {
+        const r = await fetch(`/api/search?q=${encodeURIComponent(v)}`)
+        if (!r.ok) return [] as LexicalHit[]
+        const j = await r.json()
+        return (j.results || []) as LexicalHit[]
+      } catch {
+        return [] as LexicalHit[]
+      }
+    }),
+  )
+  for (const list of results) {
+    for (const hit of list) {
+      if (seen.has(hit.verse_key)) continue
+      seen.add(hit.verse_key)
+      merged.push(hit)
+    }
+  }
+  return merged
 }
 
 export function preloadConceptSearch() {

@@ -30,38 +30,22 @@ CRITICAL RULES:
 1. Respond in the SAME LANGUAGE as the user's question. 
 2. USE ONLY THE CANDIDATE VERSES for themes, rulings, stories, and context.
 3. FACTUAL OVERRIDE: For basic numerical or structural facts (e.g., number of ayahs, longest Surah, Makki/Madani), answer directly using your internal knowledge.
-4. STRICT VOCABULARY BAN: You are strictly forbidden from using the words "candidate", "candidates", "provided verses", or "list". NEVER mention your retrieval system. Act as if you are accessing the Qur'an directly from memory.
-5. If the answer is completely missing from both the verses and your factual knowledge, reply exactly with: "I'm sorry, but I don't have the specific verses to answer that right now." Do not elaborate.
-6. Cite verses exactly as [S:V]. Quote the strongest verse fully.
-
-QUERY TYPE GUIDANCE:
-- Religious ruling: Give the ruling in one sentence, then quote the strongest verse.
-- Fact/Trivia: Answer directly from knowledge without citing a verse if one isn't needed.
-- Empathy: Brief comfort, then 1-2 verses.`
-
+4. STRICT VOCABULARY BAN: You are strictly forbidden from using the words "candidate", "candidates", "provided verses", or "list". NEVER mention your retrieval system. 
+5. NO HALLUCINATION: If the exact ruling or theme is not present in the verses provided to you, DO NOT guess or infer from unrelated verses. DO NOT generate lists of random verse citations.
+6. If you cannot answer based on the provided verses and your factual knowledge, reply exactly with: "I'm sorry, I cannot find the specific verses to accurately answer that right now." Stop there.
+7. Cite verses exactly as [S:V]. Quote the strongest verse fully.`
 const EXPANSION_SYSTEM_PROMPT = `You are a Qur'an search-query expansion assistant.
 
-Given a user question (in Arabic or English), generate 6–10 short Arabic search terms that would find the relevant verses by substring match against the Uthmani text of the Qur'an. Think of the actual Arabic words the verses USE — not the words the user used. Include morphological variants where helpful (e.g. الخمر, خمرا, تخمر, اجتنبوا الخمر).
+Given a user question (in Arabic or English), generate 6–10 short Arabic search terms that would find the relevant verses by substring match against the Uthmani text of the Qur'an. Think of the actual Arabic words the verses USE — not the words the user used. Include morphological variants where helpful.
 
-Also include 2–3 English keywords for translation-side matching.
+CRITICAL RULE: For questions about rulings/haram/halal (like alcohol, pork, gambling), you MUST include the exact Uthmani root words of prohibition: "حرم", "اجتنبوه", "رجس", "إثم".
 
 Return STRICT JSON: { "terms": ["...", "...", ...] }
-No prose, no markdown fences, just the JSON object.
 
 Examples:
-
 Input: "حكم شرب الخمر"
-Output: { "terms": ["الخمر", "خمر", "اجتنبوا الخمر", "ميسر", "إثم كبير", "رجس من عمل الشيطان", "wine", "intoxicant"] }
-
-Input: "من هو عدو موسى"
-Output: { "terms": ["فرعون", "آل فرعون", "هامان", "موسى وفرعون", "اذهب إلى فرعون", "Pharaoh"] }
-
-Input: "أشعر بالحزن"
-Output: { "terms": ["لا تحزن", "ولا تحزنوا", "لا خوف عليهم ولا هم يحزنون", "إن الله معنا", "فإن مع العسر يسرا", "patience", "comfort"] }
-
-Input: "what does the Quran say about gratitude"
-Output: { "terms": ["اشكروا", "شكر", "الشاكرين", "نعمة", "نعمتي", "لئن شكرتم", "gratitude", "thankful"] }`
-
+Output: { "terms": ["الخمر", "الميسر", "اجتنبوه", "رجس من عمل الشيطان", "إثم كبير", "حرم", "intoxicants"] }
+`
 interface AskBody {
   question?: string
   candidates?: Array<{ vk: string; ar: string; tr: string }>

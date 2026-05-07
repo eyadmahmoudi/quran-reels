@@ -6,18 +6,14 @@ import {
   buildIndexMap,
 } from '@/lib/arabic-search'
 
-// ────────────────────────────────────────────────────────────────────────
-// Pre-built, normalized Quran index
-// ────────────────────────────────────────────────────────────────────────
-
 interface IndexedVerse {
   surahId: number
   verseId: number
-  text: string          // original Uthmani
-  base: string          // strict normalization (tier 1)
-  fuzzy: string         // alef-stripped, spaces preserved (tier 2)
-  concat: string        // alef- + space-stripped (tier 3, last resort)
-  baseMap: number[]     // position map: base[i] came from text[baseMap[i]]
+  text: string
+  base: string
+  fuzzy: string
+  concat: string
+  baseMap: number[]
 }
 
 let indexPromise: Promise<IndexedVerse[]> | null = null
@@ -50,7 +46,6 @@ async function getIndex(): Promise<IndexedVerse[]> {
       }
       return out
     })().catch((err) => {
-      // Reset so next request can retry
       indexPromise = null
       throw err
     })
@@ -58,24 +53,17 @@ async function getIndex(): Promise<IndexedVerse[]> {
   return indexPromise
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// Highlighting — wrap matched range in <mark>...</mark> on the original
-// Uthmani text, using the base→original position map.
-// ────────────────────────────────────────────────────────────────────────
-
 function highlight(
   originalText: string,
   baseMap: number[],
   baseMatchStart: number,
-  baseMatchEnd: number, // exclusive
+  baseMatchEnd: number,
 ): string {
   if (baseMatchStart < 0 || baseMatchEnd <= baseMatchStart) return originalText
   const startOrig = baseMap[baseMatchStart]
   const endOrig = baseMap[Math.min(baseMatchEnd - 1, baseMap.length - 1)]
   if (startOrig === undefined || endOrig === undefined) return originalText
 
-  // Extend endOrig through any trailing tashkeel that belong to the last
-  // highlighted consonant, so the mark closes at a visually clean boundary.
   let end = endOrig
   while (
     end + 1 < originalText.length &&
@@ -95,10 +83,6 @@ function highlight(
   )
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// Route
-// ────────────────────────────────────────────────────────────────────────
-
 const MAX_RESULTS = 40
 
 export async function GET(req: NextRequest) {
@@ -110,16 +94,17 @@ export async function GET(req: NextRequest) {
     const qBase = normalizeBase(raw)
     const qFuzzy = normalizeAlefFuzzy(raw)
     const qConcat = normalizeConcat(raw)
+    
     if (qBase.length < 2 && qFuzzy.length < 2 && qConcat.length < 2) {
       return NextResponse.json({ results: [] })
     }
 
-    // ── Tier 1: strict substring match on base-normalized text (with highlight) ──
     const strictHits: Array<{
       verse_key: string
       text: string
       strict: true
     }> = []
+    
     if (qBase.length >= 2) {
       for (const entry of index) {
         const idx = entry.base.indexOf(qBase)
@@ -133,13 +118,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── Tier 2: alef-insensitive, spaces preserved. Only if tier 1 is empty. ──
-    //    Mirrors Ayah app: fallback tiers don't mix with strict results.
     const fuzzyHits: Array<{ verse_key: string; text: string; strict: false }> = []
-    if (strictHits.length === 0 && qFuzzy.length >= 2) {
+    
+    if (strictHits.length < 3 && qFuzzy.length >= 2) {
       for (const entry of index) {
         if (!entry.fuzzy.includes(qFuzzy)) continue
-        // Can't be precisely highlighted (alef positions differ); return original.
         fuzzyHits.push({
           verse_key: `${entry.surahId}:${entry.verseId}`,
           text: entry.text,
@@ -149,8 +132,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── Tier 3: alef- AND space-insensitive. Only if tiers 1+2 empty. ──
-    //    Catches no-space queries like "بسمالله" or "الحمدلله".
     const concatHits: Array<{ verse_key: string; text: string; strict: false }> = []
     if (strictHits.length === 0 && fuzzyHits.length === 0 && qConcat.length >= 2) {
       for (const entry of index) {

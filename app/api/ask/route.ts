@@ -1,25 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
-// Conversational Quran Q&A.
-//
-// Pipeline:
-//   1. CLIENT pre-retrieves ~30 candidate verses with hybrid lexical
-//      + semantic search and posts them along with the question.
-//   2. SERVER asks Groq to expand the user's question into a small
-//      set of specific Quran-style Arabic + English search terms.
-//      (The user's literal phrasing — e.g. "حكم شرب الخمر" — rarely
-//      appears in the Quran. Specific topical keywords like "الخمر",
-//      "اجتنبوا", "ميسر" do.)
-//   3. SERVER lexical-searches each expanded term against the same
-//      keyword endpoint the user-facing Exact-text tab uses.
-//   4. SERVER merges client candidates + new lexical hits, deduped
-//      and capped at ~60 verses for context.
-//   5. SERVER sends the merged candidates + the original question
-//      to Groq again for the final answer.
-//
-// Two LLM calls per question; both fit comfortably in Groq's free
-// 30 req/min tier.
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MODEL = 'llama-3.3-70b-versatile'
@@ -33,7 +14,13 @@ CRITICAL RULES:
 4. STRICT VOCABULARY BAN: You are strictly forbidden from using the words "candidate", "candidates", "provided verses", or "list". NEVER mention your retrieval system. 
 5. NO HALLUCINATION: If the exact ruling or theme is not present in the verses provided to you, DO NOT guess or infer from unrelated verses. DO NOT generate lists of random verse citations.
 6. If you cannot answer based on the provided verses and your factual knowledge, reply exactly with: "I'm sorry, I cannot find the specific verses to accurately answer that right now." Stop there.
-7. Cite verses exactly as [S:V]. Quote the strongest verse fully.`
+7. Cite verses exactly as [S:V]. Quote the strongest verse fully.
+
+QUERY TYPE GUIDANCE:
+- Religious ruling: Give the ruling in one sentence, then quote the strongest verse.
+- Fact/Trivia: Answer directly from knowledge without citing a verse if one isn't needed.
+- Empathy: Brief comfort, then 1-2 verses.`
+
 const EXPANSION_SYSTEM_PROMPT = `You are a Qur'an search-query expansion assistant.
 
 Given a user question (in Arabic or English), generate 6–10 short Arabic search terms that would find the relevant verses by substring match against the Uthmani text of the Qur'an. Think of the actual Arabic words the verses USE — not the words the user used. Include morphological variants where helpful.
@@ -45,7 +32,10 @@ Return STRICT JSON: { "terms": ["...", "...", ...] }
 Examples:
 Input: "حكم شرب الخمر"
 Output: { "terms": ["الخمر", "الميسر", "اجتنبوه", "رجس من عمل الشيطان", "إثم كبير", "حرم", "intoxicants"] }
-`
+
+Input: "من هو عدو موسى"
+Output: { "terms": ["فرعون", "آل فرعون", "هامان", "موسى وفرعون", "اذهب إلى فرعون", "Pharaoh"] }`
+
 interface AskBody {
   question?: string
   candidates?: Array<{ vk: string; ar: string; tr: string }>
@@ -109,8 +99,6 @@ async function expandQuery(question: string, apiKey: string): Promise<string[]> 
           (t): t is string => typeof t === 'string' && t.trim().length > 0,
         )
       : []
-    // Always include the original question as a fallback term so the
-    // user's literal phrasing still has a shot at lexical hits.
     if (!terms.includes(question)) terms.unshift(question)
     return terms.slice(0, 12)
   } catch (e) {
@@ -148,7 +136,6 @@ function getBaseUrl(req: NextRequest): string {
   return host ? `${proto}://${host}` : ''
 }
 
-// Strip <mark> tags that the search endpoint adds for highlighting.
 function stripMark(s: string): string {
   return s.replace(/<\/?mark>/g, '')
 }
@@ -175,30 +162,21 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 1. Expand the query into specific search terms.
   const terms = await expandQuery(question, apiKey)
-
-  // 2. Run all lexical searches in parallel.
   const baseUrl = getBaseUrl(req)
   const lexicalLists = baseUrl
     ? await Promise.all(terms.map((t) => lexicalFor(t, baseUrl)))
     : []
 
-  // 3. Merge: client candidates first (they include semantic), then
-  //    lexical hits in the order their expanded term was generated.
-  //    Dedupe by verse_key, cap at 60.
   const seen = new Set<string>()
   const merged: Array<{ vk: string; ar: string; tr: string }> = []
+  
   for (const c of clientCandidates) {
     if (!c?.vk || seen.has(c.vk)) continue
     seen.add(c.vk)
     merged.push(c)
   }
-  // For lexical hits we don't have the translation here — we can fetch
-  // verse-by-verse from quran.com but that's costly. Instead the LLM
-  // can answer from Arabic alone for the new lexical hits; the client
-  // already has full meta and will look up translations for cited
-  // verses when rendering.
+  
   for (const list of lexicalLists) {
     for (const h of list) {
       if (seen.has(h.verse_key)) continue
@@ -219,7 +197,6 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 4. Final answer call.
   const candidateBlock = merged
     .map(
       (c, i) =>
@@ -230,8 +207,7 @@ export async function POST(req: NextRequest) {
 
   const userMessage =
     `Question: ${question}\n\n` +
-    `Candidate verses (use ONLY these — these were retrieved by ` +
-    `expanded keyword search and semantic search):\n\n${candidateBlock}\n\n` +
+    `Candidate verses:\n\n${candidateBlock}\n\n` +
     `Now respond following the rules. Cite verses with [S:V] notation.`
 
   let answer: string
@@ -259,7 +235,6 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Extract [S:V] citations and dedupe in order of first appearance.
   const citationRe = /\[(\d{1,3})\s*[:：]\s*(\d{1,3})\]/g
   const cited = new Set<string>()
   const orderedVks: string[] = []
@@ -270,6 +245,7 @@ export async function POST(req: NextRequest) {
       orderedVks.push(vk)
     }
   }
+  
   const byKey = new Map(merged.map((c) => [c.vk, c]))
   const cited_verses = orderedVks
     .map((vk) => byKey.get(vk))

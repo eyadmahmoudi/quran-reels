@@ -178,15 +178,13 @@ export async function POST(req: NextRequest) {
     ? await Promise.all(terms.map((t) => lexicalFor(t, baseUrl)))
     : []
 
+// 3. Merge: Lexical hits FIRST (exact keyword matches), 
+  // then client semantic candidates SECOND (the "vibes"). 
+  // Dedupe by verse_key, cap at 60.
   const seen = new Set<string>()
   const merged: Array<{ vk: string; ar: string; tr: string }> = []
   
-  for (const c of clientCandidates) {
-    if (!c?.vk || seen.has(c.vk)) continue
-    seen.add(c.vk)
-    merged.push(c)
-  }
-  
+  // Lexical goes FIRST because it is highly specific
   for (const list of lexicalLists) {
     for (const h of list) {
       if (seen.has(h.verse_key)) continue
@@ -194,6 +192,14 @@ export async function POST(req: NextRequest) {
       merged.push({ vk: h.verse_key, ar: stripMark(h.text), tr: '' })
       if (merged.length >= 60) break
     }
+    if (merged.length >= 60) break
+  }
+
+  // Client Semantic goes SECOND as a fallback
+  for (const c of clientCandidates) {
+    if (!c?.vk || seen.has(c.vk)) continue
+    seen.add(c.vk)
+    merged.push(c)
     if (merged.length >= 60) break
   }
 

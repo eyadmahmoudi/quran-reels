@@ -29,9 +29,11 @@ QUERY TYPE GUIDANCE:
 
 const EXPANSION_SYSTEM_PROMPT = `You are a Qur'an search-query expansion assistant.
 
-Given a user question (in Arabic or English), generate 6–10 short Arabic search terms that would find the relevant verses by substring match against the Uthmani text of the Qur'an. Think of the actual Arabic words the verses USE — not the words the user used. Include morphological variants where helpful.
+Given a user question (in Arabic or English), generate 6–10 short Arabic search terms that would find the relevant verses by substring match against the Uthmani text of the Qur'an. Think of the actual Arabic words the verses USE.
 
-CRITICAL RULE: For questions about rulings/haram/halal (like alcohol, pork, gambling), you MUST include the exact Uthmani root words of prohibition: "حرم", "اجتنبوه", "رجس", "إثم".
+CRITICAL RULES:
+1. For questions about rulings/haram/halal, MUST include exact Uthmani root words of prohibition: "حرم", "اجتنبوه", "رجس", "إثم".
+2. YOU MUST INCLUDE MORPHOLOGICAL VARIANTS OF THE MAIN NOUN/VERB IN THE USER'S QUERY. If they ask about "الصابرين", you must include "صبروا", "يصبرون", "صبر". Do not just rely on generic reward/punishment words.
 
 Return STRICT JSON: { "terms": ["...", "...", ...] }
 
@@ -39,9 +41,11 @@ Examples:
 Input: "حكم شرب الخمر"
 Output: { "terms": ["الخمر", "الميسر", "اجتنبوه", "رجس من عمل الشيطان", "إثم كبير", "حرم", "intoxicants"] }
 
-Input: "من هو عدو موسى"
-Output: { "terms": ["فرعون", "آل فرعون", "هامان", "موسى وفرعون", "اذهب إلى فرعون", "Pharaoh"] }`
+Input: "ما هو جزاء الصابرين"
+Output: { "terms": ["الصابرين", "صبروا", "يصبرون", "أجرهم بغير حساب", "بما صبروا", "patient", "patience"] }
 
+Input: "من هو عدو موسى"
+Output: { "terms": ["فرعون", "آل فرعون", "هامان", "موسى وفرعون", "Pharaoh"] }`
 interface AskBody {
   question?: string
   candidates?: Array<{ vk: string; ar: string; tr: string }>

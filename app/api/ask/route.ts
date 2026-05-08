@@ -1,3 +1,16 @@
+// app/api/ask/route.ts
+// Qur'an Q&A RAG endpoint.
+//
+// Pipeline: User question → Groq query expansion → lexical search → merge
+// with client semantic candidates → Groq answer generation with citations.
+//
+// Fixes applied:
+// - Syntax: `break>` → `break`
+// - Surah names added to candidate block so LLM knows speaker context
+// - Citation validation: strip hallucinated [S:V] references
+// - Superscript alef handled in search via updated arabic-search.ts
+// - Reduced candidate cap from 60 → 25 to save tokens and avoid 429s
+
 import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
@@ -10,10 +23,10 @@ const ANSWER_SYSTEM_PROMPT = `You are a knowledgeable, warm, conversational Qur'
 CRITICAL RULES:
 1. Respond in the SAME LANGUAGE as the user's question. 
 2. USE ONLY THE CANDIDATE VERSES for themes, rulings, stories, and context.
-3. FACTUAL OVERRIDE: For basic numerical or structural facts, answer directly using your internal knowledge.
+3. FACTUAL OVERRIDE: For basic numerical or structural facts (e.g. "What is the longest Surah?", "How many ayahs in Al-Baqarah?"), answer directly using your internal knowledge. Do NOT refuse because the answer isn't in the retrieved verses.
 4. STRICT BILINGUAL VOCABULARY BAN: You are strictly forbidden from mentioning your retrieval system. 
-   - NEVER use these English words: "candidate", "candidates", "provided verses".
-   - NEVER use these Arabic words: "النصوص الموجودة", "الآيات الموجودة", "هذه الآيات", "الآيات المرشحة". 
+   - NEVER use these English words: "candidate", "candidates", "provided verses", "retrieved", "context window".
+   - NEVER use these Arabic words: "النصوص الموجودة", "الآيات الموجودة", "هذه الآيات", "الآيات المرشحة", "النصوص المقدمة".
    Act as if you are answering naturally from memory.
 5. NO METAPHORS OR WORDPLAY: Do not use verses about literal smoke/fire (e.g., Day of Judgment) to answer questions about modern concepts like smoking (التدخين).
 6. THE SAFETY REFUSAL: If the exact ruling or theme is not present in the verses, DO NOT invent one. You must reply EXACTLY with this phrase (choose English or Arabic based on the user):
@@ -21,19 +34,22 @@ CRITICAL RULES:
    - Arabic: "عذراً، لا أستطيع العثور على الآيات الدقيقة للإجابة على ذلك حالياً."
    Stop generating after this sentence. Do not elaborate.
 7. Cite verses exactly as [S:V]. Quote the strongest verse fully.
+8. SPEAKER AWARENESS: Check the surah name before attributing a verse to a person. For example, verses in "Ash-Shuara" (26) about "عدو" refer to Abraham speaking about idols, NOT Moses about Pharaoh. Do NOT misattribute verses to the wrong speaker.
 
 QUERY TYPE GUIDANCE:
-- Religious ruling: Give the ruling in one sentence, then quote the strongest verse.
+- Religious ruling (حكم): Give the ruling in one sentence, then quote the strongest verse.
 - Fact/Trivia: Answer directly from knowledge without citing a verse if one isn't needed.
-- Empathy: Brief comfort, then 1-2 verses.`
+- Empathy/Comfort: Brief comfort, then 1-2 verses.
+- Story/Prophet: Identify the surah, tell the story context, then quote the key verse.`
 
 const EXPANSION_SYSTEM_PROMPT = `You are a Qur'an search-query expansion assistant.
 
-Given a user question (in Arabic or English), generate 6–10 short Arabic search terms that would find the relevant verses by substring match against the Uthmani text of the Qur'an. Think of the actual Arabic words the verses USE.
+Given a user question (in Arabic or English), generate 6-10 short Arabic search terms that would find the relevant verses by substring match against the Uthmani text of the Qur'an. Think of the actual Arabic words the verses USE.
 
 CRITICAL RULES:
 1. For questions about rulings/haram/halal, MUST include exact Uthmani root words of prohibition: "حرم", "اجتنبوه", "رجس", "إثم".
-2. YOU MUST INCLUDE MORPHOLOGICAL VARIANTS OF THE MAIN NOUN/VERB IN THE USER'S QUERY. If they ask about "الصابرين", you must include "صبروا", "يصبرون", "صبر". Do not just rely on generic reward/punishment words.
+2. YOU MUST INCLUDE MORPHOLOGICAL VARIANTS OF THE MAIN NOUN/VERB IN THE USER'S QUERY. If they ask about "الصابرين", you must include "صبروا", "يصبرون", "صبر", "الصابرين". Do not just rely on generic reward/punishment words.
+3. Include the modern Arabic term AND the Quranic Arabic variant (e.g., both "الخمر" and "خمر").
 
 Return STRICT JSON: { "terms": ["...", "...", ...] }
 
@@ -42,10 +58,56 @@ Input: "حكم شرب الخمر"
 Output: { "terms": ["الخمر", "الميسر", "اجتنبوه", "رجس من عمل الشيطان", "إثم كبير", "حرم", "intoxicants"] }
 
 Input: "ما هو جزاء الصابرين"
-Output: { "terms": ["الصابرين", "صبروا", "يصبرون", "أجرهم بغير حساب", "بما صبروا", "patient", "patience"] }
+Output: { "terms": ["الصابرين", "صبروا", "يصبرون", "أجرهم بغير حساب", "بما صبروا", "الصابرين", "patient", "patience"] }
 
 Input: "من هو عدو موسى"
-Output: { "terms": ["فرعون", "آل فرعون", "هامان", "موسى وفرعون", "Pharaoh"] }`
+Output: { "terms": ["فرعون", "آل فرعون", "هامان", "موسى وفرعون", "Pharaoh"] }
+
+Input: "من هم المتقين"
+Output: { "terms": ["المتقين", "يتقون", "الذين يتقون", "خشية", "God-fearing"] }`
+
+// ── Surah name lookup ──────────────────────────────────────────────────────
+// Gives the LLM context about WHO is speaking in each verse.
+const SURAHS: Record<number, string> = {
+  1: 'Al-Fatihah', 2: 'Al-Baqarah', 3: 'Ali Imran', 4: 'An-Nisa',
+  5: 'Al-Maidah', 6: 'Al-Anam', 7: 'Al-Araf', 8: 'Al-Anfal',
+  9: 'At-Tawbah', 10: 'Yunus', 11: 'Hud', 12: 'Yusuf',
+  13: 'Ar-Rad', 14: 'Ibrahim', 15: 'Al-Hijr', 16: 'An-Nahl',
+  17: 'Al-Isra', 18: 'Al-Kahf', 19: 'Maryam', 20: 'Taha',
+  21: 'Al-Anbiya', 22: 'Al-Hajj', 23: 'Al-Muminun', 24: 'An-Nur',
+  25: 'Al-Furqan', 26: 'Ash-Shuara', 27: 'An-Naml', 28: 'Al-Qasas',
+  29: 'Al-Ankabut', 30: 'Ar-Rum', 31: 'Luqman', 32: 'As-Sajdah',
+  33: 'Al-Ahzab', 34: 'Saba', 35: 'Fatir', 36: 'Ya-Sin',
+  37: 'As-Saffat', 38: 'Sad', 39: 'Az-Zumar', 40: 'Ghafir',
+  41: 'Fussilat', 42: 'Ash-Shura', 43: 'Az-Zukhruf', 44: 'Ad-Dukhan',
+  45: 'Al-Jathiyah', 46: 'Al-Ahqaf', 47: 'Muhammad', 48: 'Al-Fath',
+  49: 'Al-Hujurat', 50: 'Qaf', 51: 'Adh-Dhariyat', 52: 'At-Tur',
+  53: 'An-Najm', 54: 'Al-Qamar', 55: 'Ar-Rahman', 56: 'Al-Waqiah',
+  57: 'Al-Hadid', 58: 'Al-Mujadila', 59: 'Al-Hashr', 60: 'Al-Mumtahanah',
+  61: 'As-Saff', 62: 'Al-Jumua', 63: 'Al-Munafiqun', 64: 'At-Taghabun',
+  65: 'At-Talaq', 66: 'At-Tahrim', 67: 'Al-Mulk', 68: 'Al-Qalam',
+  69: 'Al-Haqqah', 70: 'Al-Maarij', 71: 'Nuh', 72: 'Al-Jinn',
+  73: 'Al-Muzzammil', 74: 'Al-Muddaththir', 75: 'Al-Qiyamah',
+  76: 'Al-Insan', 77: 'Al-Mursalat', 78: 'An-Naba', 79: 'An-Naziat',
+  80: 'Abasa', 81: 'At-Takwir', 82: 'Al-Infitar', 83: 'Al-Mutaffifin',
+  84: 'Al-Inshiqaq', 85: 'Al-Buruj', 86: 'At-Tariq', 87: 'Al-Ala',
+  88: 'Al-Ghashiyah', 89: 'Al-Fajr', 90: 'Al-Balad', 91: 'Ash-Shams',
+  92: 'Al-Layl', 93: 'Ad-Duhaa', 94: 'Ash-Sharh', 95: 'At-Tin',
+  96: 'Al-Alaq', 97: 'Al-Qadr', 98: 'Al-Bayyinah', 99: 'Az-Zalzalah',
+  100: 'Al-Adiyat', 101: 'Al-Qariah', 102: 'At-Takathur',
+  103: 'Al-Asr', 104: 'Al-Humazah', 105: 'Al-Fil', 106: 'Quraysh',
+  107: 'Al-Maun', 108: 'Al-Kawthar', 109: 'Al-Kafirun',
+  110: 'An-Nasr', 111: 'Al-Masad', 112: 'Al-Ikhlas', 113: 'Al-Falaq',
+  114: 'An-Nas',
+}
+
+function surahName(vk: string): string {
+  const surah = parseInt(vk.split(':')[0], 10)
+  return SURAHS[surah] ?? ''
+}
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
 interface AskBody {
   question?: string
   candidates?: Array<{ vk: string; ar: string; tr: string }>
@@ -67,6 +129,8 @@ interface GroqOptions {
   maxTokens?: number
   jsonMode?: boolean
 }
+
+// ── Groq chat helper ───────────────────────────────────────────────────────
 
 async function groqChat(opts: GroqOptions): Promise<string> {
   const body: Record<string, unknown> = {
@@ -90,6 +154,8 @@ async function groqChat(opts: GroqOptions): Promise<string> {
   const data = await r.json()
   return (data.choices?.[0]?.message?.content ?? '').trim()
 }
+
+// ── Query expansion ────────────────────────────────────────────────────────
 
 async function expandQuery(question: string, apiKey: string): Promise<string[]> {
   try {
@@ -116,6 +182,8 @@ async function expandQuery(question: string, apiKey: string): Promise<string[]> 
     return [question]
   }
 }
+
+// ── Lexical search via internal /api/search ────────────────────────────────
 
 interface LexicalHit {
   verse_key: string
@@ -150,6 +218,13 @@ function stripMark(s: string): string {
   return s.replace(/<\/?mark>/g, '')
 }
 
+// ── Candidate merge cap ────────────────────────────────────────────────────
+// Reduced from 60 to 25 to save Groq tokens and avoid 429 rate limits.
+// The most relevant verses are at the top (lexical first), so 25 is plenty.
+const MAX_CANDIDATES = 25
+
+// ── POST handler ───────────────────────────────────────────────────────────
+
 export async function POST(req: NextRequest) {
   let body: AskBody
   try {
@@ -159,7 +234,7 @@ export async function POST(req: NextRequest) {
   }
   const question = (body.question ?? '').trim()
   const clientCandidates = body.candidates ?? []
-  if (question.length < 2) return badRequest('question is required (≥ 2 chars)')
+  if (question.length < 2) return badRequest('question is required (>= 2 chars)')
 
   const apiKey = process.env.GROQ_API_KEY
   if (!apiKey) {
@@ -172,27 +247,30 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // 1. Expand the query into multiple Arabic search terms
   const terms = await expandQuery(question, apiKey)
+
+  // 2. Lexical search for each term
   const baseUrl = getBaseUrl(req)
   const lexicalLists = baseUrl
     ? await Promise.all(terms.map((t) => lexicalFor(t, baseUrl)))
     : []
 
-// 3. Merge: Lexical hits FIRST (exact keyword matches), 
-  // then client semantic candidates SECOND (the "vibes"). 
-  // Dedupe by verse_key, cap at 60.
+  // 3. Merge: Lexical hits FIRST (exact keyword matches),
+  //    then client semantic candidates SECOND (the "vibes").
+  //    Dedupe by verse_key, cap at MAX_CANDIDATES.
   const seen = new Set<string>()
   const merged: Array<{ vk: string; ar: string; tr: string }> = []
-  
+
   // Lexical goes FIRST because it is highly specific
   for (const list of lexicalLists) {
     for (const h of list) {
       if (seen.has(h.verse_key)) continue
       seen.add(h.verse_key)
       merged.push({ vk: h.verse_key, ar: stripMark(h.text), tr: '' })
-      if (merged.length >= 60) break
+      if (merged.length >= MAX_CANDIDATES) break
     }
-    if (merged.length >= 60) break
+    if (merged.length >= MAX_CANDIDATES) break
   }
 
   // Client Semantic goes SECOND as a fallback
@@ -200,7 +278,7 @@ export async function POST(req: NextRequest) {
     if (!c?.vk || seen.has(c.vk)) continue
     seen.add(c.vk)
     merged.push(c)
-    if (merged.length >= 60) break
+    if (merged.length >= MAX_CANDIDATES) break
   }
 
   if (merged.length === 0) {
@@ -213,10 +291,11 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // 4. Build candidate block WITH surah names for speaker awareness
   const candidateBlock = merged
     .map(
       (c, i) =>
-        `${i + 1}. [${c.vk}] ${c.ar}` +
+        `${i + 1}. [${c.vk} - ${surahName(c.vk)}] ${c.ar}` +
         (c.tr ? `\n   English: ${c.tr}` : ''),
     )
     .join('\n\n')
@@ -226,6 +305,7 @@ export async function POST(req: NextRequest) {
     `Candidate verses:\n\n${candidateBlock}\n\n` +
     `Now respond following the rules. Cite verses with [S:V] notation.`
 
+  // 5. Generate answer via Groq
   let answer: string
   try {
     answer = await groqChat({
@@ -251,6 +331,21 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // 6. Validate citations — remove any [S:V] that the LLM hallucinated
+  //    (i.e. references that are NOT in the actual candidate list)
+  const validVkSet = new Set(merged.map((c) => c.vk))
+  let validatedAnswer = answer
+  for (const match of answer.matchAll(/\[(\d{1,3}\s*[:：]\s*\d{1,3})\]/g)) {
+    const raw = match[1]
+    const vk = raw.replace(/\s/g, '').replace(/：/, ':')
+    if (!validVkSet.has(vk)) {
+      // Remove the hallucinated bracketed citation, keep surrounding text
+      validatedAnswer = validatedAnswer.replace(`[${raw}]`, '')
+    }
+  }
+  answer = validatedAnswer
+
+  // 7. Extract cited verses for the response
   const citationRe = /\[(\d{1,3})\s*[:：]\s*(\d{1,3})\]/g
   const cited = new Set<string>()
   const orderedVks: string[] = []
@@ -261,7 +356,7 @@ export async function POST(req: NextRequest) {
       orderedVks.push(vk)
     }
   }
-  
+
   const byKey = new Map(merged.map((c) => [c.vk, c]))
   const cited_verses = orderedVks
     .map((vk) => byKey.get(vk))

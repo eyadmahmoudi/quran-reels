@@ -1,3 +1,15 @@
+// app/api/search/route.ts
+// Arabic lexical search endpoint for Qur'an verses.
+//
+// Uses the updated arabic-search.ts normalizers that correctly handle
+// the superscript alef (U+0670 ـٰ) by converting it to a regular alef
+// before stripping diacritics.
+//
+// Search cascade:
+//   1. Strict match — normalizeBase (strip diacritics only, preserve alefs)
+//   2. Fuzzy match  — normalizeAlefFuzzy (unify alef variants, ta↔ha, ya↔alif maqsurah)
+//   3. Concat match — normalizeConcat (fuzzy + remove spaces, last resort)
+
 import { NextRequest, NextResponse } from 'next/server'
 import {
   normalizeBase,
@@ -64,6 +76,7 @@ function highlight(
   const endOrig = baseMap[Math.min(baseMatchEnd - 1, baseMap.length - 1)]
   if (startOrig === undefined || endOrig === undefined) return originalText
 
+  // Extend end to include trailing diacritics that belong to the matched word
   let end = endOrig
   while (
     end + 1 < originalText.length &&
@@ -94,17 +107,22 @@ export async function GET(req: NextRequest) {
     const qBase = normalizeBase(raw)
     const qFuzzy = normalizeAlefFuzzy(raw)
     const qConcat = normalizeConcat(raw)
-    
+
     if (qBase.length < 2 && qFuzzy.length < 2 && qConcat.length < 2) {
       return NextResponse.json({ results: [] })
     }
 
+    // ── Tier 1: Strict (diacritics-stripped) match ─────────────────────
+    // This is the most accurate tier. Diacritics are removed but alef
+    // variants are preserved (e.g. ٱ stays as ٱ). With the dagger alef
+    // fix, words like ٱلصَّـٰبِرُونَ normalize to ٱلصابرون which correctly
+    // matches queries like الصابرون or الصابرين (via fuzzy tier below).
     const strictHits: Array<{
       verse_key: string
       text: string
       strict: true
     }> = []
-    
+
     if (qBase.length >= 2) {
       for (const entry of index) {
         const idx = entry.base.indexOf(qBase)
@@ -118,13 +136,19 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Tier 2: Fuzzy (alef-unified) match ─────────────────────────────
+    // Unifies alef variants (ٱأإآ→ا), ta marbuta→ha, alif maqsurah→yah.
+    // Only runs if strict didn't find enough results.
     const fuzzyHits: Array<{ verse_key: string; text: string; strict: false }> = []
-    
+
     if (strictHits.length < 3 && qFuzzy.length >= 2) {
+      const strictKeys = new Set(strictHits.map((h) => h.verse_key))
       for (const entry of index) {
         if (!entry.fuzzy.includes(qFuzzy)) continue
+        const vk = `${entry.surahId}:${entry.verseId}`
+        if (strictKeys.has(vk)) continue // don't duplicate strict hits
         fuzzyHits.push({
-          verse_key: `${entry.surahId}:${entry.verseId}`,
+          verse_key: vk,
           text: entry.text,
           strict: false,
         })
@@ -132,6 +156,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Tier 3: Concat (space-removed fuzzy) match ─────────────────────
+    // Last resort: remove all spaces so that queries split differently
+    // from the Uthmani text can still match.
     const concatHits: Array<{ verse_key: string; text: string; strict: false }> = []
     if (strictHits.length === 0 && fuzzyHits.length === 0 && qConcat.length >= 2) {
       for (const entry of index) {

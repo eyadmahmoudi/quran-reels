@@ -1,38 +1,35 @@
 // app/api/ask/route.ts
-// Qur'an Q&A RAG endpoint.
+// Qur'an Q&A RAG endpoint — v4
 //
-// Pipeline: User question → Groq query expansion → lexical search → merge
-// with client semantic candidates → Groq answer generation with citations.
+// Pipeline: User question → Groq query expansion → DIRECT lexical search →
+// merge with client semantic candidates → Groq answer generation.
 //
-// v3 Fixes:
-// - Syntax: `break>` → `break`
-// - Surah names added to candidate block so LLM knows speaker context
-// - Citation validation: strip hallucinated [S:V] references
-// - Superscript alef handled in search via updated arabic-search.ts
-// - Reduced candidate cap from 60 → 25 to save tokens and avoid 429s
-// - RESTRUCTURED PROMPT: Factual Override is now Rule #1 with ABSOLUTE
-//   priority over the Safety Refusal. The LLM was choosing refusal over
-//   factual answers because refusal was "safer."
-// - QUERY CLASSIFICATION: We now classify the question type FIRST and
-//   inject it into the prompt, so the LLM knows upfront whether to use
-//   factual override or verse-based answering.
+// v4 FIX: The lexical search now runs IN-PROCESS instead of fetching
+// /api/search over HTTP. On Vercel Serverless, self-fetching was silently
+// failing (empty baseUrl or deadlocking), causing ZERO candidates for
+// every query. Now we import and call the search index directly.
+//
+// All previous fixes also applied:
+// - Surah names in candidate block for speaker awareness
+// - Citation validation (strip hallucinated [S:V])
+// - Factual Override as Rule #1 (highest priority)
+// - Question type classifier injected into prompt
+// - Reduced candidate cap (25) to save tokens
 
 import { NextRequest, NextResponse } from 'next/server'
+import {
+  normalizeBase,
+  normalizeAlefFuzzy,
+  normalizeConcat,
+  buildIndexMap,
+} from '@/lib/arabic-search'
 
 export const runtime = 'nodejs'
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MODEL = 'llama-3.3-70b-versatile'
 
-// ── Answer prompt (v3 — restructured for Factual Override priority) ────────
-//
-// KEY CHANGE: The rules are now ordered by ABSOLUTE PRIORITY.
-// Rule 1 (Factual Override) takes precedence over Rule 7 (Safety Refusal).
-// Previously, the LLM would choose the "safer" path of refusing, even for
-// questions like "How many surahs are in the Quran?" — because Rule 6
-// (safety refusal) was more conservative than Rule 3 (factual override).
-//
-// Now the prompt explicitly states: "Rule 1 OVERRIDES Rule 7."
+// ── Answer prompt (v4 — Factual Override as Rule #1) ──────────────────────
 
 const ANSWER_SYSTEM_PROMPT = `You are a knowledgeable, warm, conversational Qur'an assistant.
 
@@ -127,7 +124,7 @@ Input: "في أي سورة توجد آية الكرسي"
 Output: { "terms": ["آية الكرسي", "الكرسي", "الله لا إله إلا هو"] }`
 
 // ── Surah name lookup ──────────────────────────────────────────────────────
-// Gives the LLM context about WHO is speaking in each verse.
+
 const SURAHS: Record<number, string> = {
   1: 'Al-Fatihah', 2: 'Al-Baqarah', 3: 'Ali Imran', 4: 'An-Nisa',
   5: 'Al-Maidah', 6: 'Al-Anam', 7: 'Al-Araf', 8: 'Al-Anfal',
@@ -167,52 +164,28 @@ function surahName(vk: string): string {
 }
 
 // ── Question type classifier ───────────────────────────────────────────────
-// Determines if the question is factual (answer from knowledge)
-// or verse-based (answer from candidates).
 
 type QuestionType = 'factual' | 'ruling' | 'story' | 'comfort' | 'general'
 
 function classifyQuestion(q: string): QuestionType {
   const lower = q.trim()
 
-  // Factual patterns — questions about Qur'an structure/numbers
   const factualPatterns = [
-    /كم عدد/i,           // "how many"
-    /ما هي أطول/i,       // "what is the longest"
-    /ما هي أقصر/i,       // "what is the shortest"
-    /في أي سورة/i,       // "in which surah"
-    /ما هي أول/i,        // "what is the first"
-    /ما هي آخر/i,        // "what is the last"
-    /كم آية/i,           // "how many ayahs"
-    /how many/i,
-    /what is the longest/i,
-    /what is the shortest/i,
-    /in which surah/i,
-    /which surah/i,
-    /how many surahs/i,
-    /how many ayahs/i,
-    /who revealed/i,
-    /what is the first surah/i,
+    /كم عدد/i, /ما هي أطول/i, /ما هي أقصر/i, /في أي سورة/i,
+    /ما هي أول/i, /ما هي آخر/i, /كم آية/i,
+    /how many/i, /what is the longest/i, /what is the shortest/i,
+    /in which surah/i, /which surah/i, /how many surahs/i,
+    /how many ayahs/i, /who revealed/i, /what is the first surah/i,
     /what is the last surah/i,
   ]
 
-  // Ruling patterns
   const rulingPatterns = [
-    /حكم/i,
-    /هل يجوز/i,
-    /حرام أم حلال/i,
-    /ما هو حكم/i,
-    /is it (haram|halal|permissible)/i,
-    /ruling/i,
+    /حكم/i, /هل يجوز/i, /حرام أم حلال/i, /ما هو حكم/i,
+    /is it (haram|halal|permissible)/i, /ruling/i,
   ]
 
-  // Story patterns
   const storyPatterns = [
-    /قصة/i,
-    /من هو/i,
-    /من هي/i,
-    /who is/i,
-    /story of/i,
+    /قصة/i, /من هو/i, /من هي/i, /who is/i, /story of/i,
   ]
 
   for (const p of factualPatterns) {
@@ -225,6 +198,123 @@ function classifyQuestion(q: string): QuestionType {
     if (p.test(lower)) return 'story'
   }
   return 'general'
+}
+
+// ── In-process Quran index & search ────────────────────────────────────────
+// THIS IS THE KEY FIX: Instead of fetching /api/search over HTTP (which
+// fails on Vercel because getBaseUrl() returns empty, or self-fetching
+// deadlocks), we build and search the index IN-PROCESS.
+
+interface IndexedVerse {
+  surahId: number
+  verseId: number
+  text: string
+  base: string
+  fuzzy: string
+  concat: string
+  baseMap: number[]
+}
+
+let indexPromise: Promise<IndexedVerse[]> | null = null
+
+async function getIndex(): Promise<IndexedVerse[]> {
+  if (!indexPromise) {
+    indexPromise = (async () => {
+      const res = await fetch(
+        'https://cdn.jsdelivr.net/npm/quran-json@3.1.2/dist/quran.json',
+        { cache: 'force-cache' },
+      )
+      if (!res.ok) throw new Error('Failed to fetch Quran dataset')
+      const data: Array<{ id: number; verses: Array<{ id: number; text: string }> }> =
+        await res.json()
+
+      const out: IndexedVerse[] = []
+      for (const surah of data) {
+        for (const verse of surah.verses) {
+          const { base, map } = buildIndexMap(verse.text)
+          out.push({
+            surahId: surah.id,
+            verseId: verse.id,
+            text: verse.text,
+            base,
+            fuzzy: normalizeAlefFuzzy(verse.text),
+            concat: normalizeConcat(verse.text),
+            baseMap: map,
+          })
+        }
+      }
+      return out
+    })().catch((err) => {
+      indexPromise = null
+      throw err
+    })
+  }
+  return indexPromise
+}
+
+interface SearchHit {
+  verse_key: string
+  text: string
+  strict: boolean
+}
+
+/**
+ * Search the Quran index directly in-process.
+ * This replaces the old HTTP fetch to /api/search that was silently
+ * failing on Vercel Serverless.
+ */
+async function searchQuran(query: string, maxResults = 30): Promise<SearchHit[]> {
+  if (!query || query.trim().length < 2) return []
+
+  const raw = query.trim()
+  const index = await getIndex()
+  const qBase = normalizeBase(raw)
+  const qFuzzy = normalizeAlefFuzzy(raw)
+  const qConcat = normalizeConcat(raw)
+
+  if (qBase.length < 2 && qFuzzy.length < 2 && qConcat.length < 2) return []
+
+  const hits: SearchHit[] = []
+  const seenKeys = new Set<string>()
+
+  // Tier 1: Strict match (diacritics stripped, alef variants preserved)
+  if (qBase.length >= 2) {
+    for (const entry of index) {
+      if (hits.length >= maxResults) break
+      const idx = entry.base.indexOf(qBase)
+      if (idx === -1) continue
+      const vk = `${entry.surahId}:${entry.verseId}`
+      if (seenKeys.has(vk)) continue
+      seenKeys.add(vk)
+      hits.push({ verse_key: vk, text: entry.text, strict: true })
+    }
+  }
+
+  // Tier 2: Fuzzy match (alef-unified, ta→ha, ya↔alif maqsurah)
+  if (hits.length < 5 && qFuzzy.length >= 2) {
+    for (const entry of index) {
+      if (hits.length >= maxResults) break
+      if (!entry.fuzzy.includes(qFuzzy)) continue
+      const vk = `${entry.surahId}:${entry.verseId}`
+      if (seenKeys.has(vk)) continue
+      seenKeys.add(vk)
+      hits.push({ verse_key: vk, text: entry.text, strict: false })
+    }
+  }
+
+  // Tier 3: Concat match (spaces removed, last resort)
+  if (hits.length === 0 && qConcat.length >= 2) {
+    for (const entry of index) {
+      if (hits.length >= maxResults) break
+      if (!entry.concat.includes(qConcat)) continue
+      const vk = `${entry.surahId}:${entry.verseId}`
+      if (seenKeys.has(vk)) continue
+      seenKeys.add(vk)
+      hits.push({ verse_key: vk, text: entry.text, strict: false })
+    }
+  }
+
+  return hits
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -304,44 +394,11 @@ async function expandQuery(question: string, apiKey: string): Promise<string[]> 
   }
 }
 
-// ── Lexical search via internal /api/search ────────────────────────────────
-
-interface LexicalHit {
-  verse_key: string
-  text: string
-}
-
-async function lexicalFor(
-  term: string,
-  baseUrl: string,
-): Promise<LexicalHit[]> {
-  try {
-    const r = await fetch(
-      `${baseUrl}/api/search?q=${encodeURIComponent(term)}`,
-    )
-    if (!r.ok) return []
-    const j = (await r.json()) as { results?: LexicalHit[] }
-    return j.results ?? []
-  } catch {
-    return []
-  }
-}
-
-function getBaseUrl(req: NextRequest): string {
-  const envUrl = process.env.VERCEL_URL
-  if (envUrl) return `https://${envUrl}`
-  const host = req.headers.get('host')
-  const proto = req.headers.get('x-forwarded-proto') ?? 'http'
-  return host ? `${proto}://${host}` : ''
-}
-
 function stripMark(s: string): string {
   return s.replace(/<\/?mark>/g, '')
 }
 
 // ── Candidate merge cap ────────────────────────────────────────────────────
-// Reduced from 60 to 25 to save Groq tokens and avoid 429 rate limits.
-// The most relevant verses are at the top (lexical first), so 25 is plenty.
 const MAX_CANDIDATES = 25
 
 // ── POST handler ───────────────────────────────────────────────────────────
@@ -374,14 +431,16 @@ export async function POST(req: NextRequest) {
   // 1. Expand the query into multiple Arabic search terms
   const terms = await expandQuery(question, apiKey)
 
-  // 2. Lexical search for each term
-  const baseUrl = getBaseUrl(req)
-  const lexicalLists = baseUrl
-    ? await Promise.all(terms.map((t) => lexicalFor(t, baseUrl)))
-    : []
+  // 2. IN-PROCESS lexical search (no HTTP fetch!)
+  //    This was the #1 bug: the old code fetched /api/search over HTTP,
+  //    which silently failed on Vercel because getBaseUrl() returned ""
+  //    and self-fetching could deadlock.
+  const lexicalLists = await Promise.all(
+    terms.map((t) => searchQuran(t)),
+  )
 
   // 3. Merge: Lexical hits FIRST (exact keyword matches),
-  //    then client semantic candidates SECOND (the "vibes").
+  //    then client semantic candidates SECOND.
   //    Dedupe by verse_key, cap at MAX_CANDIDATES.
   const seen = new Set<string>()
   const merged: Array<{ vk: string; ar: string; tr: string }> = []
@@ -407,9 +466,7 @@ export async function POST(req: NextRequest) {
 
   if (merged.length === 0) {
     // For factual questions, we can still answer without candidates
-    if (qType === 'factual') {
-      // Pass through with empty candidates — Rule 1 will handle it
-    } else {
+    if (qType !== 'factual') {
       return NextResponse.json(
         {
           error:
@@ -466,14 +523,12 @@ export async function POST(req: NextRequest) {
   }
 
   // 7. Validate citations — remove any [S:V] that the LLM hallucinated
-  //    (i.e. references that are NOT in the actual candidate list)
   const validVkSet = new Set(merged.map((c) => c.vk))
   let validatedAnswer = answer
   for (const match of answer.matchAll(/\[(\d{1,3}\s*[:：]\s*\d{1,3})\]/g)) {
     const raw = match[1]
     const vk = raw.replace(/\s/g, '').replace(/：/, ':')
     if (!validVkSet.has(vk)) {
-      // Remove the hallucinated bracketed citation, keep surrounding text
       validatedAnswer = validatedAnswer.replace(`[${raw}]`, '')
     }
   }

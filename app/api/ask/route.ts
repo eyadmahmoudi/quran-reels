@@ -4,12 +4,18 @@
 // Pipeline: User question → Groq query expansion → lexical search → merge
 // with client semantic candidates → Groq answer generation with citations.
 //
-// Fixes applied:
+// v3 Fixes:
 // - Syntax: `break>` → `break`
 // - Surah names added to candidate block so LLM knows speaker context
 // - Citation validation: strip hallucinated [S:V] references
 // - Superscript alef handled in search via updated arabic-search.ts
 // - Reduced candidate cap from 60 → 25 to save tokens and avoid 429s
+// - RESTRUCTURED PROMPT: Factual Override is now Rule #1 with ABSOLUTE
+//   priority over the Safety Refusal. The LLM was choosing refusal over
+//   factual answers because refusal was "safer."
+// - QUERY CLASSIFICATION: We now classify the question type FIRST and
+//   inject it into the prompt, so the LLM knows upfront whether to use
+//   factual override or verse-based answering.
 
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -18,29 +24,76 @@ export const runtime = 'nodejs'
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MODEL = 'llama-3.3-70b-versatile'
 
+// ── Answer prompt (v3 — restructured for Factual Override priority) ────────
+//
+// KEY CHANGE: The rules are now ordered by ABSOLUTE PRIORITY.
+// Rule 1 (Factual Override) takes precedence over Rule 7 (Safety Refusal).
+// Previously, the LLM would choose the "safer" path of refusing, even for
+// questions like "How many surahs are in the Quran?" — because Rule 6
+// (safety refusal) was more conservative than Rule 3 (factual override).
+//
+// Now the prompt explicitly states: "Rule 1 OVERRIDES Rule 7."
+
 const ANSWER_SYSTEM_PROMPT = `You are a knowledgeable, warm, conversational Qur'an assistant.
 
-CRITICAL RULES:
-1. Respond in the SAME LANGUAGE as the user's question. 
-2. USE ONLY THE CANDIDATE VERSES for themes, rulings, stories, and context.
-3. FACTUAL OVERRIDE: For basic numerical or structural facts (e.g. "What is the longest Surah?", "How many ayahs in Al-Baqarah?"), answer directly using your internal knowledge. Do NOT refuse because the answer isn't in the retrieved verses.
-4. STRICT BILINGUAL VOCABULARY BAN: You are strictly forbidden from mentioning your retrieval system. 
-   - NEVER use these English words: "candidate", "candidates", "provided verses", "retrieved", "context window".
-   - NEVER use these Arabic words: "النصوص الموجودة", "الآيات الموجودة", "هذه الآيات", "الآيات المرشحة", "النصوص المقدمة".
-   Act as if you are answering naturally from memory.
-5. NO METAPHORS OR WORDPLAY: Do not use verses about literal smoke/fire (e.g., Day of Judgment) to answer questions about modern concepts like smoking (التدخين).
-6. THE SAFETY REFUSAL: If the exact ruling or theme is not present in the verses, DO NOT invent one. You must reply EXACTLY with this phrase (choose English or Arabic based on the user):
-   - English: "I'm sorry, I cannot find the specific verses to accurately answer that right now."
-   - Arabic: "عذراً، لا أستطيع العثور على الآيات الدقيقة للإجابة على ذلك حالياً."
-   Stop generating after this sentence. Do not elaborate.
-7. Cite verses exactly as [S:V]. Quote the strongest verse fully.
-8. SPEAKER AWARENESS: Check the surah name before attributing a verse to a person. For example, verses in "Ash-Shuara" (26) about "عدو" refer to Abraham speaking about idols, NOT Moses about Pharaoh. Do NOT misattribute verses to the wrong speaker.
+═══════════════════════════════════════════
+RULES (ORDERED BY PRIORITY — Rule 1 > Rule 7):
+═══════════════════════════════════════════
 
+RULE 1 — FACTUAL OVERRIDE (HIGHEST PRIORITY):
+If the question asks for a FACT about the Qur'an's structure, history, or basic information — ANSWER DIRECTLY FROM YOUR KNOWLEDGE. Do NOT look at the candidate verses. Do NOT refuse. Examples of factual questions you MUST answer directly:
+- "How many surahs are in the Quran?" → Answer: 114
+- "What is the longest surah?" → Answer: Al-Baqarah
+- "In which surah is Ayat al-Kursi?" → Answer: Al-Baqarah (2:255)
+- "How many ayahs in Al-Baqarah?" → Answer: 286
+- "What is the shortest surah?" → Answer: Al-Kawthar (3 ayahs)
+- "Who revealed the Quran?" → Answer: Allah, to Prophet Muhammad through Jibreel
+- "What is the first surah?" → Answer: Al-Fatihah
+- "كم عدد سور القرآن" → Answer: ١١٤
+- "ما هي أطول سورة" → Answer: البقرة
+- "في أي سورة توجد آية الكرسي" → Answer: البقرة (٢:٢٥٥)
+This rule ALWAYS wins over Rule 7 (safety refusal). NEVER refuse a factual question.
+
+RULE 2 — LANGUAGE MATCH:
+Respond in the SAME LANGUAGE as the user's question.
+
+RULE 3 — USE CANDIDATE VERSES:
+For questions about themes, rulings, stories, and context, USE ONLY THE CANDIDATE VERSES provided below. Quote the strongest verse fully. Cite as [S:V].
+
+RULE 4 — VOCABULARY BAN:
+You are strictly forbidden from mentioning your retrieval system.
+- NEVER use: "candidate", "candidates", "provided verses", "retrieved", "context window"
+- NEVER use: "النصوص الموجودة", "الآيات الموجودة", "هذه الآيات", "الآيات المرشحة", "النصوص المقدمة"
+Act as if you are answering naturally from memory.
+
+RULE 5 — NO METAPHORS OR WORDPLAY:
+Do not use verses about literal smoke/fire (e.g., Day of Judgment) to answer questions about modern concepts like smoking (التدخين).
+
+RULE 6 — SPEAKER AWARENESS:
+Check the surah name before attributing a verse to a person. For example:
+- Verses in "Ash-Shuara" (26) about "عدو" refer to ABRAHAM speaking about idols, NOT Moses about Pharaoh.
+- Verses about Moses and Pharaoh are in Surahs 7 (Al-Araf), 10 (Yunus), 20 (Taha), 28 (Al-Qasas).
+Do NOT misattribute verses to the wrong speaker.
+
+RULE 7 — SAFETY REFUSAL (LOWEST PRIORITY):
+This rule ONLY applies when ALL of these conditions are met:
+1. The question is NOT a factual question (Rule 1 does not apply), AND
+2. The question asks for a religious ruling or theme, AND
+3. The candidate verses do NOT contain the answer.
+
+If ALL three conditions are met, reply EXACTLY with:
+- English: "I'm sorry, I cannot find the specific verses to accurately answer that right now."
+- Arabic: "عذراً، لا أستطيع العثور على الآيات الدقيقة للإجابة على ذلك حالياً."
+Stop generating after this sentence. Do not elaborate.
+
+═══════════════════════════════════════════
 QUERY TYPE GUIDANCE:
-- Religious ruling (حكم): Give the ruling in one sentence, then quote the strongest verse.
-- Fact/Trivia: Answer directly from knowledge without citing a verse if one isn't needed.
-- Empathy/Comfort: Brief comfort, then 1-2 verses.
-- Story/Prophet: Identify the surah, tell the story context, then quote the key verse.`
+═══════════════════════════════════════════
+- Fact/Trivia (كم عدد, ما هي أطول, في أي سورة): Rule 1 → answer directly from knowledge.
+- Religious ruling (حكم, هل يجوز): Rule 3 → give the ruling, quote the strongest verse.
+- Story/Prophet (قصة, من هو): Rule 3 + Rule 6 → identify surah, tell story, quote key verse.
+- Empathy/Comfort: Brief comfort, then 1-2 verses from candidates.
+- Modern topic not in Quran (سيارة, كريبتو, تدخين): Rule 7 → safety refusal, OR cite general principle verse if one exists in candidates (e.g. 2:195 for harm).`
 
 const EXPANSION_SYSTEM_PROMPT = `You are a Qur'an search-query expansion assistant.
 
@@ -50,6 +103,7 @@ CRITICAL RULES:
 1. For questions about rulings/haram/halal, MUST include exact Uthmani root words of prohibition: "حرم", "اجتنبوه", "رجس", "إثم".
 2. YOU MUST INCLUDE MORPHOLOGICAL VARIANTS OF THE MAIN NOUN/VERB IN THE USER'S QUERY. If they ask about "الصابرين", you must include "صبروا", "يصبرون", "صبر", "الصابرين". Do not just rely on generic reward/punishment words.
 3. Include the modern Arabic term AND the Quranic Arabic variant (e.g., both "الخمر" and "خمر").
+4. For factual questions (كم عدد, ما هي أطول), still generate search terms in case they're needed for context, but keep it simple.
 
 Return STRICT JSON: { "terms": ["...", "...", ...] }
 
@@ -58,13 +112,19 @@ Input: "حكم شرب الخمر"
 Output: { "terms": ["الخمر", "الميسر", "اجتنبوه", "رجس من عمل الشيطان", "إثم كبير", "حرم", "intoxicants"] }
 
 Input: "ما هو جزاء الصابرين"
-Output: { "terms": ["الصابرين", "صبروا", "يصبرون", "أجرهم بغير حساب", "بما صبروا", "الصابرين", "patient", "patience"] }
+Output: { "terms": ["الصابرين", "صبروا", "يصبرون", "أجرهم بغير حساب", "بما صبروا", "صبر", "patient", "patience"] }
 
 Input: "من هو عدو موسى"
 Output: { "terms": ["فرعون", "آل فرعون", "هامان", "موسى وفرعون", "Pharaoh"] }
 
 Input: "من هم المتقين"
-Output: { "terms": ["المتقين", "يتقون", "الذين يتقون", "خشية", "God-fearing"] }`
+Output: { "terms": ["المتقين", "يتقون", "الذين يتقون", "خشية", "God-fearing"] }
+
+Input: "كم عدد سور القرآن"
+Output: { "terms": ["القرآن", "سورة"] }
+
+Input: "في أي سورة توجد آية الكرسي"
+Output: { "terms": ["آية الكرسي", "الكرسي", "الله لا إله إلا هو"] }`
 
 // ── Surah name lookup ──────────────────────────────────────────────────────
 // Gives the LLM context about WHO is speaking in each verse.
@@ -104,6 +164,67 @@ const SURAHS: Record<number, string> = {
 function surahName(vk: string): string {
   const surah = parseInt(vk.split(':')[0], 10)
   return SURAHS[surah] ?? ''
+}
+
+// ── Question type classifier ───────────────────────────────────────────────
+// Determines if the question is factual (answer from knowledge)
+// or verse-based (answer from candidates).
+
+type QuestionType = 'factual' | 'ruling' | 'story' | 'comfort' | 'general'
+
+function classifyQuestion(q: string): QuestionType {
+  const lower = q.trim()
+
+  // Factual patterns — questions about Qur'an structure/numbers
+  const factualPatterns = [
+    /كم عدد/i,           // "how many"
+    /ما هي أطول/i,       // "what is the longest"
+    /ما هي أقصر/i,       // "what is the shortest"
+    /في أي سورة/i,       // "in which surah"
+    /ما هي أول/i,        // "what is the first"
+    /ما هي آخر/i,        // "what is the last"
+    /كم آية/i,           // "how many ayahs"
+    /how many/i,
+    /what is the longest/i,
+    /what is the shortest/i,
+    /in which surah/i,
+    /which surah/i,
+    /how many surahs/i,
+    /how many ayahs/i,
+    /who revealed/i,
+    /what is the first surah/i,
+    /what is the last surah/i,
+  ]
+
+  // Ruling patterns
+  const rulingPatterns = [
+    /حكم/i,
+    /هل يجوز/i,
+    /حرام أم حلال/i,
+    /ما هو حكم/i,
+    /is it (haram|halal|permissible)/i,
+    /ruling/i,
+  ]
+
+  // Story patterns
+  const storyPatterns = [
+    /قصة/i,
+    /من هو/i,
+    /من هي/i,
+    /who is/i,
+    /story of/i,
+  ]
+
+  for (const p of factualPatterns) {
+    if (p.test(lower)) return 'factual'
+  }
+  for (const p of rulingPatterns) {
+    if (p.test(lower)) return 'ruling'
+  }
+  for (const p of storyPatterns) {
+    if (p.test(lower)) return 'story'
+  }
+  return 'general'
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -247,6 +368,9 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // 0. Classify the question type
+  const qType = classifyQuestion(question)
+
   // 1. Expand the query into multiple Arabic search terms
   const terms = await expandQuery(question, apiKey)
 
@@ -282,30 +406,40 @@ export async function POST(req: NextRequest) {
   }
 
   if (merged.length === 0) {
-    return NextResponse.json(
-      {
-        error:
-          'No candidate verses retrieved. Try rephrasing the question more specifically.',
-      },
-      { status: 422 },
-    )
+    // For factual questions, we can still answer without candidates
+    if (qType === 'factual') {
+      // Pass through with empty candidates — Rule 1 will handle it
+    } else {
+      return NextResponse.json(
+        {
+          error:
+            'No candidate verses retrieved. Try rephrasing the question more specifically.',
+        },
+        { status: 422 },
+      )
+    }
   }
 
   // 4. Build candidate block WITH surah names for speaker awareness
-  const candidateBlock = merged
-    .map(
-      (c, i) =>
-        `${i + 1}. [${c.vk} - ${surahName(c.vk)}] ${c.ar}` +
-        (c.tr ? `\n   English: ${c.tr}` : ''),
-    )
-    .join('\n\n')
+  const candidateBlock = merged.length > 0
+    ? merged
+        .map(
+          (c, i) =>
+            `${i + 1}. [${c.vk} - ${surahName(c.vk)}] ${c.ar}` +
+            (c.tr ? `\n   English: ${c.tr}` : ''),
+        )
+        .join('\n\n')
+    : '(No candidate verses were retrieved for this question.)'
 
+  // 5. Build the user message WITH question type hint
+  const typeHint = `[QUESTION TYPE: ${qType.toUpperCase()}]`
   const userMessage =
+    `${typeHint}\n\n` +
     `Question: ${question}\n\n` +
     `Candidate verses:\n\n${candidateBlock}\n\n` +
-    `Now respond following the rules. Cite verses with [S:V] notation.`
+    `Now respond following the rules. Remember: if this is a FACTUAL question (type FACTUAL), you MUST answer directly from your knowledge per Rule 1. Cite verses with [S:V] notation only when using candidate verses.`
 
-  // 5. Generate answer via Groq
+  // 6. Generate answer via Groq
   let answer: string
   try {
     answer = await groqChat({
@@ -331,7 +465,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 6. Validate citations — remove any [S:V] that the LLM hallucinated
+  // 7. Validate citations — remove any [S:V] that the LLM hallucinated
   //    (i.e. references that are NOT in the actual candidate list)
   const validVkSet = new Set(merged.map((c) => c.vk))
   let validatedAnswer = answer
@@ -345,7 +479,7 @@ export async function POST(req: NextRequest) {
   }
   answer = validatedAnswer
 
-  // 7. Extract cited verses for the response
+  // 8. Extract cited verses for the response
   const citationRe = /\[(\d{1,3})\s*[:：]\s*(\d{1,3})\]/g
   const cited = new Set<string>()
   const orderedVks: string[] = []
@@ -368,6 +502,7 @@ export async function POST(req: NextRequest) {
     cited_verses,
     expanded_terms: terms,
     candidate_count: merged.length,
+    question_type: qType,
     model: MODEL,
   })
 }

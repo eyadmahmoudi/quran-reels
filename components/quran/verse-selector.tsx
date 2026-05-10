@@ -88,11 +88,11 @@ export function VerseSelector() {
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="text-caption text-ink-tertiary">Verse Range</label>
+      <label className="text-caption text-ink-tertiary" dir="rtl">نطاق الآيات</label>
 
       <div className="grid grid-cols-2 gap-2">
         <NumberField
-          label="From"
+          label="من"
           value={startDraft}
           min={1}
           max={maxVerses}
@@ -101,7 +101,7 @@ export function VerseSelector() {
           disabled={disabled}
         />
         <NumberField
-          label="To"
+          label="إلى"
           value={endDraft}
           min={1}
           max={maxVerses}
@@ -113,9 +113,9 @@ export function VerseSelector() {
 
       {!disabled && (
         <div className="flex items-center justify-between text-[11px] text-ink-tertiary">
-          <span className="tabular-nums">{maxVerses} verses total</span>
-          <span className="font-medium text-accent-primary tabular-nums">
-            {verseCount} selected
+          <span className="tabular-nums" dir="rtl">{maxVerses} آية</span>
+          <span className="font-medium text-accent-primary tabular-nums" dir="rtl">
+            {verseCount} محددة
           </span>
         </div>
       )}
@@ -123,14 +123,14 @@ export function VerseSelector() {
       {startExceedsEnd && (
         <div className="flex items-center gap-1.5 rounded-[8px] border border-destructive/20 bg-destructive/10 px-2.5 py-1.5 text-[11px] text-destructive">
           <AlertTriangle className="h-3 w-3 shrink-0" />
-          Start verse must be ≤ end verse
+          يجب أن تكون آية البداية ≤ آية النهاية
         </div>
       )}
 
       {isAtLimit && (
         <div className="flex items-center gap-1.5 rounded-[8px] border border-gold/20 bg-gold/10 px-2.5 py-1.5 text-[11px] text-gold">
           <AlertTriangle className="h-3 w-3 shrink-0" />
-          Maximum {MAX_VERSES} verses per reel
+          الحد الأقصى {MAX_VERSES} آية لكل مقطع
         </div>
       )}
     </div>

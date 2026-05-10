@@ -169,7 +169,7 @@ export function DailyVerseCard() {
 
   if (!dailyData) {
     return (
-      <p className="text-[12px] text-ink-tertiary">Could not load today&apos;s verse</p>
+      <p className="text-[12px] text-ink-tertiary" dir="rtl">تعذر تحميل آية اليوم</p>
     )
   }
 
@@ -211,7 +211,7 @@ export function DailyVerseCard() {
       </div>
 
       {/* Reason tag */}
-      <p className="text-[10px] text-ink-tertiary italic">
+      <p className="text-[10px] text-ink-tertiary italic" dir="rtl">
         {todayVerse.reason}
       </p>
 
@@ -228,16 +228,16 @@ export function DailyVerseCard() {
             : 'bg-accent-primary/10 text-accent-primary hover:bg-accent-primary/20 border border-accent-primary/20',
         )}
       >
-        <span className="flex items-center justify-center gap-1.5">
+        <span className="flex items-center justify-center gap-1.5" dir="rtl">
           {applied ? (
             <>
               <Check className="h-3.5 w-3.5" />
-              Applied
+              تم التطبيق
             </>
           ) : (
             <>
               <Sparkles className="h-3.5 w-3.5" />
-              Use Today&apos;s Verse
+              استخدم آية اليوم
             </>
           )}
         </span>

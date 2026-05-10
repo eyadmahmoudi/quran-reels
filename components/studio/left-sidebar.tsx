@@ -13,7 +13,6 @@ import {
   Sparkles,
   Layers,
   Moon,
-  BookMarked,
   BarChart3,
 } from 'lucide-react'
 import { AyahSearch } from '@/components/quran/ayah-search'
@@ -31,13 +30,15 @@ import { OverlayToggles } from '@/components/quran/overlay-toggles'
 import { WatermarkInput } from './watermark-input'
 
 interface SidebarSectionProps {
-  title: string
+  titleAr: string
+  titleEn: string
   icon: ReactNode
   children: ReactNode
-  description?: string
+  descriptionAr?: string
+  descriptionEn?: string
 }
 
-function SidebarSection({ title, icon, description, children }: SidebarSectionProps) {
+function SidebarSection({ titleAr, titleEn, icon, children, descriptionAr, descriptionEn }: SidebarSectionProps) {
   return (
     <section className="px-5 py-5">
       <header className="mb-4 flex items-start gap-3">
@@ -45,10 +46,18 @@ function SidebarSection({ title, icon, description, children }: SidebarSectionPr
           {icon}
         </span>
         <div className="min-w-0 flex-1 pt-0.5">
-          <h2 className="text-caption text-ink-primary">{title}</h2>
-          {description && (
+          <h2 className="text-caption text-ink-primary" dir="rtl">{titleAr}</h2>
+          {titleEn && (
+            <p className="mt-0.5 text-[11px] leading-tight text-ink-tertiary">{titleEn}</p>
+          )}
+          {descriptionAr && (
+            <p className="mt-0.5 text-[12px] leading-tight text-ink-tertiary" dir="rtl">
+              {descriptionAr}
+            </p>
+          )}
+          {!descriptionAr && descriptionEn && (
             <p className="mt-0.5 text-[12px] leading-tight text-ink-tertiary">
-              {description}
+              {descriptionEn}
             </p>
           )}
         </div>
@@ -74,12 +83,14 @@ function Hairline() {
 
 export function LeftSidebar() {
   return (
-    <aside className="flex h-full w-full min-h-0 flex-col bg-surface lg:w-[300px] lg:shrink-0 lg:border-r lg:border-border-subtle xl:w-[340px]">
+    <aside className="flex h-full w-full min-h-0 flex-col bg-surface lg:w-[300px] lg:shrink-0 lg:border-l lg:border-border-subtle xl:w-[340px]">
       {/* ── Sidebar heading ─────────────────────────────────── */}
       <div className="shrink-0 px-5 pt-5 pb-4">
-        <h1 className="text-caption text-ink-primary">Studio Controls</h1>
+        <h1 className="font-arabic-ui text-[16px] font-medium text-ink-primary" dir="rtl">
+          إعدادات الاستوديو
+        </h1>
         <p className="mt-1 text-[13px] leading-snug text-ink-tertiary">
-          Configure, preview &amp; export your Quran reel
+          Studio Controls
         </p>
       </div>
       <OrnamentDivider />
@@ -87,9 +98,10 @@ export function LeftSidebar() {
       {/* ── Scrollable sections ─────────────────────────────── */}
       <div className="sidebar-scroll flex-1 overflow-y-auto pb-24 lg:pb-4">
         <SidebarSection
-          title="Presets"
+          titleAr="القوالب الجاهزة"
+          titleEn="Presets"
           icon={<Layers className="h-4 w-4" strokeWidth={1.75} />}
-          description="Quick style templates"
+          descriptionAr="أنماط سريعة للتطبيق"
         >
           <PresetTemplates />
         </SidebarSection>
@@ -97,12 +109,12 @@ export function LeftSidebar() {
         <OrnamentDivider />
 
         <SidebarSection
-          title="Source"
+          titleAr="المصدر"
+          titleEn="Source"
           icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />}
-          description="Select Surah & verse range"
+          descriptionAr="اختر السورة ونطاق الآيات"
         >
           <div className="flex flex-col gap-3">
-            {/* HERE IS THE NEW SEARCH BAR */}
             <AyahSearch />
             <SurahSelector />
             <VerseSelector />
@@ -112,9 +124,10 @@ export function LeftSidebar() {
         <Hairline />
 
         <SidebarSection
-          title="Reciter"
+          titleAr="القارئ"
+          titleEn="Reciter"
           icon={<Mic className="h-4 w-4" strokeWidth={1.75} />}
-          description="Pick a voice"
+          descriptionAr="اختر صوت التلاوة"
         >
           <ReciterSelector />
         </SidebarSection>
@@ -122,9 +135,10 @@ export function LeftSidebar() {
         <Hairline />
 
         <SidebarSection
-          title="Isti‘ādha"
+          titleAr="الاستعاذة"
+          titleEn="Isti'ādha"
           icon={<ShieldCheck className="h-4 w-4" strokeWidth={1.75} />}
-          description="Protective phrase before recitation"
+          descriptionAr="أعوذ بالله من الشيطان الرجيم"
         >
           <IstiadhaToggle />
         </SidebarSection>
@@ -132,9 +146,10 @@ export function LeftSidebar() {
         <OrnamentDivider />
 
         <SidebarSection
-          title="Background"
+          titleAr="الخلفية"
+          titleEn="Background"
           icon={<ImageIcon className="h-4 w-4" strokeWidth={1.75} />}
-          description="Upload or choose a preset"
+          descriptionAr="ارفع أو اختر خلفية"
         >
           <BackgroundSelector />
         </SidebarSection>
@@ -142,9 +157,10 @@ export function LeftSidebar() {
         <Hairline />
 
         <SidebarSection
-          title="Translation"
+          titleAr="الترجمة"
+          titleEn="Translation"
           icon={<Languages className="h-4 w-4" strokeWidth={1.75} />}
-          description="Show translation under the verse"
+          descriptionAr="عرض الترجمة تحت الآية"
         >
           <TranslationSettings />
         </SidebarSection>
@@ -152,9 +168,10 @@ export function LeftSidebar() {
         <Hairline />
 
         <SidebarSection
-          title="Calligraphy"
+          titleAr="الخط"
+          titleEn="Calligraphy"
           icon={<PenTool className="h-4 w-4" strokeWidth={1.75} />}
-          description="Choose an Arabic font style"
+          descriptionAr="اختر نمط الخط العربي"
         >
           <CalligraphySelector />
         </SidebarSection>
@@ -162,9 +179,10 @@ export function LeftSidebar() {
         <Hairline />
 
         <SidebarSection
-          title="Display"
+          titleAr="التخطيط"
+          titleEn="Display"
           icon={<LayoutTemplate className="h-4 w-4" strokeWidth={1.75} />}
-          description="Choose a layout style"
+          descriptionAr="اختر نمط العرض"
         >
           <DisplayModeSelector />
         </SidebarSection>
@@ -172,9 +190,10 @@ export function LeftSidebar() {
         <OrnamentDivider />
 
         <SidebarSection
-          title="Overlays"
+          titleAr="الطبقات"
+          titleEn="Overlays"
           icon={<Moon className="h-4 w-4" strokeWidth={1.75} />}
-          description="Hijri date, tafsir & progress"
+          descriptionAr="التاريخ الهجري والتفسير والموضع"
         >
           <OverlayToggles />
         </SidebarSection>
@@ -182,9 +201,10 @@ export function LeftSidebar() {
         <Hairline />
 
         <SidebarSection
-          title="Daily Verse"
+          titleAr="آية اليوم"
+          titleEn="Daily Verse"
           icon={<Sparkles className="h-4 w-4" strokeWidth={1.75} />}
-          description="Today's featured verse"
+          descriptionAr="الآية المميزة لليوم"
         >
           <DailyVerseCard />
         </SidebarSection>
@@ -192,9 +212,10 @@ export function LeftSidebar() {
         <Hairline />
 
         <SidebarSection
-          title="Watermark"
+          titleAr="العلامة المائية"
+          titleEn="Watermark"
           icon={<AtSign className="h-4 w-4" strokeWidth={1.75} />}
-          description="Add your handle to the preview"
+          descriptionAr="أضف اسمك على المعاينة"
         >
           <WatermarkInput />
         </SidebarSection>

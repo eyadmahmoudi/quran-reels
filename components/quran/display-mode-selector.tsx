@@ -11,21 +11,25 @@ export function DisplayModeSelector() {
   const modes = [
     {
       key: 'minimal' as const,
-      label: 'Minimal',
-      hint: 'Clean, no chrome',
+      labelAr: 'بسيط',
+      labelEn: 'Minimal',
+      hintAr: 'نظيف بدون إضافات',
+      hintEn: 'Clean, no chrome',
       Icon: Minimize2,
     },
     {
       key: 'classic' as const,
-      label: 'Classic',
-      hint: 'Header + bar',
+      labelAr: 'كلاسيكي',
+      labelEn: 'Classic',
+      hintAr: 'رأس + شريط',
+      hintEn: 'Header + bar',
       Icon: Layers,
     },
   ]
 
   return (
     <div className="grid grid-cols-2 gap-2">
-      {modes.map(({ key, label, hint, Icon }) => {
+      {modes.map(({ key, labelAr, labelEn, hintAr, hintEn, Icon }) => {
         const active = mode === key
         return (
           <button
@@ -88,15 +92,18 @@ export function DisplayModeSelector() {
                 )}
               />
               <div className="min-w-0">
-                <p
-                  className={cn(
-                    'text-[12px] font-medium leading-tight',
-                    active ? 'text-accent-primary' : 'text-ink-primary',
-                  )}
-                >
-                  {label}
-                </p>
-                <p className="truncate text-[10px] text-ink-tertiary">{hint}</p>
+                <div className="min-w-0">
+                  <p
+                    className={cn(
+                      'text-[12px] font-medium leading-tight',
+                      active ? 'text-accent-primary' : 'text-ink-primary',
+                    )}
+                    dir="rtl"
+                  >
+                    {labelAr}
+                  </p>
+                  <p className="truncate text-[10px] text-ink-tertiary">{labelEn} — {hintAr}</p>
+                </div>
               </div>
             </div>
           </button>

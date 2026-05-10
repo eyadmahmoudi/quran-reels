@@ -70,10 +70,10 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Quran Reels Studio | مولد مقاطع القرآن',
+  title: 'مولد مقاطع القرآن | Quran Reels Studio',
   description:
-    'A crafted studio for generating vertical Quran recitation reels with authentic Uthmani script and professional reciters.',
-  keywords: ['Quran', 'Reels', 'Islamic', 'Arabic', 'Video', 'Recitation'],
+    'استوديو احترافي لإنشاء مقاطع فيديو قرآنية بخط عثماني أصيل وأصوات قراء متميزين. A crafted studio for generating vertical Quran recitation reels with authentic Uthmani script and professional reciters.',
+  keywords: ['Quran', 'قرآن', 'Reels', 'Islamic', 'إسلامي', 'Arabic', 'عربي', 'Video', 'فيديو', 'Recitation', 'تلاوة'],
 }
 
 export const viewport: Viewport = {
@@ -89,8 +89,8 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
-      dir="ltr"
+      lang="ar"
+      dir="rtl"
       suppressHydrationWarning
       className={`${fraunces.variable} ${inter.variable} ${amiri.variable} ${reemKufi.variable} ${jetbrainsMono.variable} ${scheherazadeNew.variable} ${notoNaskhArabic.variable} ${arefRuqaa.variable} ${notoKufiArabic.variable} lg:h-[100dvh] lg:overflow-hidden`}
     >

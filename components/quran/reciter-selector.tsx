@@ -84,20 +84,20 @@ export function ReciterSelector() {
             <div className="min-w-0 flex-1">
               <p
                 className={cn(
-                  'truncate text-[14px] font-medium leading-tight',
+                  'truncate font-arabic-ui text-[14px] font-medium leading-tight',
                   isSelected ? 'text-accent-primary' : 'text-ink-primary',
-                )}
-              >
-                {reciter.name}
-              </p>
-              <p
-                className={cn(
-                  'mt-0.5 truncate font-arabic-ui text-[12px] leading-tight',
-                  isSelected ? 'text-gold' : 'text-ink-tertiary',
                 )}
                 style={{ direction: 'rtl' }}
               >
                 {reciter.arabicName}
+              </p>
+              <p
+                className={cn(
+                  'mt-0.5 truncate text-[12px] leading-tight',
+                  isSelected ? 'text-gold' : 'text-ink-tertiary',
+                )}
+              >
+                {reciter.name}
               </p>
             </div>
 
@@ -111,7 +111,7 @@ export function ReciterSelector() {
                   ? 'border-gold/40 bg-gold/15 text-gold'
                   : 'border-border-subtle bg-surface text-ink-tertiary hover:border-accent-primary/40 hover:text-accent-primary',
               )}
-              title="Preview reciter"
+              title="استمع للقارئ"
             >
               {isLoading
                 ? <Loader2 className="h-3.5 w-3.5 animate-spin" />

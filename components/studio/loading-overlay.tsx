@@ -8,10 +8,10 @@ interface LoadingOverlayProps {
 
 export function LoadingOverlay({ progress }: LoadingOverlayProps) {
   const stage =
-    progress < 30 ? 'Loading audio files…' :
-    progress < 50 ? 'Processing audio…' :
-    progress < 95 ? 'Rendering frames…' :
-    'Finalizing…'
+    progress < 30 ? 'تحميل الملفات الصوتية...' :
+    progress < 50 ? 'معالجة الصوت...' :
+    progress < 95 ? 'تصيير الإطارات...' :
+    'المرحلة النهائية...'
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -21,7 +21,7 @@ export function LoadingOverlay({ progress }: LoadingOverlayProps) {
           <Loader2 className="relative h-10 w-10 animate-spin text-emerald-600" strokeWidth={2.25} />
         </div>
         <div className="flex flex-col items-center gap-1">
-          <p className="text-sm font-semibold text-zinc-900">Generating your reel</p>
+          <p className="text-sm font-semibold text-zinc-900" dir="rtl">جارٍ إنشاء المقطع</p>
           <p className="text-xs text-zinc-600">{stage}</p>
         </div>
         <div className="relative h-1.5 w-56 overflow-hidden rounded-full bg-zinc-200">

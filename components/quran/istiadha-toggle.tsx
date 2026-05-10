@@ -12,9 +12,9 @@ export function IstiadhaToggle() {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between rounded-[10px] border border-border-subtle bg-surface px-3 py-2.5">
         <div className="min-w-0">
-          <p className="text-[13px] font-medium text-ink-primary">Include Isti‘ādha</p>
+          <p className="text-[13px] font-medium text-ink-primary" dir="rtl">الاستعاذة</p>
           <p className="mt-0.5 text-[11px] text-ink-tertiary">
-            Prepend “A‘ūdhu billāhi min ash‑shayṭān ir‑rajīm”
+            Isti&apos;ādha — أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ
           </p>
         </div>
         <Switch
@@ -32,8 +32,8 @@ export function IstiadhaToggle() {
           >
             أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ
           </p>
-          <p className="mt-1 text-[11px] text-ink-tertiary">
-            Played once before the first verse.
+          <p className="mt-1 text-[11px] text-ink-tertiary" dir="rtl">
+            تُقرأ مرة قبل الآية الأولى
           </p>
         </div>
       )}

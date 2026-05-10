@@ -15,7 +15,7 @@ export function MobileSidebarSheet() {
       <SheetTrigger asChild>
         <button
           type="button"
-          aria-label="Open studio controls"
+          aria-label="فتح إعدادات الاستوديو"
           className={cn(
             'inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-border-subtle bg-surface text-ink-secondary transition-all duration-150 ease-out lg:hidden',
             'hover:border-border-default hover:bg-subtle',
@@ -35,9 +35,9 @@ export function MobileSidebarSheet() {
           <div className="flex shrink-0 items-center justify-center py-3" aria-hidden>
             <span className="h-1 w-10 rounded-full bg-border-default" />
           </div>
-          <SheetPrimitive.Title className="sr-only">Studio Controls</SheetPrimitive.Title>
+          <SheetPrimitive.Title className="sr-only">إعدادات الاستوديو</SheetPrimitive.Title>
           <SheetPrimitive.Description className="sr-only">
-            Configure source, reciter, background, translation, display, and watermark.
+            إعدادات المصدر والقارئ والخلفية والترجمة والعرض والعلامة المائية
           </SheetPrimitive.Description>
           {/* Reuse the full sidebar content inside the sheet */}
           <div className="min-h-0 flex-1 overflow-hidden">

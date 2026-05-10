@@ -16,14 +16,14 @@ export function WatermarkInput() {
         type="text"
         value={config.watermark}
         onChange={(e) => setConfig({ watermark: e.target.value.slice(0, 32) })}
-        placeholder="yourhandle"
+        placeholder="اسمك أو حسابك"
         spellCheck={false}
         autoComplete="off"
         className="h-10 w-full rounded-[10px] border border-border-subtle bg-surface pl-9 pr-14 text-[14px] text-ink-primary placeholder:text-ink-tertiary outline-none transition-all duration-150 ease-out hover:border-border-default focus-visible:border-accent-primary focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ring)]"
       />
       {config.watermark && (
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium uppercase tracking-wider text-accent-primary">
-          Live
+          مباشر
         </span>
       )}
     </div>

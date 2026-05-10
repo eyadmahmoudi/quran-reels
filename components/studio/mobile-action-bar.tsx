@@ -37,20 +37,20 @@ export function MobileActionBar() {
         <div className="flex items-center gap-2">
           <div className="relative h-11 flex-1 overflow-hidden rounded-[10px] border border-border-subtle bg-canvas">
             <div
-              className="absolute inset-y-0 left-0 bg-accent-primary/90 transition-[width] duration-500"
+              className="absolute inset-y-0 right-0 bg-accent-primary/90 transition-[width] duration-500"
               style={{ width: `${Math.max(progress, 2)}%` }}
             />
-            <div className="relative flex h-full items-center justify-center gap-2 text-[13px] font-medium text-ink-primary">
+            <div className="relative flex h-full items-center justify-center gap-2 text-[13px] font-medium text-ink-primary" dir="rtl">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               <span className="font-mono tabular-nums">
-                Rendering · {Math.round(progress)}%
+                تصدير · {Math.round(progress)}%
               </span>
             </div>
           </div>
           <button
             type="button"
             onClick={cancelGeneration}
-            aria-label="Cancel generation"
+            aria-label="إلغاء التصدير"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-border-subtle bg-canvas text-ink-tertiary transition-colors hover:border-red-400 hover:bg-red-50 hover:text-red-600"
           >
             <X className="h-4 w-4" />
@@ -70,7 +70,7 @@ export function MobileActionBar() {
           )}
         >
           <Download className="h-4 w-4" strokeWidth={2} />
-          Generate &amp; Export
+          <span dir="rtl">تصدير الفيديو</span>
         </button>
       )}
     </div>

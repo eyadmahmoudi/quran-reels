@@ -15,9 +15,9 @@ const INITIAL_COUNT = 6
 type Category = 'animated' | 'scenes' | 'gradients'
 
 const CATEGORIES: { key: Category; label: string }[] = [
-  { key: 'animated', label: 'Animated' },
-  { key: 'scenes', label: 'Scenes' },
-  { key: 'gradients', label: 'Gradients' },
+  { key: 'animated', label: 'متحركة' },
+  { key: 'scenes', label: 'مشاهد' },
+  { key: 'gradients', label: 'تدرجات' },
 ]
 
 function AnimatedPreview({ name }: { name: string }) {
@@ -83,7 +83,7 @@ export function BackgroundSelector() {
   }
 
   const applyImageFile = (file: File) => {
-    if (!file.type.startsWith('image/')) { alert('Please select an image file'); return }
+    if (!file.type.startsWith('image/')) { alert('يرجى اختيار ملف صورة'); return }
     revokeCurrentImageUrl()
     const url = URL.createObjectURL(file)
     setConfig({
@@ -146,7 +146,7 @@ export function BackgroundSelector() {
     <div className="flex flex-col gap-4">
       {/* ── Custom image dropzone ── */}
       <div>
-        <p className="mb-1.5 text-caption text-ink-tertiary">Custom upload</p>
+        <p className="mb-1.5 text-caption text-ink-tertiary" dir="rtl">رفع صورة مخصصة</p>
         {isCustomImageActive && config.background ? (
           <div className="flex items-center gap-3 rounded-[10px] border border-accent-primary/30 bg-accent-soft p-2">
             <div className="relative h-14 w-10 overflow-hidden rounded-[6px] ring-1 ring-accent-primary/30">
@@ -160,7 +160,7 @@ export function BackgroundSelector() {
               </div>
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium text-accent-primary">In use</p>
+              <p className="truncate text-[13px] font-medium text-accent-primary" dir="rtl">قيد الاستخدام</p>
               <p className="truncate text-[11px] text-ink-tertiary">
                 {config.background.name}
               </p>
@@ -169,7 +169,7 @@ export function BackgroundSelector() {
               type="button"
               onClick={clearCustomImage}
               className="flex h-8 w-8 items-center justify-center rounded-[8px] border border-border-subtle bg-surface text-ink-tertiary transition-colors hover:border-destructive/40 hover:text-destructive"
-              title="Remove custom image"
+              title="إزالة الصورة"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -200,8 +200,8 @@ export function BackgroundSelector() {
               <Upload className="h-4 w-4" strokeWidth={1.75} />
             </div>
             <div className="flex flex-col gap-0.5">
-              <span className="text-[13px] font-medium text-ink-primary">
-                Drop image or click to upload
+              <span className="text-[13px] font-medium text-ink-primary" dir="rtl">
+                اسحب الصورة أو انقر للرفع
               </span>
               <span className="text-[11px] text-ink-tertiary">JPG, PNG, WebP</span>
             </div>
@@ -281,7 +281,7 @@ export function BackgroundSelector() {
           className="flex w-full items-center justify-center gap-1 rounded-[8px] py-1.5 text-[12px] font-medium text-ink-tertiary transition-colors duration-150 ease-out hover:bg-subtle hover:text-ink-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ring)]"
         >
           <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
-          {expanded ? 'Show less' : `Show ${allItems.length - INITIAL_COUNT} more`}
+          {expanded ? 'عرض أقل' : `عرض ${allItems.length - INITIAL_COUNT} أخرى`}
         </button>
       )}
     </div>

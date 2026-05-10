@@ -235,7 +235,7 @@ export function AyahSearch() {
         className="flex w-full items-center gap-2 rounded-[10px] border border-border-subtle bg-surface px-3 py-2.5 text-sm text-ink-tertiary transition-all hover:border-border-default hover:text-ink-secondary"
       >
         <Search className="h-4 w-4" />
-        <span>Search ayah, concept, or ask a question…</span>
+        <span>ابحث عن آية، مفهوم، أو اسأل سؤالاً...</span>
       </button>
 
       <CommandDialog open={open} onOpenChange={setOpen}>
@@ -252,7 +252,7 @@ export function AyahSearch() {
             }
           >
             <BookOpen className="h-3.5 w-3.5" />
-            <span>Exact text</span>
+            <span>نص دقيق</span>
           </button>
           <button
             type="button"
@@ -265,7 +265,7 @@ export function AyahSearch() {
             }
           >
             <Sparkles className="h-3.5 w-3.5" />
-            <span>By concept / feeling</span>
+            <span>بالمفهوم / الشعور</span>
           </button>
           <button
             type="button"
@@ -278,7 +278,7 @@ export function AyahSearch() {
             }
           >
             <MessageCircle className="h-3.5 w-3.5" />
-            <span>Ask</span>
+            <span>اسأل</span>
           </button>
         </div>
 

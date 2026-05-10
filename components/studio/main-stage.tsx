@@ -72,7 +72,7 @@ export function MainStage() {
                 {config.startVerse}–{config.endVerse}
               </span>
             ) : (
-              <span className="text-ink-tertiary">No surah selected</span>
+              <span className="text-ink-tertiary" dir="rtl">لم يتم اختيار سورة</span>
             )}
           </div>
 

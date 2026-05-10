@@ -240,7 +240,7 @@ export interface ReelPreset {
 export const BUILTIN_PRESETS: ReelPreset[] = [
   {
     id: 'elegant-dark',
-    name: 'Elegant Dark',
+    name: 'ليل أنيق',
     emoji: '🌙',
     background: { id: 'night-sky', name: 'Night Sky', type: 'gradient', value: 'linear-gradient(180deg, #0c1220 0%, #1a2744 50%, #0c1220 100%)' },
     calligraphyStyle: 'nabi',
@@ -251,7 +251,7 @@ export const BUILTIN_PRESETS: ReelPreset[] = [
   },
   {
     id: 'golden-classic',
-    name: 'Golden Classic',
+    name: 'ذهبي كلاسيكي',
     emoji: '✨',
     background: { id: 'golden-hour', name: 'Golden Hour', type: 'gradient', value: 'linear-gradient(180deg, #1a1510 0%, #2a2015 50%, #1a1510 100%)' },
     calligraphyStyle: 'uthmanic-hafs',
@@ -262,7 +262,7 @@ export const BUILTIN_PRESETS: ReelPreset[] = [
   },
   {
     id: 'kaaba-serenity',
-    name: 'Kaaba Serenity',
+    name: 'سكون الكعبة',
     emoji: '🕋',
     background: { id: 'scene-kaaba', name: 'The Kaaba', type: 'preset', value: 'https://images.unsplash.com/photo-1565330770968-0240c0046ce3?w=1080&q=80', thumbnail: 'https://images.unsplash.com/photo-1565330770968-0240c0046ce3?w=200&q=60' },
     calligraphyStyle: 'amiri',
@@ -273,7 +273,7 @@ export const BUILTIN_PRESETS: ReelPreset[] = [
   },
   {
     id: 'kufi-modern',
-    name: 'Kufi Modern',
+    name: 'كوفي عصري',
     emoji: '🔹',
     background: { id: 'deep-purple', name: 'Deep Purple', type: 'gradient', value: 'linear-gradient(180deg, #0f0a1a 0%, #1e1040 50%, #0f0a1a 100%)' },
     calligraphyStyle: 'reem-kufi',
@@ -284,7 +284,7 @@ export const BUILTIN_PRESETS: ReelPreset[] = [
   },
   {
     id: 'scholar-tafsir',
-    name: 'Scholar Tafsir',
+    name: 'تفسير العالم',
     emoji: '📖',
     background: { id: 'midnight', name: 'Midnight', type: 'gradient', value: 'linear-gradient(180deg, #0a0a0f 0%, #151520 50%, #0a0a0f 100%)' },
     calligraphyStyle: 'scheherazade',
@@ -295,7 +295,7 @@ export const BUILTIN_PRESETS: ReelPreset[] = [
   },
   {
     id: 'emerald-nature',
-    name: 'Emerald Nature',
+    name: 'طبيعة خضراء',
     emoji: '🌿',
     background: { id: 'nature-forest', name: 'Forest Light', type: 'preset', value: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=1080&q=80', thumbnail: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=200&q=60' },
     calligraphyStyle: 'noto-naskh',

@@ -51,7 +51,7 @@ export function SurahSelector() {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-caption text-ink-tertiary">Surah</label>
+      <label className="text-caption text-ink-tertiary" dir="rtl">السورة</label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
@@ -67,7 +67,7 @@ export function SurahSelector() {
             )}
           >
             {loading ? (
-              <span className="text-ink-tertiary">Loading surahs…</span>
+              <span className="text-ink-tertiary" dir="rtl">جارٍ تحميل السور...</span>
             ) : config.surah ? (
               <span className="flex min-w-0 items-center gap-2.5">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] bg-accent-soft text-[11px] font-semibold text-accent-primary tabular-nums">
@@ -86,9 +86,9 @@ export function SurahSelector() {
                 </span>
               </span>
             ) : (
-              <span className="flex items-center gap-2 text-ink-tertiary">
+              <span className="flex items-center gap-2 text-ink-tertiary" dir="rtl">
                 <Book className="h-4 w-4" />
-                Select a surah
+                اختر سورة
               </span>
             )}
             <ChevronsUpDown className="h-4 w-4 shrink-0 text-ink-tertiary transition-colors group-hover:text-ink-secondary" />
@@ -102,10 +102,10 @@ export function SurahSelector() {
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <Command className="bg-surface">
-            <CommandInput placeholder="Search surah…" className="h-10" />
+            <CommandInput placeholder="ابحث عن سورة..." className="h-10" />
             <CommandList className="bg-surface max-h-[200px] lg:max-h-[300px] overflow-y-auto">
               <CommandEmpty className="py-6 text-center text-[13px] text-ink-tertiary">
-                No surah found.
+                لم يتم العثور على سورة.
               </CommandEmpty>
               <CommandGroup>
                 {surahs.map((surah) => {
@@ -139,7 +139,7 @@ export function SurahSelector() {
                         </span>
                       </div>
                       <span className="text-[11px] text-ink-tertiary tabular-nums">
-                        {surah.verses_count} vs
+                        {surah.verses_count} آية
                       </span>
                       {isSelected && (
                         <Check className="h-4 w-4 text-accent-primary" />

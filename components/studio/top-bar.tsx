@@ -54,41 +54,40 @@ export function TopBar() {
           <StarMark className="h-5 w-5" />
         </div>
         <div className="flex min-w-0 flex-col leading-tight">
-          <span className="truncate font-display text-[18px] font-medium tracking-tight text-ink-primary">
-            Quran Reels{' '}
-            <span className="italic font-medium text-accent-primary">Studio</span>
-          </span>
           <span
-            className="hidden font-arabic-ui text-[11px] leading-tight text-ink-tertiary sm:inline"
-            style={{ direction: 'rtl' }}
+            className="truncate font-arabic-ui text-[18px] font-medium text-ink-primary"
+            dir="rtl"
           >
-            مولد مقاطع القرآن الكريم
+            مولد مقاطع القرآن
+          </span>
+          <span className="font-display text-[11px] leading-tight text-ink-tertiary">
+            Quran Reels <span className="italic">Studio</span>
           </span>
         </div>
       </div>
 
-      {/* ── Right actions ──────────────────────────────────────── */}
+      {/* ── Left actions (RTL = left side) ──────────────────────── */}
       <div className="flex items-center gap-2">
         <MobileSidebarSheet />
         {isGenerating ? (
           <div className="hidden items-center gap-2 lg:flex">
             <div className="relative h-10 w-60 overflow-hidden rounded-[10px] border border-border-subtle bg-surface">
               <div
-                className="absolute inset-y-0 left-0 bg-accent-primary/90 transition-[width] duration-500"
+                className="absolute inset-y-0 right-0 bg-accent-primary/90 transition-[width] duration-500"
                 style={{ width: `${Math.max(progress, 2)}%` }}
               />
-              <div className="relative flex h-full items-center justify-center gap-2 text-[13px] font-medium text-ink-primary">
+              <div className="relative flex h-full items-center justify-center gap-2 text-[13px] font-medium text-ink-primary" dir="rtl">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 <span className="font-mono tabular-nums">
-                  Rendering · {Math.round(progress)}%
+                  تصدير · {Math.round(progress)}%
                 </span>
               </div>
             </div>
             <button
               type="button"
               onClick={cancelGeneration}
-              title="Cancel"
-              aria-label="Cancel generation"
+              title="إلغاء"
+              aria-label="إلغاء التصدير"
               className="flex h-10 w-10 items-center justify-center rounded-[10px] border border-border-subtle bg-surface text-ink-tertiary transition-all duration-150 ease-out hover:border-red-400 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ring)]"
             >
               <X className="h-4 w-4" />
@@ -108,7 +107,7 @@ export function TopBar() {
             )}
           >
             <Download className="h-4 w-4" strokeWidth={2} />
-            <span>Generate &amp; Export</span>
+            <span dir="rtl">تصدير الفيديو</span>
           </button>
         )}
       </div>

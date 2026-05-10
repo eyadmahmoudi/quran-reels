@@ -5,20 +5,23 @@ import { Switch } from '@/components/ui/switch'
 import { TAFSIR_RESOURCES } from '@/lib/quran-types'
 
 interface ToggleRowProps {
-  label: string
-  hint: string
+  labelAr: string
+  labelEn: string
+  hintAr: string
+  hintEn: string
   checked: boolean
   onCheckedChange: (checked: boolean) => void
   children?: React.ReactNode
 }
 
-function ToggleRow({ label, hint, checked, onCheckedChange, children }: ToggleRowProps) {
+function ToggleRow({ labelAr, labelEn, hintAr, hintEn, checked, onCheckedChange, children }: ToggleRowProps) {
   return (
     <div className="flex flex-col gap-2 rounded-[10px] border border-border-subtle bg-surface px-3 py-2.5">
       <div className="flex items-center justify-between">
         <div className="min-w-0">
-          <p className="text-[13px] font-medium text-ink-primary">{label}</p>
-          <p className="mt-0.5 text-[11px] text-ink-tertiary">{hint}</p>
+          <p className="text-[13px] font-medium text-ink-primary" dir="rtl">{labelAr}</p>
+          <p className="mt-0.5 text-[11px] text-ink-tertiary">{labelEn}</p>
+          <p className="mt-0.5 text-[11px] text-ink-tertiary" dir="rtl">{hintAr}</p>
         </div>
         <Switch checked={checked} onCheckedChange={onCheckedChange} />
       </div>
@@ -37,24 +40,30 @@ export function OverlayToggles() {
   return (
     <div className="flex flex-col gap-2">
       <ToggleRow
-        label="Hijri Date"
-        hint="Islamic date (Arabic + English)"
+        labelAr="التاريخ الهجري"
+        labelEn="Hijri Date"
+        hintAr="التاريخ الإسلامي (عربي + إنجليزي)"
+        hintEn="Islamic date overlay"
         checked={config.showHijriDate}
         onCheckedChange={(checked) => setConfig({ showHijriDate: checked })}
       />
       <ToggleRow
-        label="Tafsir"
-        hint="Brief exegesis below translation"
+        labelAr="التفسير"
+        labelEn="Tafsir"
+        hintAr="تفسير مختصر تحت الترجمة"
+        hintEn="Brief exegesis below translation"
         checked={config.showTafsir}
         onCheckedChange={(checked) => setConfig({ showTafsir: checked })}
       >
-        <p className="text-[10px] text-ink-tertiary">
-          Source: {TAFSIR_RESOURCES.map(r => r.name).join(' · ')}
+        <p className="text-[10px] text-ink-tertiary" dir="rtl">
+          المصادر: {TAFSIR_RESOURCES.map(r => r.name).join(' · ')}
         </p>
       </ToggleRow>
       <ToggleRow
-        label="Juz / Hizb"
-        hint="Show Quran position with progress bar"
+        labelAr="الجزء / الحزب"
+        labelEn="Juz / Hizb"
+        hintAr="موضع الآية مع شريط التقدم"
+        hintEn="Quran position with progress bar"
         checked={config.showJuzProgress}
         onCheckedChange={(checked) => setConfig({ showJuzProgress: checked })}
       />

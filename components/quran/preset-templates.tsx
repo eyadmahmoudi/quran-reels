@@ -51,13 +51,13 @@ function getPresetSummary(preset: ReelPreset): string {
   const calligraphy = CALLIGRAPHY_STYLES.find(c => c.id === preset.calligraphyStyle)
   const reciter = POPULAR_RECITERS.find(r => r.id === preset.reciterId)
   const parts: string[] = []
-  if (calligraphy) parts.push(calligraphy.name)
-  if (reciter) parts.push(reciter.name.split('(')[0].trim())
-  if (preset.displayMode === 'classic') parts.push('Classic')
-  if (preset.showTranslation) parts.push('Trans')
-  if (preset.showHijriDate) parts.push('Hijri')
-  if (preset.showTafsir) parts.push('Tafsir')
-  if (preset.showJuzProgress) parts.push('Juz')
+  if (calligraphy) parts.push(calligraphy.arabicName)
+  if (reciter) parts.push(reciter.arabicName.split('(')[0].trim())
+  if (preset.displayMode === 'classic') parts.push('كلاسيكي')
+  if (preset.showTranslation) parts.push('ترجمة')
+  if (preset.showHijriDate) parts.push('هجري')
+  if (preset.showTafsir) parts.push('تفسير')
+  if (preset.showJuzProgress) parts.push('جزء')
   return parts.join(' · ')
 }
 
@@ -97,9 +97,9 @@ export function PresetTemplates() {
   }
 
   const saveCurrentAsPreset = () => {
-    const name = prompt('Name this preset:')
+    const name = prompt('سمّي هذا القالب:') || prompt('Name this preset:')
     if (!name) return
-    const emoji = prompt('Pick an emoji:', '⭐') || '⭐'
+    const emoji = prompt('اختر رمزاً:', '⭐') || '⭐'
     const newPreset: ReelPreset = {
       id: `custom-${Date.now()}`,
       name,
@@ -193,9 +193,9 @@ export function PresetTemplates() {
         onClick={saveCurrentAsPreset}
         className="w-full rounded-[8px] border border-dashed border-border-default px-3 py-2 text-[12px] text-ink-tertiary hover:border-accent-primary/40 hover:text-accent-primary hover:bg-accent-soft transition-all duration-150"
       >
-        <span className="flex items-center justify-center gap-1.5">
+        <span className="flex items-center justify-center gap-1.5" dir="rtl">
           <Star className="h-3.5 w-3.5" />
-          Save Current as Preset
+          حفظ كقالب
         </span>
       </button>
     </div>

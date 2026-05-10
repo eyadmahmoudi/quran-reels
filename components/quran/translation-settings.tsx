@@ -29,8 +29,8 @@ export function TranslationSettings() {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between rounded-[10px] border border-border-subtle bg-surface px-3 py-2.5">
         <div className="min-w-0">
-          <p className="text-[13px] font-medium text-ink-primary">Show translation</p>
-          <p className="mt-0.5 text-[11px] text-ink-tertiary">Render under Arabic verse</p>
+          <p className="text-[13px] font-medium text-ink-primary" dir="rtl">عرض الترجمة</p>
+          <p className="mt-0.5 text-[11px] text-ink-tertiary">Show translation — تحت الآية العربية</p>
         </div>
         <Switch
           id="translation-toggle"

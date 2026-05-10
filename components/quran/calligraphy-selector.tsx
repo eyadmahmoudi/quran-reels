@@ -49,14 +49,14 @@ export function CalligraphySelector() {
                     'text-[12px] font-medium leading-tight',
                     active ? 'text-accent-primary' : 'text-ink-primary',
                   )}
+                  dir="rtl"
                 >
-                  {style.name}
+                  {style.arabicName}
                 </p>
                 <p
                   className="text-[11px] leading-tight text-ink-tertiary"
-                  style={{ direction: 'rtl' }}
                 >
-                  {style.arabicName}
+                  {style.name}
                 </p>
               </div>
               <p className="truncate text-[10px] text-ink-tertiary">{style.style}</p>

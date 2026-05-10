@@ -6,6 +6,7 @@ import { TopBar } from '@/components/studio/top-bar'
 import { LeftSidebar } from '@/components/studio/left-sidebar'
 import { MainStage } from '@/components/studio/main-stage'
 import { MobileActionBar } from '@/components/studio/mobile-action-bar'
+import { IslamicInfoBar } from '@/components/islamic/info-bar'
 
 export default function QuranReelsStudio() {
   return (
@@ -13,6 +14,7 @@ export default function QuranReelsStudio() {
       <GeneratorProvider>
         <div className="flex min-h-screen flex-1 flex-col bg-canvas text-ink-primary lg:h-full lg:min-h-0">
           <TopBar />
+          <IslamicInfoBar />
           <div className="flex flex-1 flex-col lg:min-h-0 lg:overflow-hidden lg:flex-row">
             <div className="enter-canvas min-h-0 flex-1 lg:order-2">
               <MainStage />

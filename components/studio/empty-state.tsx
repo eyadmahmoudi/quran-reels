@@ -19,11 +19,11 @@ export function EmptyState() {
         >
           ٱقْرَأْ بِٱسْمِ رَبِّكَ
         </p>
-        <h3 className="font-display text-[18px] font-medium text-ink-primary">
-          Your Reel Preview
+        <h3 className="font-arabic-ui text-[18px] font-medium text-ink-primary" dir="rtl">
+          معاينة المقطع
         </h3>
-        <p className="mx-auto max-w-[280px] text-[13px] leading-relaxed text-ink-tertiary">
-          Configure your settings in the sidebar to preview your Reel.
+        <p className="mx-auto max-w-[280px] text-[13px] leading-relaxed text-ink-tertiary" dir="rtl">
+          اختر السورة والإعدادات من الشريط الجانبي لمعاينة المقطع
         </p>
       </div>
 
@@ -35,7 +35,7 @@ export function EmptyState() {
         <span className="text-[12px] leading-none text-gold">۞</span>
         <span className="h-px w-8 bg-border-default" />
       </div>
-      <p className="-mt-3 text-caption text-ink-tertiary">Start with a Surah</p>
+      <p className="-mt-3 text-caption text-ink-tertiary" dir="rtl">ابدأ باختيار سورة</p>
     </div>
   )
 }

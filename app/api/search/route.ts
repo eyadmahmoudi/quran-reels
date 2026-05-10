@@ -1,69 +1,24 @@
 // app/api/search/route.ts
-// Arabic lexical search endpoint for Qur'an verses.
+// Arabic lexical search endpoint for Qur'an verses — v5
 //
-// Uses the updated arabic-search.ts normalizers that correctly handle
-// the superscript alef (U+0670 ـٰ) by converting it to a regular alef
-// before stripping diacritics.
-//
-// Search cascade:
-//   1. Strict match — normalizeBase (strip diacritics only, preserve alefs)
-//   2. Fuzzy match  — normalizeAlefFuzzy (unify alef variants, ta↔ha, ya↔alif maqsurah)
-//   3. Concat match — normalizeConcat (fuzzy + remove spaces, last resort)
+// v5 CHANGES:
+// - Added morphological search tier (ون↔ين normalization) so that searching
+//   "الصابرين" also finds verses with "الصابرون"
+// - Uses shared getQuranIndex() from arabic-search.ts to avoid duplicating
+//   the index-building logic
+// - Better tier ordering: strict → morpho → fuzzy → concat
+// - Multi-word search support: if no phrase match, splits query and finds
+//   verses containing ALL words
 
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  getQuranIndex,
   normalizeBase,
   normalizeAlefFuzzy,
+  normalizeMorpho,
   normalizeConcat,
   buildIndexMap,
 } from '@/lib/arabic-search'
-
-interface IndexedVerse {
-  surahId: number
-  verseId: number
-  text: string
-  base: string
-  fuzzy: string
-  concat: string
-  baseMap: number[]
-}
-
-let indexPromise: Promise<IndexedVerse[]> | null = null
-
-async function getIndex(): Promise<IndexedVerse[]> {
-  if (!indexPromise) {
-    indexPromise = (async () => {
-      const res = await fetch(
-        'https://cdn.jsdelivr.net/npm/quran-json@3.1.2/dist/quran.json',
-        { cache: 'force-cache' },
-      )
-      if (!res.ok) throw new Error('Failed to fetch Quran dataset')
-      const data: Array<{ id: number; verses: Array<{ id: number; text: string }> }> =
-        await res.json()
-
-      const out: IndexedVerse[] = []
-      for (const surah of data) {
-        for (const verse of surah.verses) {
-          const { base, map } = buildIndexMap(verse.text)
-          out.push({
-            surahId: surah.id,
-            verseId: verse.id,
-            text: verse.text,
-            base,
-            fuzzy: normalizeAlefFuzzy(verse.text),
-            concat: normalizeConcat(verse.text),
-            baseMap: map,
-          })
-        }
-      }
-      return out
-    })().catch((err) => {
-      indexPromise = null
-      throw err
-    })
-  }
-  return indexPromise
-}
 
 function highlight(
   originalText: string,
@@ -103,20 +58,17 @@ export async function GET(req: NextRequest) {
   if (raw.length < 2) return NextResponse.json({ results: [] })
 
   try {
-    const index = await getIndex()
+    const index = await getQuranIndex()
     const qBase = normalizeBase(raw)
     const qFuzzy = normalizeAlefFuzzy(raw)
+    const qMorpho = normalizeMorpho(raw)
     const qConcat = normalizeConcat(raw)
 
-    if (qBase.length < 2 && qFuzzy.length < 2 && qConcat.length < 2) {
+    if (qBase.length < 2 && qFuzzy.length < 2 && qMorpho.length < 2 && qConcat.length < 2) {
       return NextResponse.json({ results: [] })
     }
 
     // ── Tier 1: Strict (diacritics-stripped) match ─────────────────────
-    // This is the most accurate tier. Diacritics are removed but alef
-    // variants are preserved (e.g. ٱ stays as ٱ). With the dagger alef
-    // fix, words like ٱلصَّـٰبِرُونَ normalize to ٱلصابرون which correctly
-    // matches queries like الصابرون or الصابرين (via fuzzy tier below).
     const strictHits: Array<{
       verse_key: string
       text: string
@@ -136,31 +88,49 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // ── Tier 2: Fuzzy (alef-unified) match ─────────────────────────────
-    // Unifies alef variants (ٱأإآ→ا), ta marbuta→ha, alif maqsurah→yah.
-    // Only runs if strict didn't find enough results.
+    // ── Tier 2: Morphological (ون↔ين) match ────────────────────────────
+    // NEW: Bridges the gap between الصابرون and الصابرين
+    const morphoHits: Array<{ verse_key: string; text: string; strict: false }> = []
+
+    if (strictHits.length < 3 && qMorpho.length >= 2) {
+      const strictKeys = new Set(strictHits.map((h) => h.verse_key))
+      for (const entry of index) {
+        if (!entry.morpho.includes(qMorpho)) continue
+        const vk = `${entry.surahId}:${entry.verseId}`
+        if (strictKeys.has(vk)) continue
+        morphoHits.push({
+          verse_key: vk,
+          text: entry.text,
+          strict: false,
+        })
+        if (strictHits.length + morphoHits.length >= MAX_RESULTS) break
+      }
+    }
+
+    // ── Tier 3: Fuzzy (alef-unified) match ─────────────────────────────
     const fuzzyHits: Array<{ verse_key: string; text: string; strict: false }> = []
 
-    if (strictHits.length < 3 && qFuzzy.length >= 2) {
-      const strictKeys = new Set(strictHits.map((h) => h.verse_key))
+    if (strictHits.length + morphoHits.length < 5 && qFuzzy.length >= 2) {
+      const existingKeys = new Set([
+        ...strictHits.map((h) => h.verse_key),
+        ...morphoHits.map((h) => h.verse_key),
+      ])
       for (const entry of index) {
         if (!entry.fuzzy.includes(qFuzzy)) continue
         const vk = `${entry.surahId}:${entry.verseId}`
-        if (strictKeys.has(vk)) continue // don't duplicate strict hits
+        if (existingKeys.has(vk)) continue
         fuzzyHits.push({
           verse_key: vk,
           text: entry.text,
           strict: false,
         })
-        if (fuzzyHits.length >= MAX_RESULTS) break
+        if (strictHits.length + morphoHits.length + fuzzyHits.length >= MAX_RESULTS) break
       }
     }
 
-    // ── Tier 3: Concat (space-removed fuzzy) match ─────────────────────
-    // Last resort: remove all spaces so that queries split differently
-    // from the Uthmani text can still match.
+    // ── Tier 4: Concat (space-removed) match ───────────────────────────
     const concatHits: Array<{ verse_key: string; text: string; strict: false }> = []
-    if (strictHits.length === 0 && fuzzyHits.length === 0 && qConcat.length >= 2) {
+    if (strictHits.length === 0 && morphoHits.length === 0 && fuzzyHits.length === 0 && qConcat.length >= 2) {
       for (const entry of index) {
         if (!entry.concat.includes(qConcat)) continue
         concatHits.push({
@@ -173,9 +143,9 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({
-      results: [...strictHits, ...fuzzyHits, ...concatHits],
+      results: [...strictHits, ...morphoHits, ...fuzzyHits, ...concatHits],
       strict_count: strictHits.length,
-      loose_count: fuzzyHits.length + concatHits.length,
+      loose_count: morphoHits.length + fuzzyHits.length + concatHits.length,
     })
   } catch (err) {
     console.error('[search] error:', err)

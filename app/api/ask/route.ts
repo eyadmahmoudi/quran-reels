@@ -1,26 +1,26 @@
 // app/api/ask/route.ts
-// Qur'an Q&A RAG endpoint — v4
+// Qur'an Q&A RAG endpoint — v5
 //
-// Pipeline: User question → Groq query expansion → DIRECT lexical search →
+// Pipeline: User question → Groq query expansion → MULTI-WORD lexical search →
 // merge with client semantic candidates → Groq answer generation.
 //
-// v4 FIX: The lexical search now runs IN-PROCESS instead of fetching
-// /api/search over HTTP. On Vercel Serverless, self-fetching was silently
-// failing (empty baseUrl or deadlocking), causing ZERO candidates for
-// every query. Now we import and call the search index directly.
-//
-// All previous fixes also applied:
-// - Surah names in candidate block for speaker awareness
-// - Citation validation (strip hallucinated [S:V])
-// - Factual Override as Rule #1 (highest priority)
-// - Question type classifier injected into prompt
-// - Reduced candidate cap (25) to save tokens
+// v5 CHANGES from v4:
+// - Multi-word search: "جزاء الصابرين" now finds 39:10 (which has both words
+//   but not adjacent) by splitting the query and using AND logic
+// - Morphological normalization (ون↔ين): "الصابرين" now matches "الصابرون"
+// - Better candidate ranking: results sorted by relevance score
+// - Prompt v5: Added EXACT PHRASE MATCH rule so LLM prefers verses that
+//   contain the exact queried phrase over partial matches
+// - Expanded terms filter: strips non-Arabic/non-English junk terms
+// - Surah names in Arabic: added Arabic surah names alongside English
 
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  searchQuranMulti,
+  getQuranIndex,
   normalizeBase,
   normalizeAlefFuzzy,
-  normalizeConcat,
+  normalizeMorpho,
   buildIndexMap,
 } from '@/lib/arabic-search'
 
@@ -29,12 +29,12 @@ export const runtime = 'nodejs'
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const MODEL = 'llama-3.3-70b-versatile'
 
-// ── Answer prompt (v4 — Factual Override as Rule #1) ──────────────────────
+// ── Answer prompt (v5 — Exact Phrase + Factual Override as top rules) ─────
 
 const ANSWER_SYSTEM_PROMPT = `You are a knowledgeable, warm, conversational Qur'an assistant.
 
 ═══════════════════════════════════════════
-RULES (ORDERED BY PRIORITY — Rule 1 > Rule 7):
+RULES (ORDERED BY PRIORITY — Rule 1 > Rule 8):
 ═══════════════════════════════════════════
 
 RULE 1 — FACTUAL OVERRIDE (HIGHEST PRIORITY):
@@ -49,30 +49,39 @@ If the question asks for a FACT about the Qur'an's structure, history, or basic 
 - "كم عدد سور القرآن" → Answer: ١١٤
 - "ما هي أطول سورة" → Answer: البقرة
 - "في أي سورة توجد آية الكرسي" → Answer: البقرة (٢:٢٥٥)
-This rule ALWAYS wins over Rule 7 (safety refusal). NEVER refuse a factual question.
+This rule ALWAYS wins over Rule 8 (safety refusal). NEVER refuse a factual question.
 
-RULE 2 — LANGUAGE MATCH:
+RULE 2 — EXACT PHRASE PREFERENCE:
+When multiple candidate verses are available, STRONGLY prefer verses that contain the EXACT phrase from the user's question. For example:
+- If the user asks "من قال إنهم عدو لي", prefer the verse that contains "عدو لي" (26:77 - Abraham) over a verse that contains "عدو لكم" (18:50 - Allah about Iblis), because "عدو لي" matches the EXACT query phrase while "عدو لكم" does not.
+- If the user asks about "الصابرين", prefer verses with "الصابرين" over verses with "الصابرون" when both are available.
+
+RULE 3 — LANGUAGE MATCH:
 Respond in the SAME LANGUAGE as the user's question.
 
-RULE 3 — USE CANDIDATE VERSES:
+RULE 4 — USE CANDIDATE VERSES:
 For questions about themes, rulings, stories, and context, USE ONLY THE CANDIDATE VERSES provided below. Quote the strongest verse fully. Cite as [S:V].
 
-RULE 4 — VOCABULARY BAN:
+RULE 5 — VOCABULARY BAN:
 You are strictly forbidden from mentioning your retrieval system.
 - NEVER use: "candidate", "candidates", "provided verses", "retrieved", "context window"
 - NEVER use: "النصوص الموجودة", "الآيات الموجودة", "هذه الآيات", "الآيات المرشحة", "النصوص المقدمة"
 Act as if you are answering naturally from memory.
 
-RULE 5 — NO METAPHORS OR WORDPLAY:
+RULE 6 — NO METAPHORS OR WORDPLAY:
 Do not use verses about literal smoke/fire (e.g., Day of Judgment) to answer questions about modern concepts like smoking (التدخين).
 
-RULE 6 — SPEAKER AWARENESS:
+RULE 7 — SPEAKER AWARENESS:
 Check the surah name before attributing a verse to a person. For example:
-- Verses in "Ash-Shuara" (26) about "عدو" refer to ABRAHAM speaking about idols, NOT Moses about Pharaoh.
+- Verses in "Ash-Shuara" (26) about "عدو لي" are ABRAHAM speaking about idols, NOT Moses about Pharaoh.
 - Verses about Moses and Pharaoh are in Surahs 7 (Al-Araf), 10 (Yunus), 20 (Taha), 28 (Al-Qasas).
+- In Surah Taha (20:39), "عدو لي" is ALLAH speaking about Pharaoh as His enemy.
+- In Surah Ash-Shuara (26:77), "عدو لي" is ABRAHAM speaking about idols.
+- The PRONOUN after "عدو" distinguishes the speaker: "لي" (to me) vs "لكم" (to you).
 Do NOT misattribute verses to the wrong speaker.
 
-RULE 7 — SAFETY REFUSAL (LOWEST PRIORITY):
+═══════════════════════════════════════════
+RULE 8 — SAFETY REFUSAL (LOWEST PRIORITY):
 This rule ONLY applies when ALL of these conditions are met:
 1. The question is NOT a factual question (Rule 1 does not apply), AND
 2. The question asks for a religious ruling or theme, AND
@@ -87,35 +96,35 @@ Stop generating after this sentence. Do not elaborate.
 QUERY TYPE GUIDANCE:
 ═══════════════════════════════════════════
 - Fact/Trivia (كم عدد, ما هي أطول, في أي سورة): Rule 1 → answer directly from knowledge.
-- Religious ruling (حكم, هل يجوز): Rule 3 → give the ruling, quote the strongest verse.
-- Story/Prophet (قصة, من هو): Rule 3 + Rule 6 → identify surah, tell story, quote key verse.
+- Religious ruling (حكم, هل يجوز): Rule 4 → give the ruling, quote the strongest verse.
+- Story/Prophet (قصة, من هو): Rule 4 + Rule 7 → identify surah, tell story, quote key verse.
 - Empathy/Comfort: Brief comfort, then 1-2 verses from candidates.
-- Modern topic not in Quran (سيارة, كريبتو, تدخين): Rule 7 → safety refusal, OR cite general principle verse if one exists in candidates (e.g. 2:195 for harm).`
+- Modern topic not in Quran (سيارة, كريبتو, تدخين): Rule 8 → safety refusal, OR cite general principle verse if one exists in candidates (e.g. 2:195 for harm).`
 
 const EXPANSION_SYSTEM_PROMPT = `You are a Qur'an search-query expansion assistant.
 
 Given a user question (in Arabic or English), generate 6-10 short Arabic search terms that would find the relevant verses by substring match against the Uthmani text of the Qur'an. Think of the actual Arabic words the verses USE.
 
 CRITICAL RULES:
-1. For questions about rulings/haram/halal, MUST include exact Uthmani root words of prohibition: "حرم", "اجتنبوه", "رجس", "إثم".
-2. YOU MUST INCLUDE MORPHOLOGICAL VARIANTS OF THE MAIN NOUN/VERB IN THE USER'S QUERY. If they ask about "الصابرين", you must include "صبروا", "يصبرون", "صبر", "الصابرين". Do not just rely on generic reward/punishment words.
+1. For questions about rulings/haram/halal, MUST include exact Quranic root words: "حرم", "اجتنبوه", "رجس", "إثم".
+2. YOU MUST INCLUDE MORPHOLOGICAL VARIANTS OF THE MAIN NOUN/VERB. If they ask about "الصابرين", you must include BOTH "الصابرين" AND "الصابرون" (the nominative form). Also include verb forms: "صبروا", "يصبرون", "صبر".
 3. Include the modern Arabic term AND the Quranic Arabic variant (e.g., both "الخمر" and "خمر").
-4. For factual questions (كم عدد, ما هي أطول), still generate search terms in case they're needed for context, but keep it simple.
+4. For questions with pronouns like "عدو لي", include the exact phrase "عدو لي" AND the variant "عدو لكم" because different speakers use different pronouns.
+5. For multi-word queries, include each important word separately AND the full phrase. E.g., "جزاء الصابرين" → include "جزاء", "الصابرين", "الصابرون", AND "جزاء الصابرين".
+6. ONLY output Arabic and English terms. NO Chinese, Japanese, Korean, or other non-Arabic/non-English characters.
+7. For factual questions (كم عدد, ما هي أطول), still generate search terms in case they're needed for context, but keep it simple.
 
 Return STRICT JSON: { "terms": ["...", "...", ...] }
 
 Examples:
 Input: "حكم شرب الخمر"
-Output: { "terms": ["الخمر", "الميسر", "اجتنبوه", "رجس من عمل الشيطان", "إثم كبير", "حرم", "intoxicants"] }
+Output: { "terms": ["الخمر", "الميسر", "اجتنبوه", "رجس من عمل الشيطان", "إثم كبير", "حرم"] }
 
 Input: "ما هو جزاء الصابرين"
-Output: { "terms": ["الصابرين", "صبروا", "يصبرون", "أجرهم بغير حساب", "بما صبروا", "صبر", "patient", "patience"] }
+Output: { "terms": ["الصابرين", "الصابرون", "جزاء", "صبروا", "يصبرون", "أجرهم بغير حساب", "بما صبروا", "صبر"] }
 
-Input: "من هو عدو موسى"
-Output: { "terms": ["فرعون", "آل فرعون", "هامان", "موسى وفرعون", "Pharaoh"] }
-
-Input: "من هم المتقين"
-Output: { "terms": ["المتقين", "يتقون", "الذين يتقون", "خشية", "God-fearing"] }
+Input: "من قال إنهم عدو لي"
+Output: { "terms": ["عدو لي", "عدو لكم", "إنهم عدو", "فرعون", "إبليس", "إبراهيم"] }
 
 Input: "كم عدد سور القرآن"
 Output: { "terms": ["القرآن", "سورة"] }
@@ -123,9 +132,9 @@ Output: { "terms": ["القرآن", "سورة"] }
 Input: "في أي سورة توجد آية الكرسي"
 Output: { "terms": ["آية الكرسي", "الكرسي", "الله لا إله إلا هو"] }`
 
-// ── Surah name lookup ──────────────────────────────────────────────────────
+// ── Surah name lookup (English + Arabic) ───────────────────────────────────
 
-const SURAHS: Record<number, string> = {
+const SURAHS_EN: Record<number, string> = {
   1: 'Al-Fatihah', 2: 'Al-Baqarah', 3: 'Ali Imran', 4: 'An-Nisa',
   5: 'Al-Maidah', 6: 'Al-Anam', 7: 'Al-Araf', 8: 'Al-Anfal',
   9: 'At-Tawbah', 10: 'Yunus', 11: 'Hud', 12: 'Yusuf',
@@ -158,9 +167,44 @@ const SURAHS: Record<number, string> = {
   114: 'An-Nas',
 }
 
+const SURAHS_AR: Record<number, string> = {
+  1: 'الفاتحة', 2: 'البقرة', 3: 'آل عمران', 4: 'النساء',
+  5: 'المائدة', 6: 'الأنعام', 7: 'الأعراف', 8: 'الأنفال',
+  9: 'التوبة', 10: 'يونس', 11: 'هود', 12: 'يوسف',
+  13: 'الرعد', 14: 'إبراهيم', 15: 'الحجر', 16: 'النحل',
+  17: 'الإسراء', 18: 'الكهف', 19: 'مريم', 20: 'طه',
+  21: 'الأنبياء', 22: 'الحج', 23: 'المؤمنون', 24: 'النور',
+  25: 'الفرقان', 26: 'الشعراء', 27: 'النمل', 28: 'القصص',
+  29: 'العنكبوت', 30: 'الروم', 31: 'لقمان', 32: 'السجدة',
+  33: 'الأحزاب', 34: 'سبأ', 35: 'فاطر', 36: 'يس',
+  37: 'الصافات', 38: 'ص', 39: 'الزمر', 40: 'غافر',
+  41: 'فصلت', 42: 'الشورى', 43: 'الزخرف', 44: 'الدخان',
+  45: 'الجاثية', 46: 'الأحقاف', 47: 'محمد', 48: 'الفتح',
+  49: 'الحجرات', 50: 'ق', 51: 'الذاريات', 52: 'الطور',
+  53: 'النجم', 54: 'القمر', 55: 'الرحمن', 56: 'الواقعة',
+  57: 'الحديد', 58: 'المجادلة', 59: 'الحشر', 60: 'الممتحنة',
+  61: 'الصف', 62: 'الجمعة', 63: 'المنافقون', 64: 'التغابن',
+  65: 'الطلاق', 66: 'التحريم', 67: 'الملك', 68: 'القلم',
+  69: 'الحاقة', 70: 'المعارج', 71: 'نوح', 72: 'الجن',
+  73: 'المزمل', 74: 'المدثر', 75: 'القيامة',
+  76: 'الإنسان', 77: 'المرسلات', 78: 'النبأ', 79: 'النازعات',
+  80: 'عبس', 81: 'التكوير', 82: 'الانفطار', 83: 'المطففين',
+  84: 'الانشقاق', 85: 'البروج', 86: 'الطارق', 87: 'الأعلى',
+  88: 'الغاشية', 89: 'الفجر', 90: 'البلد', 91: 'الشمس',
+  92: 'الليل', 93: 'الضحى', 94: 'الشرح', 95: 'التين',
+  96: 'العلق', 97: 'القدر', 98: 'البينة', 99: 'الزلزلة',
+  100: 'العاديات', 101: 'القارعة', 102: 'التكاثر',
+  103: 'العصر', 104: 'الهمزة', 105: 'الفيل', 106: 'قريش',
+  107: 'الماعون', 108: 'الكوثر', 109: 'الكافرون',
+  110: 'النصر', 111: 'المسد', 112: 'الإخلاص', 113: 'الفلق',
+  114: 'الناس',
+}
+
 function surahName(vk: string): string {
   const surah = parseInt(vk.split(':')[0], 10)
-  return SURAHS[surah] ?? ''
+  const en = SURAHS_EN[surah] ?? ''
+  const ar = SURAHS_AR[surah] ?? ''
+  return ar ? `${en} / ${ar}` : en
 }
 
 // ── Question type classifier ───────────────────────────────────────────────
@@ -185,7 +229,8 @@ function classifyQuestion(q: string): QuestionType {
   ]
 
   const storyPatterns = [
-    /قصة/i, /من هو/i, /من هي/i, /who is/i, /story of/i,
+    /قصة/i, /من هو/i, /من هي/i, /من قال/i, /who is/i, /story of/i,
+    /who said/i,
   ]
 
   for (const p of factualPatterns) {
@@ -198,123 +243,6 @@ function classifyQuestion(q: string): QuestionType {
     if (p.test(lower)) return 'story'
   }
   return 'general'
-}
-
-// ── In-process Quran index & search ────────────────────────────────────────
-// THIS IS THE KEY FIX: Instead of fetching /api/search over HTTP (which
-// fails on Vercel because getBaseUrl() returns empty, or self-fetching
-// deadlocks), we build and search the index IN-PROCESS.
-
-interface IndexedVerse {
-  surahId: number
-  verseId: number
-  text: string
-  base: string
-  fuzzy: string
-  concat: string
-  baseMap: number[]
-}
-
-let indexPromise: Promise<IndexedVerse[]> | null = null
-
-async function getIndex(): Promise<IndexedVerse[]> {
-  if (!indexPromise) {
-    indexPromise = (async () => {
-      const res = await fetch(
-        'https://cdn.jsdelivr.net/npm/quran-json@3.1.2/dist/quran.json',
-        { cache: 'force-cache' },
-      )
-      if (!res.ok) throw new Error('Failed to fetch Quran dataset')
-      const data: Array<{ id: number; verses: Array<{ id: number; text: string }> }> =
-        await res.json()
-
-      const out: IndexedVerse[] = []
-      for (const surah of data) {
-        for (const verse of surah.verses) {
-          const { base, map } = buildIndexMap(verse.text)
-          out.push({
-            surahId: surah.id,
-            verseId: verse.id,
-            text: verse.text,
-            base,
-            fuzzy: normalizeAlefFuzzy(verse.text),
-            concat: normalizeConcat(verse.text),
-            baseMap: map,
-          })
-        }
-      }
-      return out
-    })().catch((err) => {
-      indexPromise = null
-      throw err
-    })
-  }
-  return indexPromise
-}
-
-interface SearchHit {
-  verse_key: string
-  text: string
-  strict: boolean
-}
-
-/**
- * Search the Quran index directly in-process.
- * This replaces the old HTTP fetch to /api/search that was silently
- * failing on Vercel Serverless.
- */
-async function searchQuran(query: string, maxResults = 30): Promise<SearchHit[]> {
-  if (!query || query.trim().length < 2) return []
-
-  const raw = query.trim()
-  const index = await getIndex()
-  const qBase = normalizeBase(raw)
-  const qFuzzy = normalizeAlefFuzzy(raw)
-  const qConcat = normalizeConcat(raw)
-
-  if (qBase.length < 2 && qFuzzy.length < 2 && qConcat.length < 2) return []
-
-  const hits: SearchHit[] = []
-  const seenKeys = new Set<string>()
-
-  // Tier 1: Strict match (diacritics stripped, alef variants preserved)
-  if (qBase.length >= 2) {
-    for (const entry of index) {
-      if (hits.length >= maxResults) break
-      const idx = entry.base.indexOf(qBase)
-      if (idx === -1) continue
-      const vk = `${entry.surahId}:${entry.verseId}`
-      if (seenKeys.has(vk)) continue
-      seenKeys.add(vk)
-      hits.push({ verse_key: vk, text: entry.text, strict: true })
-    }
-  }
-
-  // Tier 2: Fuzzy match (alef-unified, ta→ha, ya↔alif maqsurah)
-  if (hits.length < 5 && qFuzzy.length >= 2) {
-    for (const entry of index) {
-      if (hits.length >= maxResults) break
-      if (!entry.fuzzy.includes(qFuzzy)) continue
-      const vk = `${entry.surahId}:${entry.verseId}`
-      if (seenKeys.has(vk)) continue
-      seenKeys.add(vk)
-      hits.push({ verse_key: vk, text: entry.text, strict: false })
-    }
-  }
-
-  // Tier 3: Concat match (spaces removed, last resort)
-  if (hits.length === 0 && qConcat.length >= 2) {
-    for (const entry of index) {
-      if (hits.length >= maxResults) break
-      if (!entry.concat.includes(qConcat)) continue
-      const vk = `${entry.surahId}:${entry.verseId}`
-      if (seenKeys.has(vk)) continue
-      seenKeys.add(vk)
-      hits.push({ verse_key: vk, text: entry.text, strict: false })
-    }
-  }
-
-  return hits
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -368,6 +296,20 @@ async function groqChat(opts: GroqOptions): Promise<string> {
 
 // ── Query expansion ────────────────────────────────────────────────────────
 
+/**
+ * Filter expanded terms to remove non-Arabic/non-English junk.
+ * The LLM sometimes outputs Chinese, Japanese, or other characters
+ * that are useless for Arabic substring search.
+ */
+function isSearchableTerm(term: string): boolean {
+  if (term.trim().length < 2) return false
+  // Allow Arabic, English, and common punctuation only
+  const cleaned = term.replace(/[\s\-,.،؛:!?'"()]/g, '')
+  if (cleaned.length === 0) return false
+  // Must contain at least one Arabic or English letter
+  return /[\u0600-\u06FFa-zA-Z]/.test(cleaned)
+}
+
 async function expandQuery(question: string, apiKey: string): Promise<string[]> {
   try {
     const raw = await groqChat({
@@ -382,11 +324,10 @@ async function expandQuery(question: string, apiKey: string): Promise<string[]> 
     })
     const parsed = JSON.parse(raw) as { terms?: unknown }
     const terms = Array.isArray(parsed.terms)
-      ? parsed.terms.filter(
-          (t): t is string => typeof t === 'string' && t.trim().length > 0,
-        )
+      ? parsed.terms
+          .filter((t): t is string => typeof t === 'string' && isSearchableTerm(t))
       : []
-    if (!terms.includes(question)) terms.unshift(question)
+    if (!terms.some((t) => t === question)) terms.unshift(question)
     return terms.slice(0, 12)
   } catch (e) {
     console.warn('[ask] query expansion failed, falling back to raw query:', e)
@@ -431,37 +372,51 @@ export async function POST(req: NextRequest) {
   // 1. Expand the query into multiple Arabic search terms
   const terms = await expandQuery(question, apiKey)
 
-  // 2. IN-PROCESS lexical search (no HTTP fetch!)
-  //    This was the #1 bug: the old code fetched /api/search over HTTP,
-  //    which silently failed on Vercel because getBaseUrl() returned ""
-  //    and self-fetching could deadlock.
+  // 2. MULTI-WORD lexical search (no HTTP fetch!)
+  //    Each term is searched individually using searchQuranMulti,
+  //    which splits multi-word terms and finds verses containing ALL words.
   const lexicalLists = await Promise.all(
-    terms.map((t) => searchQuran(t)),
+    terms.map((t) => searchQuranMulti(t)),
   )
 
   // 3. Merge: Lexical hits FIRST (exact keyword matches),
   //    then client semantic candidates SECOND.
   //    Dedupe by verse_key, cap at MAX_CANDIDATES.
+  //    Track best score per verse for ranking.
   const seen = new Set<string>()
-  const merged: Array<{ vk: string; ar: string; tr: string }> = []
+  const scoreMap = new Map<string, number>()
+  const merged: Array<{ vk: string; ar: string; tr: string; score: number }> = []
 
-  // Lexical goes FIRST because it is highly specific
+  // Collect all lexical hits with their scores
   for (const list of lexicalLists) {
     for (const h of list) {
-      if (seen.has(h.verse_key)) continue
+      if (seen.has(h.verse_key)) {
+        // Update score if this hit is better
+        const existing = merged.find((m) => m.vk === h.verse_key)
+        if (existing && h.score > existing.score) {
+          existing.score = h.score
+        }
+        continue
+      }
       seen.add(h.verse_key)
-      merged.push({ vk: h.verse_key, ar: stripMark(h.text), tr: '' })
-      if (merged.length >= MAX_CANDIDATES) break
+      merged.push({ vk: h.verse_key, ar: stripMark(h.text), tr: '', score: h.score })
     }
-    if (merged.length >= MAX_CANDIDATES) break
+  }
+
+  // Sort by score descending — best matches first for the LLM
+  merged.sort((a, b) => b.score - a.score)
+
+  // Cap at MAX_CANDIDATES after sorting
+  if (merged.length > MAX_CANDIDATES) {
+    merged.length = MAX_CANDIDATES
   }
 
   // Client Semantic goes SECOND as a fallback
   for (const c of clientCandidates) {
     if (!c?.vk || seen.has(c.vk)) continue
     seen.add(c.vk)
-    merged.push(c)
-    if (merged.length >= MAX_CANDIDATES) break
+    merged.push({ ...c, score: 0 })
+    if (merged.length >= MAX_CANDIDATES + 5) break // Allow a few extra semantic candidates
   }
 
   if (merged.length === 0) {
@@ -480,6 +435,7 @@ export async function POST(req: NextRequest) {
   // 4. Build candidate block WITH surah names for speaker awareness
   const candidateBlock = merged.length > 0
     ? merged
+        .slice(0, MAX_CANDIDATES)
         .map(
           (c, i) =>
             `${i + 1}. [${c.vk} - ${surahName(c.vk)}] ${c.ar}` +
@@ -493,8 +449,8 @@ export async function POST(req: NextRequest) {
   const userMessage =
     `${typeHint}\n\n` +
     `Question: ${question}\n\n` +
-    `Candidate verses:\n\n${candidateBlock}\n\n` +
-    `Now respond following the rules. Remember: if this is a FACTUAL question (type FACTUAL), you MUST answer directly from your knowledge per Rule 1. Cite verses with [S:V] notation only when using candidate verses.`
+    `Candidate verses (sorted by relevance, best matches first):\n\n${candidateBlock}\n\n` +
+    `Now respond following the rules. Remember: if this is a FACTUAL question (type FACTUAL), you MUST answer directly from your knowledge per Rule 1. For other questions, prefer verses listed FIRST (they are the best matches). Cite verses with [S:V] notation only when using candidate verses.`
 
   // 6. Generate answer via Groq
   let answer: string

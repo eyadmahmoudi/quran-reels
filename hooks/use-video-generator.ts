@@ -267,6 +267,7 @@ function drawVerseContentLayer(
   showMarker: boolean, translationChunkText: string | undefined,
   fadeOpacity: number,
   calligraphyStyle: string,
+  showTafsirFlag: boolean,
 ): number | undefined {
   const uiScale = width / 1080
   const s = (n: number) => n * uiScale
@@ -346,6 +347,9 @@ function drawVerseContentLayer(
   })
   ctx.shadowBlur = 0
 
+  // Track the bottom Y of content for tafsir/progress positioning
+  let contentBottomY = textStartY + totalTextHeight
+
   if (shouldShowTranslation) {
     const rawTranslation = translationChunkText || (verse.translations?.[0]?.text?.replace(/<[^>]+>/g, '') ?? '')
     if (rawTranslation) {
@@ -369,12 +373,48 @@ function drawVerseContentLayer(
       const transLineHeight = transFontSize * 1.5
       const transY = textStartY + totalTextHeight + (displayMode === 'minimal' ? s(44) : s(70))
       transLines.forEach((line, i) => ctx.fillText(line, width / 2, transY + i * transLineHeight))
+      contentBottomY = transY + transLines.length * transLineHeight
       if (displayMode === 'classic' && transLines.length > 0) {
         const lastY = transY + (transLines.length - 1) * transLineHeight
         translationBottomForBar = lastY + transFontSize * 0.55
       }
     }
   }
+
+  // ── Tafsir overlay (below translation) ──
+  if (showTafsirFlag) {
+    const tafsir = verse.translations?.[1]?.text?.replace(/<[^>]+>/g, '') ?? ''
+    if (tafsir) {
+      ctx.fillStyle = 'rgba(212,175,55,0.75)'
+      const tfSize = Math.round(s(displayMode === 'minimal' ? 20 : 24))
+      // Detect if tafsir is Arabic (contains Arabic Unicode range)
+      const isArabicTafsir = /[\u0600-\u06FF]/.test(tafsir)
+      ctx.font = isArabicTafsir
+        ? `${tfSize}px "Scheherazade New", "Noto Naskh Arabic", "Amiri", serif`
+        : `${tfSize}px Georgia, serif`
+      ctx.textAlign = 'center'
+      ctx.direction = isArabicTafsir ? 'rtl' : 'ltr'
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'
+      ctx.shadowBlur = s(8)
+      const tfMaxW = width - s(120)
+      const tfWords = tafsir.split(/\s+/)
+      const tfLines: string[] = []
+      let tfCur = ''
+      for (const word of tfWords) {
+        const test = tfCur ? `${tfCur} ${word}` : word
+        if (ctx.measureText(test).width > tfMaxW && tfCur) {
+          tfLines.push(tfCur); tfCur = word
+        } else { tfCur = test }
+      }
+      if (tfCur) tfLines.push(tfCur)
+      // Cap at 4 lines for readability
+      const capped = tfLines.slice(0, 4)
+      const tfLineH = tfSize * (isArabicTafsir ? 1.8 : 1.4)
+      const tfY = contentBottomY + s(20)
+      capped.forEach((line, i) => ctx.fillText(line, width / 2, tfY + i * tfLineH))
+    }
+  }
+
   ctx.restore()
 
   return translationBottomForBar
@@ -437,15 +477,24 @@ function drawFrame(
   if (showHijriDateFlag) {
     ctx.save()
     const hijri = getHijriDate()
-    const dateSize = Math.round(s(18))
-    ctx.font = `500 ${dateSize}px "Reem Kufi", "Noto Naskh Arabic", sans-serif`
+    const dateSizeAr = Math.round(s(18))
+    const dateSizeEn = Math.round(s(12))
+    const topY = s(displayMode === 'classic' ? 52 : 36)
+    // Arabic date line
+    ctx.font = `500 ${dateSizeAr}px "Reem Kufi", "Noto Naskh Arabic", sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.shadowColor = 'rgba(0,0,0,0.8)'
     ctx.shadowBlur = s(8)
     ctx.fillStyle = 'rgba(212,175,55,0.85)'
     ctx.direction = 'rtl'
-    ctx.fillText(hijri.formattedAr, width / 2, s(displayMode === 'classic' ? 52 : 36))
+    ctx.fillText(hijri.formattedAr, width / 2, topY)
+    // English subtitle line
+    ctx.font = `400 ${dateSizeEn}px Inter, system-ui, sans-serif`
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'
+    ctx.direction = 'ltr'
+    ctx.shadowBlur = s(4)
+    ctx.fillText(hijri.formattedEn, width / 2, topY + dateSizeAr * 0.8)
     ctx.restore()
   }
 
@@ -483,7 +532,7 @@ function drawFrame(
     ctx, width, height, verse, displayMode,
     showTranslation && showTranslationOverride,
     chunkText, showMarker, translationChunkText, fadeOpacity,
-    calligraphyStyle,
+    calligraphyStyle, showTafsirFlag,
   )
 
   if (displayMode === 'classic' && videoProgress !== undefined) {
@@ -509,7 +558,14 @@ function drawFrame(
   if (showJuzProgressFlag && verse) {
     ctx.save()
     const juzNum = verse.juz_number ?? 0
-    const progSize = Math.round(s(16))
+    const hizbNum = verse.hizb_number ?? 0
+    const progSize = Math.round(s(14))
+    const barW = width - s(120)
+    const barH = Math.max(2, Math.round(s(4)))
+    const barX = s(60)
+    const progBarY = height - s(36)
+
+    // Label above progress bar
     ctx.font = `500 ${progSize}px Inter, system-ui, sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
@@ -517,16 +573,32 @@ function drawFrame(
     ctx.shadowBlur = s(6)
     ctx.fillStyle = 'rgba(255,255,255,0.55)'
     ctx.direction = 'ltr'
-    const barW = width - s(120)
-    const barH = Math.max(2, Math.round(s(4)))
-    const barX = s(60)
-    const progBarY = height - s(36)
+    const label = hizbNum > 0 ? `Juz ${juzNum} of 30  ·  Hizb ${hizbNum} of 60` : `Juz ${juzNum} of 30`
+    ctx.fillText(label, width / 2, progBarY - s(10))
+
+    // Track bar
     ctx.fillStyle = 'rgba(255,255,255,0.12)'
     ctx.fillRect(barX, progBarY, barW, barH)
-    ctx.fillStyle = 'rgba(212,175,55,0.6)'
+    // Juz fill
+    ctx.fillStyle = 'rgba(212,175,55,0.5)'
     ctx.fillRect(barX, progBarY, barW * (juzNum / 30), barH)
-    ctx.fillStyle = 'rgba(255,255,255,0.55)'
-    ctx.fillText(`Juz ${juzNum} of 30`, width / 2, progBarY - s(8))
+    // Hizb tick marks (every 2 hizb = 1 juz boundary, mark all hizb positions)
+    if (hizbNum > 0) {
+      for (let h = 1; h <= 60; h++) {
+        if (h % 2 === 0) continue  // juz boundaries already visible
+        const tickX = barX + barW * (h / 60)
+        ctx.fillStyle = 'rgba(212,175,55,0.25)'
+        ctx.fillRect(tickX, progBarY - s(1), Math.max(1, Math.round(s(1))), barH + s(2))
+      }
+      // Current hizb indicator dot
+      const dotX = barX + barW * (hizbNum / 60)
+      const dotR = Math.max(2, Math.round(s(3)))
+      ctx.fillStyle = 'rgba(212,175,55,0.85)'
+      ctx.beginPath()
+      ctx.arc(dotX, progBarY + barH / 2, dotR, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
     ctx.restore()
   }
 }
@@ -1546,7 +1618,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
                   ctx, width, height, verse, displayMode,
                   showTranslation && seg.showTranslationForChunk,
                   seg.chunkText, seg.showMarker, seg.translationChunkText, alpha,
-                  calligraphyStyle,
+                  calligraphyStyle, showTafsir,
                 )
               }
             }

@@ -114,19 +114,28 @@ function drawPreview(
     : (hasRich ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.25)')
   ctx.fillRect(0, 0, w, h)
 
-  // ── Hijri Date overlay (top-left) ──
+  // ── Hijri Date overlay (top area) ──
   if (showHijriDate) {
     ctx.save()
     const hijri = getHijriDate()
-    const dateSize = Math.round(s(18))
-    ctx.font = `500 ${dateSize}px "Reem Kufi", "Noto Naskh Arabic", sans-serif`
+    const dateSizeAr = Math.round(s(18))
+    const dateSizeEn = Math.round(s(12))
+    const topY = s(mode === 'classic' ? 52 : 36)
+    // Arabic date line
+    ctx.font = `500 ${dateSizeAr}px "Reem Kufi", "Noto Naskh Arabic", sans-serif`
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.shadowColor = 'rgba(0,0,0,0.8)'
     ctx.shadowBlur = s(8)
     ctx.fillStyle = 'rgba(212,175,55,0.85)'
     ctx.direction = 'rtl'
-    ctx.fillText(hijri.formattedAr, w / 2, s(mode === 'classic' ? 52 : 36))
+    ctx.fillText(hijri.formattedAr, w / 2, topY)
+    // English subtitle line
+    ctx.font = `400 ${dateSizeEn}px Inter, system-ui, sans-serif`
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'
+    ctx.direction = 'ltr'
+    ctx.shadowBlur = s(4)
+    ctx.fillText(hijri.formattedEn, w / 2, topY + dateSizeAr * 0.8)
     ctx.restore()
   }
 
@@ -264,15 +273,19 @@ function drawPreview(
       // Tafsir comes as the second translation (index 1) when tafsirId is included
       const tafsir = verse.translations?.[1]?.text?.replace(/<[^>]+>/g, '') ?? ''
       if (tafsir) {
-        ctx.fillStyle = 'rgba(212,175,55,0.7)'
+        ctx.fillStyle = 'rgba(212,175,55,0.75)'
         const tfSize = Math.round(s(mode === 'minimal' ? 20 : 24))
-        ctx.font = `${tfSize}px Georgia, serif`
+        // Detect if tafsir is Arabic (contains Arabic Unicode range)
+        const isArabicTafsir = /[\u0600-\u06FF]/.test(tafsir)
+        ctx.font = isArabicTafsir
+          ? `${tfSize}px "Scheherazade New", "Noto Naskh Arabic", "Amiri", serif`
+          : `${tfSize}px Georgia, serif`
         ctx.textAlign = 'center'
-        ctx.direction = 'ltr'
+        ctx.direction = isArabicTafsir ? 'rtl' : 'ltr'
         ctx.shadowColor = 'rgba(0,0,0,0.9)'
         ctx.shadowBlur = s(8)
         const tfMaxW = w - s(120)
-        const tfWords = tafsir.split(' ')
+        const tfWords = tafsir.split(/\s+/)
         const tfLines: string[] = []
         let tfCur = ''
         for (const word of tfWords) {
@@ -287,7 +300,7 @@ function drawPreview(
         if (tfCur) tfLines.push(tfCur)
         // Cap at 4 lines
         const capped = tfLines.slice(0, 4)
-        const tfLineH = tfSize * 1.4
+        const tfLineH = tfSize * (isArabicTafsir ? 1.8 : 1.4)
         // Position below translation or below Arabic text
         const transBottom = showTranslation
           ? startY + totalH + (mode === 'minimal' ? s(44) : s(70)) + s(28) * 2
@@ -300,7 +313,13 @@ function drawPreview(
     if (showJuzProgress && verse) {
       ctx.save()
       const juzNum = verse.juz_number ?? 0
-      const progSize = Math.round(s(16))
+      const hizbNum = verse.hizb_number ?? 0
+      const progSize = Math.round(s(14))
+      const barW = w - s(120)
+      const barH = Math.max(2, Math.round(s(4)))
+      const barX = s(60)
+      const progressY = h - (watermark ? s(70) : s(36))
+      // Label above progress bar
       ctx.font = `500 ${progSize}px Inter, system-ui, sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'alphabetic'
@@ -308,19 +327,30 @@ function drawPreview(
       ctx.shadowBlur = s(6)
       ctx.fillStyle = 'rgba(255,255,255,0.55)'
       ctx.direction = 'ltr'
-      const progressY = h - (watermark ? s(70) : s(36))
-      // Juz progress bar (30 parts)
-      const barW = w - s(120)
-      const barH = Math.max(2, Math.round(s(4)))
-      const barX = s(60)
+      const label = hizbNum > 0 ? `Juz ${juzNum} of 30  ·  Hizb ${hizbNum} of 60` : `Juz ${juzNum} of 30`
+      ctx.fillText(label, w / 2, progressY - barH - s(10))
+      // Track bar
       ctx.fillStyle = 'rgba(255,255,255,0.12)'
-      ctx.fillRect(barX, progressY - progSize - s(4), barW, barH)
-      const juzFrac = juzNum / 30
-      ctx.fillStyle = 'rgba(212,175,55,0.6)'
-      ctx.fillRect(barX, progressY - progSize - s(4), barW * juzFrac, barH)
-      // Label
-      ctx.fillStyle = 'rgba(255,255,255,0.55)'
-      ctx.fillText(`Juz ${juzNum} of 30`, w / 2, progressY - progSize - s(12))
+      ctx.fillRect(barX, progressY - barH - s(4), barW, barH)
+      // Juz fill
+      ctx.fillStyle = 'rgba(212,175,55,0.5)'
+      ctx.fillRect(barX, progressY - barH - s(4), barW * (juzNum / 30), barH)
+      // Hizb tick marks
+      if (hizbNum > 0) {
+        for (let hi = 1; hi <= 60; hi++) {
+          if (hi % 2 === 0) continue  // juz boundaries already visible
+          const tickX = barX + barW * (hi / 60)
+          ctx.fillStyle = 'rgba(212,175,55,0.25)'
+          ctx.fillRect(tickX, progressY - barH - s(5), Math.max(1, Math.round(s(1))), barH + s(2))
+        }
+        // Current hizb indicator dot
+        const dotX = barX + barW * (hizbNum / 60)
+        const dotR = Math.max(2, Math.round(s(3)))
+        ctx.fillStyle = 'rgba(212,175,55,0.85)'
+        ctx.beginPath()
+        ctx.arc(dotX, progressY - barH - s(4) + barH / 2, dotR, 0, Math.PI * 2)
+        ctx.fill()
+      }
       ctx.restore()
     }
     ctx.restore()

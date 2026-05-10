@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Check, Star, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useReel } from '@/lib/reel-context'
-import { BUILTIN_PRESETS, type ReelPreset } from '@/lib/quran-types'
+import { BUILTIN_PRESETS, CALLIGRAPHY_STYLES, POPULAR_RECITERS, type ReelPreset } from '@/lib/quran-types'
 
 const STORAGE_KEY = 'quran-reels-custom-presets'
 
@@ -22,6 +22,43 @@ function saveCustomPresets(presets: ReelPreset[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(presets))
   } catch { /* noop */ }
+}
+
+/** Extract a preview color from a background option for the swatch */
+function getPresetSwatchStyle(preset: ReelPreset): React.CSSProperties {
+  const bg = preset.background
+  if (bg.type === 'gradient' && typeof bg.value === 'string') {
+    return { background: bg.value }
+  }
+  if ((bg.type === 'preset' || bg.type === 'image') && bg.thumbnail) {
+    return {
+      backgroundImage: `url(${bg.thumbnail})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    }
+  }
+  if (bg.type === 'animated' && bg.thumbnail) {
+    return {
+      backgroundImage: `url(${bg.thumbnail})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    }
+  }
+  return { background: '#1a2744' }
+}
+
+function getPresetSummary(preset: ReelPreset): string {
+  const calligraphy = CALLIGRAPHY_STYLES.find(c => c.id === preset.calligraphyStyle)
+  const reciter = POPULAR_RECITERS.find(r => r.id === preset.reciterId)
+  const parts: string[] = []
+  if (calligraphy) parts.push(calligraphy.name)
+  if (reciter) parts.push(reciter.name.split('(')[0].trim())
+  if (preset.displayMode === 'classic') parts.push('Classic')
+  if (preset.showTranslation) parts.push('Trans')
+  if (preset.showHijriDate) parts.push('Hijri')
+  if (preset.showTafsir) parts.push('Tafsir')
+  if (preset.showJuzProgress) parts.push('Juz')
+  return parts.join(' · ')
 }
 
 export function PresetTemplates() {
@@ -103,22 +140,34 @@ export function PresetTemplates() {
               type="button"
               onClick={() => applyPreset(preset)}
               className={cn(
-                'group relative flex flex-col items-center gap-1.5 rounded-[10px] border p-3 text-center transition-all duration-150 ease-out',
+                'group relative flex items-center gap-2.5 rounded-[10px] border p-2.5 text-left transition-all duration-150 ease-out',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent-ring)]',
                 active
                   ? 'border-accent-primary/40 bg-accent-soft'
                   : 'border-border-subtle bg-surface hover:border-border-default hover:bg-subtle',
               )}
             >
-              <span className="text-lg">{preset.emoji}</span>
-              <span
-                className={cn(
-                  'text-[11px] font-medium leading-tight',
-                  active ? 'text-accent-primary' : 'text-ink-primary',
-                )}
-              >
-                {preset.name}
-              </span>
+              {/* Color swatch */}
+              <div
+                className="h-9 w-9 shrink-0 rounded-[6px] border border-white/10"
+                style={getPresetSwatchStyle(preset)}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1">
+                  <span className="text-[11px]">{preset.emoji}</span>
+                  <span
+                    className={cn(
+                      'text-[11px] font-medium leading-tight truncate',
+                      active ? 'text-accent-primary' : 'text-ink-primary',
+                    )}
+                  >
+                    {preset.name}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[9px] leading-tight text-ink-tertiary truncate">
+                  {getPresetSummary(preset)}
+                </p>
+              </div>
               {active && (
                 <div className="absolute top-1.5 right-1.5 h-3 w-3 rounded-full bg-accent-primary flex items-center justify-center">
                   <Check className="h-2 w-2 text-white" />

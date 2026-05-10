@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Fraunces, Inter, Amiri, Reem_Kufi, JetBrains_Mono } from 'next/font/google'
+import { Fraunces, Inter, Amiri, Reem_Kufi, JetBrains_Mono, Scheherazade_New, Noto_Naskh_Arabic, Aref_Ruqaa, Noto_Kufi_Arabic } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import Script from 'next/script'
 import './globals.css'
@@ -33,6 +33,35 @@ const reemKufi = Reem_Kufi({
   display: 'swap',
 })
 
+const scheherazadeNew = Scheherazade_New({
+  subsets: ['arabic', 'latin'],
+  weight: ['400', '700'],
+  variable: '--font-scheherazade',
+  display: 'swap',
+})
+
+const notoNaskhArabic = Noto_Naskh_Arabic({
+  subsets: ['arabic', 'latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-noto-naskh',
+  display: 'swap',
+})
+
+const arefRuqaa = Aref_Ruqaa({
+  subsets: ['arabic', 'latin'],
+  weight: ['400'],
+  style: ['normal'],
+  variable: '--font-aref-ruqaa',
+  display: 'swap',
+})
+
+const notoKufiArabic = Noto_Kufi_Arabic({
+  subsets: ['arabic', 'latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-noto-kufi',
+  display: 'swap',
+})
+
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   weight: ['400', '500'],
@@ -63,7 +92,7 @@ export default function RootLayout({
       lang="en"
       dir="ltr"
       suppressHydrationWarning
-      className={`${fraunces.variable} ${inter.variable} ${amiri.variable} ${reemKufi.variable} ${jetbrainsMono.variable} lg:h-[100dvh] lg:overflow-hidden`}
+      className={`${fraunces.variable} ${inter.variable} ${amiri.variable} ${reemKufi.variable} ${jetbrainsMono.variable} ${scheherazadeNew.variable} ${notoNaskhArabic.variable} ${arefRuqaa.variable} ${notoKufiArabic.variable} lg:h-[100dvh] lg:overflow-hidden`}
     >
       <head>
         <Script

@@ -9,6 +9,8 @@ import {
   Mic,
   AtSign,
   ShieldCheck,
+  PenTool,
+  Sparkles,
 } from 'lucide-react'
 import { AyahSearch } from '@/components/quran/ayah-search'
 import { SurahSelector } from '@/components/quran/surah-selector'
@@ -18,6 +20,8 @@ import { BackgroundSelector } from '@/components/quran/background-selector'
 import { TranslationSettings } from '@/components/quran/translation-settings'
 import { DisplayModeSelector } from '@/components/quran/display-mode-selector'
 import { IstiadhaToggle } from '@/components/quran/istiadha-toggle'
+import { CalligraphySelector } from '@/components/quran/calligraphy-selector'
+import { DailyVerseCard } from '@/components/quran/daily-verse'
 import { WatermarkInput } from './watermark-input'
 
 interface SidebarSectionProps {
@@ -132,6 +136,16 @@ export function LeftSidebar() {
         <Hairline />
 
         <SidebarSection
+          title="Calligraphy"
+          icon={<PenTool className="h-4 w-4" strokeWidth={1.75} />}
+          description="Choose an Arabic font style"
+        >
+          <CalligraphySelector />
+        </SidebarSection>
+
+        <Hairline />
+
+        <SidebarSection
           title="Display"
           icon={<LayoutTemplate className="h-4 w-4" strokeWidth={1.75} />}
           description="Choose a layout style"
@@ -140,6 +154,16 @@ export function LeftSidebar() {
         </SidebarSection>
 
         <OrnamentDivider />
+
+        <SidebarSection
+          title="Daily Verse"
+          icon={<Sparkles className="h-4 w-4" strokeWidth={1.75} />}
+          description="Today's featured verse"
+        >
+          <DailyVerseCard />
+        </SidebarSection>
+
+        <Hairline />
 
         <SidebarSection
           title="Watermark"

@@ -5,6 +5,7 @@ import type { Verse, Word, BackgroundOption, ReelConfig } from '@/lib/quran-type
 import { drawAnimatedBackground } from '@/lib/animations'
 import { splitVerseByWordTimings, splitTranslation } from '@/lib/verse-chunking'
 import { fetchAudioSegments, fetchQDCVerseAudioUrls, fetchLocalSegments } from '@/lib/quran-api'
+import { CALLIGRAPHY_STYLES } from '@/lib/quran-types'
 
 interface VideoGeneratorOptions {
   verses: Verse[]
@@ -18,6 +19,7 @@ interface VideoGeneratorOptions {
   endVerse: number
   displayMode?: 'minimal' | 'classic'
   includeIstiadha?: boolean
+  calligraphyStyle?: string
 }
 
 interface UseVideoGeneratorReturn {
@@ -38,6 +40,14 @@ interface DisplaySegment {
   translationChunkText?: string
   startMs: number
   endMs: number
+}
+
+function getCalligraphyFont(styleId: string): { body: string; marker: string } {
+  const style = CALLIGRAPHY_STYLES.find(s => s.id === styleId) ?? CALLIGRAPHY_STYLES[0]
+  return {
+    body: style.fontFamily,
+    marker: '"UthmanicHafs", "Amiri Quran", "Scheherazade New", serif',
+  }
 }
 
 function toArabicNumerals(n: number): string {
@@ -224,13 +234,15 @@ function drawRasterBackground(
 function drawIntroContentLayer(
   ctx: CanvasRenderingContext2D, width: number, height: number,
   taawudhText: string, fadeOpacity: number,
+  calligraphyStyle: string,
 ) {
   const uiScale = width / 1080
   const s = (n: number) => n * uiScale
+  const fonts = getCalligraphyFont(calligraphyStyle)
   ctx.save()
   ctx.globalAlpha = fadeOpacity
   ctx.fillStyle = 'white'
-  ctx.font = `${Math.round(s(52))}px "Nabi", sans-serif`
+  ctx.font = `${Math.round(s(52))}px ${fonts.body}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.shadowColor = 'rgba(0,0,0,0.9)'
@@ -250,18 +262,20 @@ function drawVerseContentLayer(
   showTranslation: boolean, chunkText: string | undefined,
   showMarker: boolean, translationChunkText: string | undefined,
   fadeOpacity: number,
+  calligraphyStyle: string,
 ): number | undefined {
   const uiScale = width / 1080
   const s = (n: number) => n * uiScale
   let translationBottomForBar: number | undefined
+  const fonts = getCalligraphyFont(calligraphyStyle)
 
   ctx.save()
   ctx.globalAlpha = fadeOpacity
 
   ctx.fillStyle = 'white'
   const arabicFontSize = Math.round(s(displayMode === 'minimal' ? 58 : 68))
-  const nabiFont = `${arabicFontSize}px "Nabi", sans-serif`
-  const uthmanicFont = `${arabicFontSize}px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif`
+  const bodyFont = `${arabicFontSize}px ${fonts.body}`
+  const uthmanicFont = `${arabicFontSize}px ${fonts.marker}`
   ctx.textBaseline = 'middle'
   ctx.shadowColor = 'rgba(0,0,0,0.9)'
   ctx.shadowBlur = s(displayMode === 'minimal' ? 18 : 24)
@@ -274,7 +288,7 @@ function drawVerseContentLayer(
   ctx.font = uthmanicFont
   const markerWidth = ctx.measureText(markerChar).width
 
-  ctx.font = nabiFont
+  ctx.font = bodyFont
   const maxWidth = width - s(100)
   const words = verseText.split(' ')
   const lines: string[] = []
@@ -309,11 +323,11 @@ function drawVerseContentLayer(
     const isLastLine = i === lines.length - 1
 
     if (!showMarker || !isLastLine) {
-      ctx.font = nabiFont; ctx.textAlign = 'center'; ctx.fillText(line, width / 2, y)
+      ctx.font = bodyFont; ctx.textAlign = 'center'; ctx.fillText(line, width / 2, y)
     } else if (line === '') {
       ctx.font = uthmanicFont; ctx.textAlign = 'center'; ctx.fillText(markerChar, width / 2, y)
     } else {
-      ctx.font = nabiFont
+      ctx.font = bodyFont
       const lineW = ctx.measureText(line).width
       const spaceW = ctx.measureText(' ').width
       ctx.font = uthmanicFont
@@ -322,7 +336,7 @@ function drawVerseContentLayer(
       const rightEdge = width / 2 + totalW / 2
       const leftEdge = width / 2 - totalW / 2
 
-      ctx.font = nabiFont; ctx.textAlign = 'right'; ctx.fillText(line, rightEdge, y)
+      ctx.font = bodyFont; ctx.textAlign = 'right'; ctx.fillText(line, rightEdge, y)
       ctx.font = uthmanicFont; ctx.textAlign = 'left'; ctx.fillText(markerChar, leftEdge, y)
     }
   })
@@ -371,6 +385,7 @@ function drawFrame(
   chunkText?: string, showMarker: boolean = true, showTranslationOverride: boolean = true,
   fadeOpacity: number = 1, translationChunkText?: string,
   videoProgress?: number,
+  calligraphyStyle: string = 'nabi',
 ) {
   let translationBottomForBar: number | undefined
   const uiScale = width / 1080
@@ -412,7 +427,7 @@ function drawFrame(
   ctx.fillRect(0, 0, width, height)
 
   if (taawudhText && !verse) {
-    drawIntroContentLayer(ctx, width, height, taawudhText, fadeOpacity)
+    drawIntroContentLayer(ctx, width, height, taawudhText, fadeOpacity, calligraphyStyle)
     if (displayMode === 'classic' && videoProgress !== undefined) {
       const barX = Math.round(s(40))
       const barW = Math.round(width - barX * 2)
@@ -445,6 +460,7 @@ function drawFrame(
     ctx, width, height, verse, displayMode,
     showTranslation && showTranslationOverride,
     chunkText, showMarker, translationChunkText, fadeOpacity,
+    calligraphyStyle,
   )
 
   if (displayMode === 'classic' && videoProgress !== undefined) {
@@ -474,7 +490,7 @@ async function exportVerseImages(
   setProgress: (n: number) => void
 ) {
   for (let i = 0; i < verses.length; i++) {
-    drawFrame(ctx, canvas.width, canvas.height, backgroundImage, background, surahName, verses[i], showTranslation, displayMode, undefined, i * 3000)
+    drawFrame(ctx, canvas.width, canvas.height, backgroundImage, background, surahName, verses[i], showTranslation, displayMode, undefined, i * 3000, undefined, true, true, 1, undefined, undefined, 'nabi')
     const blob = await new Promise<Blob>((resolve) => { canvas.toBlob((b) => resolve(b!), 'image/png', 1.0) })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1136,6 +1152,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         verses, background, showTranslation, surahName, qdcRecitationId,
         reciterFolder, surahId, startVerse, endVerse,
         displayMode = 'minimal', includeIstiadha = true,
+        calligraphyStyle = 'nabi',
       } = options
 
       if (verses.length === 0) { setError('No verses to generate video from'); return }
@@ -1318,15 +1335,23 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           } catch { }
         }
 
-        try { await document.fonts.load('52px "Nabi"') } catch { }
-        try { await document.fonts.load('58px "Nabi"') } catch { }
-        try { await document.fonts.load('68px "Nabi"') } catch { }
+        // Load the selected calligraphy font + marker font
+        const selectedFonts = getCalligraphyFont(calligraphyStyle)
+        const bodyFontFamily = selectedFonts.body.replace(/"/g, '')
+        try { await document.fonts.load(`52px ${bodyFontFamily}`) } catch { }
+        try { await document.fonts.load(`58px ${bodyFontFamily}`) } catch { }
+        try { await document.fonts.load(`68px ${bodyFontFamily}`) } catch { }
         try { await document.fonts.load('58px "UthmanicHafs"') } catch { }
         try { await document.fonts.load('68px "UthmanicHafs"') } catch { }
         try { await document.fonts.load('32px "Amiri Quran"') } catch { }
         try { await document.fonts.load('58px "Amiri Quran"') } catch { }
         try { await document.fonts.load('32px "Scheherazade New"') } catch { }
         try { await document.fonts.load('58px "Scheherazade New"') } catch { }
+        try { await document.fonts.load('58px "Noto Naskh Arabic"') } catch { }
+        try { await document.fonts.load('58px "Noto Kufi Arabic"') } catch { }
+        try { await document.fonts.load('58px "Reem Kufi"') } catch { }
+        try { await document.fonts.load('58px "Aref Ruqaa"') } catch { }
+        try { await document.fonts.load('58px "Amiri"') } catch { }
         setProgress(40)
 
         const taawudhIdx = taawudhBuffer ? 0 : -1
@@ -1420,10 +1445,10 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           if (coldSeg) {
             const videoProgress = 0
             if (coldSeg.type === 'intro') {
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, coldSeg.introText, 0, undefined, true, true, 1, undefined, videoProgress)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, coldSeg.introText, 0, undefined, true, true, 1, undefined, videoProgress, calligraphyStyle)
             } else {
               const verse = coldSeg.verseIndex !== undefined ? verses[coldSeg.verseIndex] : undefined
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, verse, showTranslation, displayMode, undefined, 0, coldSeg.chunkText, coldSeg.showMarker, coldSeg.showTranslationForChunk, 1, coldSeg.translationChunkText, videoProgress)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, verse, showTranslation, displayMode, undefined, 0, coldSeg.chunkText, coldSeg.showMarker, coldSeg.showTranslationForChunk, 1, coldSeg.translationChunkText, videoProgress, calligraphyStyle)
             }
           }
 
@@ -1451,9 +1476,10 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
                   ctx, width, height, backgroundImage, background, surahName,
                   undefined, showTranslation, displayMode, seg.introText,
                   animTime, undefined, true, true, alpha, undefined, videoProg,
+                  calligraphyStyle,
                 )
               } else {
-                drawIntroContentLayer(ctx, width, height, seg.introText ?? '', alpha)
+                drawIntroContentLayer(ctx, width, height, seg.introText ?? '', alpha, calligraphyStyle)
               }
             } else {
               const verse = seg.verseIndex !== undefined ? verses[seg.verseIndex] : undefined
@@ -1464,12 +1490,14 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
                   verse, showTranslation, displayMode, undefined, animTime,
                   seg.chunkText, seg.showMarker, seg.showTranslationForChunk,
                   alpha, seg.translationChunkText, videoProg,
+                  calligraphyStyle,
                 )
               } else {
                 drawVerseContentLayer(
                   ctx, width, height, verse, displayMode,
                   showTranslation && seg.showTranslationForChunk,
                   seg.chunkText, seg.showMarker, seg.translationChunkText, alpha,
+                  calligraphyStyle,
                 )
               }
             }

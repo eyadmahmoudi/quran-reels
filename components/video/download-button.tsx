@@ -23,6 +23,7 @@ export function DownloadButton() {
       endVerse: config.endVerse,
       displayMode: config.displayMode ?? 'minimal',
       includeIstiadha: config.includeIstiadha,
+      calligraphyStyle: config.calligraphyStyle ?? 'nabi',
     })
   }
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import type { BackgroundOption, Verse } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
+import { CALLIGRAPHY_STYLES } from '@/lib/quran-types'
 
 interface PreviewCanvasProps {
   background: BackgroundOption
@@ -11,6 +12,7 @@ interface PreviewCanvasProps {
   displayMode: 'minimal' | 'classic'
   surahName: string
   watermark?: string
+  calligraphyStyle?: string
 }
 
 const WIDTH = 540
@@ -61,6 +63,14 @@ function drawGradientFallback(ctx: CanvasRenderingContext2D, w: number, h: numbe
   ctx.fillRect(0, 0, w, h)
 }
 
+function getCalligraphyFont(styleId: string): { body: string; marker: string } {
+  const style = CALLIGRAPHY_STYLES.find(s => s.id === styleId) ?? CALLIGRAPHY_STYLES[0]
+  return {
+    body: style.fontFamily,
+    marker: '"UthmanicHafs", "Amiri Quran", "Scheherazade New", serif',
+  }
+}
+
 function drawPreview(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -73,10 +83,12 @@ function drawPreview(
   surahName: string,
   watermark: string | undefined,
   animT: number,
+  calligraphyStyle?: string,
 ) {
   const uiScale = w / 1080
   const s = (n: number) => n * uiScale
   const bgValue = typeof bg.value === 'string' ? bg.value : (bg.value[0] ?? '')
+  const fonts = getCalligraphyFont(calligraphyStyle ?? 'nabi')
 
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
@@ -125,8 +137,8 @@ function drawPreview(
     ctx.save()
     ctx.fillStyle = 'white'
     const arabicSize = Math.round(s(mode === 'minimal' ? 58 : 68))
-    const nabiFont = `${arabicSize}px "Nabi", sans-serif`
-    const uthmanicFont = `${arabicSize}px "UthmanicHafs", "Amiri Quran", "Scheherazade New", serif`
+    const bodyFont = `${arabicSize}px ${fonts.body}`
+    const uthmanicFont = `${arabicSize}px ${fonts.marker}`
     ctx.textBaseline = 'middle'
     ctx.shadowColor = 'rgba(0,0,0,0.9)'
     ctx.shadowBlur = s(mode === 'minimal' ? 18 : 24)
@@ -139,7 +151,7 @@ function drawPreview(
     ctx.font = uthmanicFont
     const markerW = ctx.measureText(markerChar).width
 
-    ctx.font = nabiFont
+    ctx.font = bodyFont
     const maxLineW = w - s(100)
     const words = text.split(' ')
     const lines: string[] = []
@@ -173,7 +185,7 @@ function drawPreview(
       const y = startY + i * lineH
       const isLast = i === lines.length - 1
       if (!isLast) {
-        ctx.font = nabiFont
+        ctx.font = bodyFont
         ctx.textAlign = 'center'
         ctx.fillText(line, w / 2, y)
       } else if (line === '') {
@@ -181,7 +193,7 @@ function drawPreview(
         ctx.textAlign = 'center'
         ctx.fillText(markerChar, w / 2, y)
       } else {
-        ctx.font = nabiFont
+        ctx.font = bodyFont
         const lineW = ctx.measureText(line).width
         const spaceW = ctx.measureText(' ').width
         ctx.font = uthmanicFont
@@ -189,7 +201,7 @@ function drawPreview(
         const totalW = lineW + spaceW + mw
         const right = w / 2 + totalW / 2
         const left = w / 2 - totalW / 2
-        ctx.font = nabiFont; ctx.textAlign = 'right'; ctx.fillText(line, right, y)
+        ctx.font = bodyFont; ctx.textAlign = 'right'; ctx.fillText(line, right, y)
         ctx.font = uthmanicFont; ctx.textAlign = 'left'; ctx.fillText(markerChar, left, y)
       }
     })
@@ -240,7 +252,7 @@ function drawPreview(
   }
 }
 
-export function PreviewCanvas({ background, verse, showTranslation, displayMode, surahName, watermark }: PreviewCanvasProps) {
+export function PreviewCanvas({ background, verse, showTranslation, displayMode, surahName, watermark, calligraphyStyle }: PreviewCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rafRef = useRef<number | null>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
@@ -282,6 +294,7 @@ export function PreviewCanvas({ background, verse, showTranslation, displayMode,
         ctx, WIDTH, HEIGHT, background, imgRef.current,
         verse, showTranslation, displayMode, surahName, watermark,
         now - startRef.current,
+        calligraphyStyle,
       )
       if (background.type === 'animated') {
         rafRef.current = requestAnimationFrame(tick)
@@ -297,7 +310,7 @@ export function PreviewCanvas({ background, verse, showTranslation, displayMode,
       cancelled = true
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
-  }, [background, verse, showTranslation, displayMode, surahName, watermark])
+  }, [background, verse, showTranslation, displayMode, surahName, watermark, calligraphyStyle])
 
   return (
     <canvas

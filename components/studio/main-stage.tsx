@@ -48,6 +48,7 @@ export function MainStage() {
                 displayMode={config.displayMode ?? 'minimal'}
                 surahName={config.surah?.name_arabic ?? ''}
                 watermark={config.watermark}
+                calligraphyStyle={config.calligraphyStyle ?? 'nabi'}
               />
             ) : (
               <EmptyState />

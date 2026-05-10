@@ -27,6 +27,7 @@ const defaultConfig: ReelConfig = {
   showTranslation: true,
   translationId: 20,
   displayMode: 'minimal',
+  calligraphyStyle: 'nabi',
   watermark: '',
   includeIstiadha: true,
 }

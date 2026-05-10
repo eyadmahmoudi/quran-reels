@@ -122,6 +122,84 @@ export interface TranslationResource {
 }
 
 // App State Types
+export interface CalligraphyOption {
+  id: string
+  name: string           // English name
+  arabicName: string     // Arabic name for display
+  fontFamily: string     // CSS font-family string for canvas
+  style: string          // Style description
+  category: 'naskh' | 'kufi' | 'thuluth' | 'ruqaa' | 'diwani' | 'modern'
+}
+
+export const CALLIGRAPHY_STYLES: CalligraphyOption[] = [
+  {
+    id: 'nabi',
+    name: 'Nabi',
+    arabicName: 'نبي',
+    fontFamily: '"Nabi", sans-serif',
+    style: 'Modern rounded',
+    category: 'modern',
+  },
+  {
+    id: 'uthmanic-hafs',
+    name: 'Uthmanic Hafs',
+    arabicName: 'عثماني حفص',
+    fontFamily: '"UthmanicHafs", "Amiri Quran", serif',
+    style: 'Traditional Mushaf',
+    category: 'naskh',
+  },
+  {
+    id: 'amiri',
+    name: 'Amiri',
+    arabicName: 'أميري',
+    fontFamily: '"Amiri", serif',
+    style: 'Classic Naskh',
+    category: 'naskh',
+  },
+  {
+    id: 'scheherazade',
+    name: 'Scheherazade',
+    arabicName: 'شهرزاد',
+    fontFamily: '"Scheherazade New", serif',
+    style: 'Elegant Naskh',
+    category: 'naskh',
+  },
+  {
+    id: 'noto-naskh',
+    name: 'Noto Naskh',
+    arabicName: 'نوتو نسخ',
+    fontFamily: '"Noto Naskh Arabic", serif',
+    style: 'Clean Naskh',
+    category: 'naskh',
+  },
+  {
+    id: 'reem-kufi',
+    name: 'Reem Kufi',
+    arabicName: 'ريم كوفي',
+    fontFamily: '"Reem Kufi", sans-serif',
+    style: 'Geometric Kufi',
+    category: 'kufi',
+  },
+  {
+    id: 'aref-ruqaa',
+    name: 'Aref Ruqaa',
+    arabicName: 'عارفة رقعة',
+    fontFamily: '"Aref Ruqaa", serif',
+    style: 'Handwritten Ruqaa',
+    category: 'ruqaa',
+  },
+  {
+    id: 'noto-kufi',
+    name: 'Noto Kufi',
+    arabicName: 'نوتو كوفي',
+    fontFamily: '"Noto Kufi Arabic", sans-serif',
+    style: 'Modern Kufi',
+    category: 'kufi',
+  },
+]
+
+export const DEFAULT_CALLIGRAPHY = CALLIGRAPHY_STYLES[0] // Nabi
+
 export interface ReelConfig {
   surah: Surah | null
   startVerse: number
@@ -133,6 +211,7 @@ export interface ReelConfig {
   showTranslation: boolean
   translationId: number | null
   displayMode: 'minimal' | 'classic'  // minimal = no header/footer chrome
+  calligraphyStyle: string             // id from CALLIGRAPHY_STYLES
   watermark: string                    // optional creator handle shown on preview
   includeIstiadha: boolean             // prepend A'udhu billah... before the recitation
 }

@@ -11,9 +11,7 @@ import {
   ShieldCheck,
   PenTool,
   Sparkles,
-  Layers,
   Moon,
-  BarChart3,
 } from 'lucide-react'
 import { AyahSearch } from '@/components/quran/ayah-search'
 import { SurahSelector } from '@/components/quran/surah-selector'
@@ -25,7 +23,6 @@ import { DisplayModeSelector } from '@/components/quran/display-mode-selector'
 import { IstiadhaToggle } from '@/components/quran/istiadha-toggle'
 import { CalligraphySelector } from '@/components/quran/calligraphy-selector'
 import { DailyVerseCard } from '@/components/quran/daily-verse'
-import { PresetTemplates } from '@/components/quran/preset-templates'
 import { OverlayToggles } from '@/components/quran/overlay-toggles'
 import { WatermarkInput } from './watermark-input'
 
@@ -97,17 +94,6 @@ export function LeftSidebar() {
 
       {/* ── Scrollable sections ─────────────────────────────── */}
       <div className="sidebar-scroll flex-1 overflow-y-auto pb-24 lg:pb-4">
-        <SidebarSection
-          titleAr="القوالب الجاهزة"
-          titleEn="Presets"
-          icon={<Layers className="h-4 w-4" strokeWidth={1.75} />}
-          descriptionAr="أنماط سريعة للتطبيق"
-        >
-          <PresetTemplates />
-        </SidebarSection>
-
-        <OrnamentDivider />
-
         <SidebarSection
           titleAr="المصدر"
           titleEn="Source"

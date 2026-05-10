@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import type { BackgroundOption, Verse } from '@/lib/quran-types'
 import { drawAnimatedBackground } from '@/lib/animations'
 import { CALLIGRAPHY_STYLES } from '@/lib/quran-types'
+import { getHijriDate } from '@/lib/hijri-date'
 
 interface PreviewCanvasProps {
   background: BackgroundOption
@@ -13,6 +14,9 @@ interface PreviewCanvasProps {
   surahName: string
   watermark?: string
   calligraphyStyle?: string
+  showHijriDate?: boolean
+  showTafsir?: boolean
+  showJuzProgress?: boolean
 }
 
 const WIDTH = 540
@@ -84,6 +88,9 @@ function drawPreview(
   watermark: string | undefined,
   animT: number,
   calligraphyStyle?: string,
+  showHijriDate?: boolean,
+  showTafsir?: boolean,
+  showJuzProgress?: boolean,
 ) {
   const uiScale = w / 1080
   const s = (n: number) => n * uiScale
@@ -106,6 +113,22 @@ function drawPreview(
     ? (hasRich ? 'rgba(0,0,0,0.30)' : 'rgba(0,0,0,0.20)')
     : (hasRich ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.25)')
   ctx.fillRect(0, 0, w, h)
+
+  // ── Hijri Date overlay (top-left) ──
+  if (showHijriDate) {
+    ctx.save()
+    const hijri = getHijriDate()
+    const dateSize = Math.round(s(18))
+    ctx.font = `500 ${dateSize}px "Reem Kufi", "Noto Naskh Arabic", sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.shadowColor = 'rgba(0,0,0,0.8)'
+    ctx.shadowBlur = s(8)
+    ctx.fillStyle = 'rgba(212,175,55,0.85)'
+    ctx.direction = 'rtl'
+    ctx.fillText(hijri.formattedAr, w / 2, s(mode === 'classic' ? 52 : 36))
+    ctx.restore()
+  }
 
   if (mode === 'classic') {
     ctx.save()
@@ -235,6 +258,71 @@ function drawPreview(
         tLines.forEach((line, i) => ctx.fillText(line, w / 2, tY + i * tLineH))
       }
     }
+
+    // ── Tafsir overlay (below translation, smaller text) ──
+    if (showTafsir) {
+      // Tafsir comes as the second translation (index 1) when tafsirId is included
+      const tafsir = verse.translations?.[1]?.text?.replace(/<[^>]+>/g, '') ?? ''
+      if (tafsir) {
+        ctx.fillStyle = 'rgba(212,175,55,0.7)'
+        const tfSize = Math.round(s(mode === 'minimal' ? 20 : 24))
+        ctx.font = `${tfSize}px Georgia, serif`
+        ctx.textAlign = 'center'
+        ctx.direction = 'ltr'
+        ctx.shadowColor = 'rgba(0,0,0,0.9)'
+        ctx.shadowBlur = s(8)
+        const tfMaxW = w - s(120)
+        const tfWords = tafsir.split(' ')
+        const tfLines: string[] = []
+        let tfCur = ''
+        for (const word of tfWords) {
+          const test = tfCur ? `${tfCur} ${word}` : word
+          if (ctx.measureText(test).width > tfMaxW && tfCur) {
+            tfLines.push(tfCur)
+            tfCur = word
+          } else {
+            tfCur = test
+          }
+        }
+        if (tfCur) tfLines.push(tfCur)
+        // Cap at 4 lines
+        const capped = tfLines.slice(0, 4)
+        const tfLineH = tfSize * 1.4
+        // Position below translation or below Arabic text
+        const transBottom = showTranslation
+          ? startY + totalH + (mode === 'minimal' ? s(44) : s(70)) + s(28) * 2
+          : startY + totalH + (mode === 'minimal' ? s(44) : s(70))
+        capped.forEach((line, i) => ctx.fillText(line, w / 2, transBottom + i * tfLineH))
+      }
+    }
+
+    // ── Juz / Hizb progress indicator ──
+    if (showJuzProgress && verse) {
+      ctx.save()
+      const juzNum = verse.juz_number ?? 0
+      const progSize = Math.round(s(16))
+      ctx.font = `500 ${progSize}px Inter, system-ui, sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'alphabetic'
+      ctx.shadowColor = 'rgba(0,0,0,0.7)'
+      ctx.shadowBlur = s(6)
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'
+      ctx.direction = 'ltr'
+      const progressY = h - (watermark ? s(70) : s(36))
+      // Juz progress bar (30 parts)
+      const barW = w - s(120)
+      const barH = Math.max(2, Math.round(s(4)))
+      const barX = s(60)
+      ctx.fillStyle = 'rgba(255,255,255,0.12)'
+      ctx.fillRect(barX, progressY - progSize - s(4), barW, barH)
+      const juzFrac = juzNum / 30
+      ctx.fillStyle = 'rgba(212,175,55,0.6)'
+      ctx.fillRect(barX, progressY - progSize - s(4), barW * juzFrac, barH)
+      // Label
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'
+      ctx.fillText(`Juz ${juzNum} of 30`, w / 2, progressY - progSize - s(12))
+      ctx.restore()
+    }
     ctx.restore()
   }
 
@@ -252,7 +340,7 @@ function drawPreview(
   }
 }
 
-export function PreviewCanvas({ background, verse, showTranslation, displayMode, surahName, watermark, calligraphyStyle }: PreviewCanvasProps) {
+export function PreviewCanvas({ background, verse, showTranslation, displayMode, surahName, watermark, calligraphyStyle, showHijriDate, showTafsir, showJuzProgress }: PreviewCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rafRef = useRef<number | null>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
@@ -294,7 +382,7 @@ export function PreviewCanvas({ background, verse, showTranslation, displayMode,
         ctx, WIDTH, HEIGHT, background, imgRef.current,
         verse, showTranslation, displayMode, surahName, watermark,
         now - startRef.current,
-        calligraphyStyle,
+        calligraphyStyle, showHijriDate, showTafsir, showJuzProgress,
       )
       if (background.type === 'animated') {
         rafRef.current = requestAnimationFrame(tick)
@@ -310,7 +398,7 @@ export function PreviewCanvas({ background, verse, showTranslation, displayMode,
       cancelled = true
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
-  }, [background, verse, showTranslation, displayMode, surahName, watermark, calligraphyStyle])
+  }, [background, verse, showTranslation, displayMode, surahName, watermark, calligraphyStyle, showHijriDate, showTafsir, showJuzProgress])
 
   return (
     <canvas

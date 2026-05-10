@@ -24,6 +24,9 @@ export function DownloadButton() {
       displayMode: config.displayMode ?? 'minimal',
       includeIstiadha: config.includeIstiadha,
       calligraphyStyle: config.calligraphyStyle ?? 'nabi',
+      showHijriDate: config.showHijriDate,
+      showTafsir: config.showTafsir,
+      showJuzProgress: config.showJuzProgress,
     })
   }
 

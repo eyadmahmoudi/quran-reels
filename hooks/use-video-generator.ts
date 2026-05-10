@@ -6,6 +6,7 @@ import { drawAnimatedBackground } from '@/lib/animations'
 import { splitVerseByWordTimings, splitTranslation } from '@/lib/verse-chunking'
 import { fetchAudioSegments, fetchQDCVerseAudioUrls, fetchLocalSegments } from '@/lib/quran-api'
 import { CALLIGRAPHY_STYLES } from '@/lib/quran-types'
+import { getHijriDate } from '@/lib/hijri-date'
 
 interface VideoGeneratorOptions {
   verses: Verse[]
@@ -20,6 +21,9 @@ interface VideoGeneratorOptions {
   displayMode?: 'minimal' | 'classic'
   includeIstiadha?: boolean
   calligraphyStyle?: string
+  showHijriDate?: boolean
+  showTafsir?: boolean
+  showJuzProgress?: boolean
 }
 
 interface UseVideoGeneratorReturn {
@@ -386,6 +390,9 @@ function drawFrame(
   fadeOpacity: number = 1, translationChunkText?: string,
   videoProgress?: number,
   calligraphyStyle: string = 'nabi',
+  showHijriDateFlag: boolean = false,
+  showTafsirFlag: boolean = false,
+  showJuzProgressFlag: boolean = false,
 ) {
   let translationBottomForBar: number | undefined
   const uiScale = width / 1080
@@ -425,6 +432,22 @@ function drawFrame(
     ctx.fillStyle = hasRichBg ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.25)'
   }
   ctx.fillRect(0, 0, width, height)
+
+  // ── Hijri Date overlay ──
+  if (showHijriDateFlag) {
+    ctx.save()
+    const hijri = getHijriDate()
+    const dateSize = Math.round(s(18))
+    ctx.font = `500 ${dateSize}px "Reem Kufi", "Noto Naskh Arabic", sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.shadowColor = 'rgba(0,0,0,0.8)'
+    ctx.shadowBlur = s(8)
+    ctx.fillStyle = 'rgba(212,175,55,0.85)'
+    ctx.direction = 'rtl'
+    ctx.fillText(hijri.formattedAr, width / 2, s(displayMode === 'classic' ? 52 : 36))
+    ctx.restore()
+  }
 
   if (taawudhText && !verse) {
     drawIntroContentLayer(ctx, width, height, taawudhText, fadeOpacity, calligraphyStyle)
@@ -480,6 +503,31 @@ function drawFrame(
     ctx.fillRect(barX, Math.round(trackTop), barW, barH)
     ctx.fillStyle = 'rgba(212,175,55,0.9)'
     ctx.fillRect(barX, Math.round(trackTop), barW * videoProgress, barH)
+  }
+
+  // ── Juz / Hizb progress indicator ──
+  if (showJuzProgressFlag && verse) {
+    ctx.save()
+    const juzNum = verse.juz_number ?? 0
+    const progSize = Math.round(s(16))
+    ctx.font = `500 ${progSize}px Inter, system-ui, sans-serif`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'alphabetic'
+    ctx.shadowColor = 'rgba(0,0,0,0.7)'
+    ctx.shadowBlur = s(6)
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'
+    ctx.direction = 'ltr'
+    const barW = width - s(120)
+    const barH = Math.max(2, Math.round(s(4)))
+    const barX = s(60)
+    const progBarY = height - s(36)
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'
+    ctx.fillRect(barX, progBarY, barW, barH)
+    ctx.fillStyle = 'rgba(212,175,55,0.6)'
+    ctx.fillRect(barX, progBarY, barW * (juzNum / 30), barH)
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'
+    ctx.fillText(`Juz ${juzNum} of 30`, width / 2, progBarY - s(8))
+    ctx.restore()
   }
 }
 
@@ -1153,6 +1201,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
         reciterFolder, surahId, startVerse, endVerse,
         displayMode = 'minimal', includeIstiadha = true,
         calligraphyStyle = 'nabi',
+        showHijriDate = false, showTafsir = false, showJuzProgress = false,
       } = options
 
       if (verses.length === 0) { setError('No verses to generate video from'); return }
@@ -1445,10 +1494,10 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
           if (coldSeg) {
             const videoProgress = 0
             if (coldSeg.type === 'intro') {
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, coldSeg.introText, 0, undefined, true, true, 1, undefined, videoProgress, calligraphyStyle)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, undefined, showTranslation, displayMode, coldSeg.introText, 0, undefined, true, true, 1, undefined, videoProgress, calligraphyStyle, showHijriDate, showTafsir, showJuzProgress)
             } else {
               const verse = coldSeg.verseIndex !== undefined ? verses[coldSeg.verseIndex] : undefined
-              drawFrame(ctx, width, height, backgroundImage, background, surahName, verse, showTranslation, displayMode, undefined, 0, coldSeg.chunkText, coldSeg.showMarker, coldSeg.showTranslationForChunk, 1, coldSeg.translationChunkText, videoProgress, calligraphyStyle)
+              drawFrame(ctx, width, height, backgroundImage, background, surahName, verse, showTranslation, displayMode, undefined, 0, coldSeg.chunkText, coldSeg.showMarker, coldSeg.showTranslationForChunk, 1, coldSeg.translationChunkText, videoProgress, calligraphyStyle, showHijriDate, showTafsir, showJuzProgress)
             }
           }
 
@@ -1476,7 +1525,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
                   ctx, width, height, backgroundImage, background, surahName,
                   undefined, showTranslation, displayMode, seg.introText,
                   animTime, undefined, true, true, alpha, undefined, videoProg,
-                  calligraphyStyle,
+                  calligraphyStyle, showHijriDate, showTafsir, showJuzProgress,
                 )
               } else {
                 drawIntroContentLayer(ctx, width, height, seg.introText ?? '', alpha, calligraphyStyle)
@@ -1490,7 +1539,7 @@ export function useVideoGenerator(config: ReelConfig): UseVideoGeneratorReturn {
                   verse, showTranslation, displayMode, undefined, animTime,
                   seg.chunkText, seg.showMarker, seg.showTranslationForChunk,
                   alpha, seg.translationChunkText, videoProg,
-                  calligraphyStyle,
+                  calligraphyStyle, showHijriDate, showTafsir, showJuzProgress,
                 )
               } else {
                 drawVerseContentLayer(

@@ -11,6 +11,10 @@ import {
   ShieldCheck,
   PenTool,
   Sparkles,
+  Layers,
+  Moon,
+  BookMarked,
+  BarChart3,
 } from 'lucide-react'
 import { AyahSearch } from '@/components/quran/ayah-search'
 import { SurahSelector } from '@/components/quran/surah-selector'
@@ -22,6 +26,8 @@ import { DisplayModeSelector } from '@/components/quran/display-mode-selector'
 import { IstiadhaToggle } from '@/components/quran/istiadha-toggle'
 import { CalligraphySelector } from '@/components/quran/calligraphy-selector'
 import { DailyVerseCard } from '@/components/quran/daily-verse'
+import { PresetTemplates } from '@/components/quran/preset-templates'
+import { OverlayToggles } from '@/components/quran/overlay-toggles'
 import { WatermarkInput } from './watermark-input'
 
 interface SidebarSectionProps {
@@ -80,6 +86,16 @@ export function LeftSidebar() {
 
       {/* ── Scrollable sections ─────────────────────────────── */}
       <div className="sidebar-scroll flex-1 overflow-y-auto pb-24 lg:pb-4">
+        <SidebarSection
+          title="Presets"
+          icon={<Layers className="h-4 w-4" strokeWidth={1.75} />}
+          description="Quick style templates"
+        >
+          <PresetTemplates />
+        </SidebarSection>
+
+        <OrnamentDivider />
+
         <SidebarSection
           title="Source"
           icon={<BookOpen className="h-4 w-4" strokeWidth={1.75} />}
@@ -154,6 +170,16 @@ export function LeftSidebar() {
         </SidebarSection>
 
         <OrnamentDivider />
+
+        <SidebarSection
+          title="Overlays"
+          icon={<Moon className="h-4 w-4" strokeWidth={1.75} />}
+          description="Hijri date, tafsir & progress"
+        >
+          <OverlayToggles />
+        </SidebarSection>
+
+        <Hairline />
 
         <SidebarSection
           title="Daily Verse"

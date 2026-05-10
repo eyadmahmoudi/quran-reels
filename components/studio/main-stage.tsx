@@ -49,6 +49,9 @@ export function MainStage() {
                 surahName={config.surah?.name_arabic ?? ''}
                 watermark={config.watermark}
                 calligraphyStyle={config.calligraphyStyle ?? 'nabi'}
+                showHijriDate={config.showHijriDate}
+                showTafsir={config.showTafsir}
+                showJuzProgress={config.showJuzProgress}
               />
             ) : (
               <EmptyState />

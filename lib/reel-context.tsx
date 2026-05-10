@@ -30,6 +30,9 @@ const defaultConfig: ReelConfig = {
   calligraphyStyle: 'nabi',
   watermark: '',
   includeIstiadha: true,
+  showHijriDate: false,
+  showTafsir: false,
+  showJuzProgress: false,
 }
 
 const ReelContext = createContext<ReelContextType | null>(null)
@@ -52,6 +55,7 @@ export function ReelProvider({ children }: { children: ReactNode }) {
       startVerse: config.startVerse,
       endVerse: config.endVerse,
       translationId: config.showTranslation ? config.translationId! : undefined,
+      tafsirId: config.showTafsir ? 169 : undefined,  // Tafsir Ibn Kathir
     }).then((data) => {
       if (!cancelled) setVerses(data)
     }).catch((err) => {
@@ -59,7 +63,7 @@ export function ReelProvider({ children }: { children: ReactNode }) {
     })
 
     return () => { cancelled = true }
-  }, [config.surah?.id, config.startVerse, config.endVerse, config.showTranslation, config.translationId])
+  }, [config.surah?.id, config.startVerse, config.endVerse, config.showTranslation, config.translationId, config.showTafsir])
 
   const setConfig = useCallback((updates: Partial<ReelConfig>) => {
     setConfigState((prev) => ({ ...prev, ...updates }))

@@ -32,6 +32,7 @@ export async function fetchVerses(
     startVerse?: number
     endVerse?: number
     translationId?: number
+    tafsirId?: number
     perPage?: number
   }
 ): Promise<Verse[]> {
@@ -44,6 +45,11 @@ export async function fetchVerses(
 
   if (options?.translationId) {
     params.set('translations', String(options.translationId))
+  }
+  if (options?.tafsirId) {
+    // Tafsir comes through the same translations param as a comma-separated list
+    const existing = params.get('translations') || ''
+    params.set('translations', existing ? `${existing},${options.tafsirId}` : String(options.tafsirId))
   }
 
   const res = await fetch(`${API_BASE}/verses/by_chapter/${surahId}?${params}`)

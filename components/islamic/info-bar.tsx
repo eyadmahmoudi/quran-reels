@@ -85,10 +85,10 @@ export function IslamicInfoBar() {
 
     async function fetchPrayerTimes() {
       try {
-        // Algiers coordinates: 36.7538, 3.0588 — method 5 (Umm al-Qura, close to Algerian practice)
+        // Algiers — method 19 (وزارة الشؤون الدينية والأوقاف الجزائرية / Algerian Ministry of Religious Affairs)
         const today = new Date()
         const dateStr = `${today.getDate()}-${today.getMonth() + 1}-${today.getFullYear()}`
-        const url = `https://api.aladhan.com/v1/timingsByCity/${dateStr}?city=Algiers&country=Algeria&method=5`
+        const url = `https://api.aladhan.com/v1/timingsByCity/${dateStr}?city=Algiers&country=Algeria&method=19`
 
         const res = await fetch(url)
         if (!res.ok) throw new Error('Failed to fetch prayer times')
